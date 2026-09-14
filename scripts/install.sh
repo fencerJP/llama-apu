@@ -97,8 +97,21 @@ if [ -d "$LLAMA_CPP_DIR/build/bin" ]; then
     fi
 fi
 
-# 6. System Configurations (Udev & Systemd)
-echo -e "\n${BOLD}[4/4] Configuring System Permissions & Services...${RESET}"
+# 6. Install & Register XCLBIN Hardware Profiles
+XCLBINS_DEST="/usr/local/share/llama-apu/xclbins"
+if [ ! -w "/usr/local/share" ] && [ "${EUID:-$(id -u)}" -ne 0 ]; then
+    XCLBINS_DEST="$HOME/.local/share/llama-apu/xclbins"
+fi
+echo -e "\n${BOLD}[4/5] Registering & Installing System XCLBIN Hardware Profiles...${RESET}"
+echo -e "  -> Target XCLBIN directory: ${GREEN}$XCLBINS_DEST${RESET}"
+mkdir -p "$XCLBINS_DEST"
+if [ -d "$REPO_ROOT/xclbins" ]; then
+    cp -r "$REPO_ROOT/xclbins/"* "$XCLBINS_DEST/"
+    echo -e "  -> Successfully registered $(ls -1 "$XCLBINS_DEST" | wc -l) XDNA 2 hardware profiles"
+fi
+
+# 7. System Configurations (Udev & Systemd)
+echo -e "\n${BOLD}[5/5] Configuring System Permissions & Services...${RESET}"
 
 # Udev rules
 UDEV_SRC="$REPO_ROOT/scripts/99-amdxdna-apu.rules"

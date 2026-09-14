@@ -83,6 +83,12 @@ if [ -f "$LLAMA_CPP_DIR/docs/backend/APU.md" ]; then
     cp "$LLAMA_CPP_DIR/docs/backend/APU.md" "$OUTPUT_DIR/${BUNDLE_NAME}/docs/"
 fi
 
+# XCLBIN Profiles
+if [ -d "$REPO_ROOT/xclbins" ]; then
+    echo "Copying XDNA 2 hardware profile bank..."
+    cp -r "$REPO_ROOT/xclbins" "$OUTPUT_DIR/${BUNDLE_NAME}/"
+fi
+
 # Top-level Readme & License
 cp "$REPO_ROOT/README.md" "$OUTPUT_DIR/${BUNDLE_NAME}/" 2>/dev/null || true
 cp "$REPO_ROOT/CLI_GUIDE.md" "$OUTPUT_DIR/${BUNDLE_NAME}/" 2>/dev/null || true
@@ -94,14 +100,22 @@ cat << 'INSTALLER_EOF' > "$OUTPUT_DIR/${BUNDLE_NAME}/install.sh"
 set -euo pipefail
 
 DEST="/usr/local/bin"
+XCLBINS_DEST="/usr/local/share/llama-apu/xclbins"
 if [ ! -w "$DEST" ] && [ "${EUID:-$(id -u)}" -ne 0 ]; then
     DEST="$HOME/.local/bin"
+    XCLBINS_DEST="$HOME/.local/share/llama-apu/xclbins"
     mkdir -p "$DEST"
 fi
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 echo "Installing llama-apu binaries to $DEST..."
 cp -a "$SCRIPT_DIR/bin/"* "$DEST/"
+
+echo "Registering and installing XCLBIN hardware profiles to $XCLBINS_DEST..."
+mkdir -p "$XCLBINS_DEST"
+if [ -d "$SCRIPT_DIR/xclbins" ]; then
+    cp -r "$SCRIPT_DIR/xclbins/"* "$XCLBINS_DEST/"
+fi
 
 if [ "${EUID:-$(id -u)}" -eq 0 ]; then
     if [ -d "/etc/udev/rules.d" ]; then
