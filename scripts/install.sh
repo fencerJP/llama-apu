@@ -80,9 +80,9 @@ for tool in apu-doctor apu-model; do
     fi
 done
 
-# Install C++ binaries from llama.cpp build
+# Install C++ binaries from llama.cpp build (including unified 'llama' multiplexer)
 if [ -d "$LLAMA_CPP_DIR/build/bin" ]; then
-    for bin in llama-cli llama-server apu-run llama-bench llama-quantize; do
+    for bin in llama llama-cli llama-server apu-run llama-bench llama-quantize; do
         SRC="$LLAMA_CPP_DIR/build/bin/$bin"
         if [ -f "$SRC" ]; then
             echo -e "  -> Installing ${GREEN}$bin${RESET}"
@@ -90,11 +90,6 @@ if [ -d "$LLAMA_CPP_DIR/build/bin" ]; then
             chmod +x "$INSTALL_DIR/$bin"
         fi
     done
-    # Symlink 'llama' convenience alias
-    if [ -f "$INSTALL_DIR/llama-cli" ]; then
-        echo -e "  -> Creating convenience alias ${GREEN}llama${RESET} -> llama-cli"
-        ln -sf "$INSTALL_DIR/llama-cli" "$INSTALL_DIR/llama"
-    fi
 fi
 
 # 6. Install & Register XCLBIN Hardware Profiles

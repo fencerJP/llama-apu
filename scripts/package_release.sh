@@ -40,20 +40,15 @@ cd "$REPO_ROOT"
 rm -rf "$OUTPUT_DIR/${BUNDLE_NAME}"
 mkdir -p "$OUTPUT_DIR/${BUNDLE_NAME}"/{bin,lib,include,etc/udev/rules.d,etc/systemd/system,etc/default,docs}
 
-# Binaries
+# Binaries (including the unified 'llama' multiplexer binary)
 cp "$REPO_ROOT/target/release/apu-doctor" "$OUTPUT_DIR/${BUNDLE_NAME}/bin/"
 cp "$REPO_ROOT/target/release/apu-model" "$OUTPUT_DIR/${BUNDLE_NAME}/bin/"
 
-for bin in llama-cli llama-server apu-run llama-bench llama-quantize; do
+for bin in llama llama-cli llama-server apu-run llama-bench llama-quantize; do
     if [ -f "$LLAMA_CPP_DIR/build/bin/$bin" ]; then
         cp "$LLAMA_CPP_DIR/build/bin/$bin" "$OUTPUT_DIR/${BUNDLE_NAME}/bin/"
     fi
 done
-
-# Create convenience alias symlink
-cd "$OUTPUT_DIR/${BUNDLE_NAME}/bin"
-ln -sf llama-cli llama
-cd "$REPO_ROOT"
 
 # Libraries & Headers
 if [ -f "$REPO_ROOT/target/release/libzero_copy_model_runner.so" ]; then
