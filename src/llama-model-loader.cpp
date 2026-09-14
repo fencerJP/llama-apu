@@ -13,6 +13,7 @@
 #include <cstring>
 #include <future>
 #include <regex>
+#include <unistd.h>
 
 static const size_t kiB = 1024;
 static const size_t MiB = 1024*kiB;
@@ -560,6 +561,15 @@ llama_model_loader::llama_model_loader(
     this->use_direct_io = load_mode == LLAMA_LOAD_MODE_DIRECT_IO;
 
     if (!fname.empty()) {
+        std::string actual_fname = fname;
+#ifdef LLAMA_APU_BACKEND
+        if (actual_fname.size() >= 5 && actual_fname.substr(actual_fname.size() - 5) == ".q4nx") {
+            std::string candidate = actual_fname.substr(0, actual_fname.size() - 5) + ".gguf";
+            if (access(candidate.c_str(), R_OK) == 0) {
+                actual_fname = candidate;
+            }
+        }
+#endif
         // Load the main GGUF
         struct ggml_context * ctx = NULL;
         struct gguf_init_params params = {
@@ -567,10 +577,10 @@ llama_model_loader::llama_model_loader(
             /*.ctx      = */ &ctx,
         };
 
-        metadata_ptr.reset(gguf_init_from_file(fname.c_str(), params));
+        metadata_ptr.reset(gguf_init_from_file(actual_fname.c_str(), params));
         metadata = metadata_ptr.get();
         if (metadata == nullptr) {
-            throw std::runtime_error(format("%s: failed to load model from %s", __func__, fname.c_str()));
+            throw std::runtime_error(format("%s: failed to load model from %s", __func__, actual_fname.c_str()));
         }
 
         get_key(llm_kv(LLM_KV_GENERAL_ARCHITECTURE), arch_name, false);

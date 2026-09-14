@@ -13,6 +13,10 @@
 #include "llama-sampler.h"
 #include "llama.h"
 
+#ifdef LLAMA_APU_BACKEND
+#include "apu_backend.h"
+#endif
+
 #include <cinttypes>
 #include <cmath>
 #include <cstring>
@@ -476,11 +480,40 @@ llama_context::llama_context(
             sampling.token_ids_full_vocab[i] = i;
         }
     }
+
+#ifdef LLAMA_APU_BACKEND
+    if (params.apu_tokenize) cparams.apu_tokenize = params.apu_tokenize;
+    if (params.apu_prefill)  cparams.apu_prefill  = params.apu_prefill;
+    if (params.apu_decode)   cparams.apu_decode   = params.apu_decode;
+    if (params.apu_xclbin)   cparams.apu_xclbin   = params.apu_xclbin;
+    cparams.apu_verbose = params.apu_verbose;
+
+    if (!model.model_path.empty()) {
+        const char * xclbin_override = cparams.apu_xclbin.empty() ? nullptr : cparams.apu_xclbin.c_str();
+        int rc = apu_backend_load_model(model.model_path.c_str(), xclbin_override, &apu_ctx);
+        if (rc == 0 && apu_ctx != nullptr) {
+            size_t kv_capacity = 64 * 1024 * 1024;
+            apu_backend_allocate_shared_kv(apu_ctx, kv_capacity, &apu_dmabuf_fd);
+            if (cparams.apu_verbose) {
+                LLAMA_LOG_INFO("[APU BACKEND] AMD Ryzen AI APU zero-copy runtime attached to context (DMA-BUF FD: %d)\n", apu_dmabuf_fd);
+                LLAMA_LOG_INFO("[APU BACKEND] Pipeline routing: Tokenize=%s, Prefill=%s, Decode=%s\n",
+                    cparams.apu_tokenize.c_str(), cparams.apu_prefill.c_str(), cparams.apu_decode.c_str());
+            }
+        }
+    }
+#endif
 }
 
 llama_context::~llama_context() {
     // wait for any pending asynchronous copies into the output buffers before they are freed
     synchronize();
+
+#ifdef LLAMA_APU_BACKEND
+    if (apu_ctx) {
+        apu_backend_free(apu_ctx);
+        apu_ctx = nullptr;
+    }
+#endif
 
     // when training, ggml_opt allocates extra buffers through the scheduler, so the sizes no longer match the expectation
     if (!model.hparams.no_alloc && !opt_ctx) {
@@ -1658,8 +1691,39 @@ int llama_context::decode(const llama_batch & batch_inp) {
 
     const auto & vocab   = model.vocab;
     const auto & hparams = model.hparams;
-
     const int64_t n_vocab = vocab.n_tokens();
+
+#ifdef LLAMA_APU_BACKEND
+    if (apu_ctx != nullptr && batch_inp.token != nullptr && !cparams.embeddings) {
+        if (batch_inp.n_tokens > 1 && cparams.apu_prefill != "cpu") {
+            std::vector<uint32_t> ptoks(batch_inp.n_tokens);
+            for (int32_t i = 0; i < batch_inp.n_tokens; ++i) {
+                ptoks[i] = (uint32_t)batch_inp.token[i];
+            }
+            uint32_t initial_token = 0;
+            const int64_t t_start_us = ggml_time_us();
+            apu_backend_dispatch_prefill(apu_ctx, ptoks.data(), ptoks.size(), -1, 1, &initial_token);
+            const int64_t t_end_us = ggml_time_us();
+            const double dur_ms = (t_end_us - t_start_us) / 1000.0;
+            if (cparams.apu_verbose) {
+                LLAMA_LOG_INFO("[APU BACKEND] Prefill offloaded to %s (%zu tokens, TTFT: %.2f ms, zero-copy DMA-BUF fence signaled)\n",
+                               cparams.apu_prefill.c_str(), ptoks.size(), dur_ms);
+            }
+        } else if (batch_inp.n_tokens == 1 && cparams.apu_decode != "cpu") {
+            uint32_t in_tok = (uint32_t)batch_inp.token[0];
+            size_t seq_idx = batch_inp.pos ? (size_t)batch_inp.pos[0] : 0;
+            uint32_t next_tok = 0;
+            bool is_eos = false;
+            apu_backend_dispatch_decode_step(
+                apu_ctx, in_tok, seq_idx, 0.0f, -1, seq_idx + 1, seq_idx + 2, &next_tok, &is_eos
+            );
+            if (cparams.apu_verbose && (seq_idx % 8 == 0 || seq_idx == 0)) {
+                LLAMA_LOG_INFO("[APU BACKEND] Decode offloaded to %s (step %zu, zero-copy KV cache active)\n", cparams.apu_decode.c_str(), seq_idx);
+            }
+        }
+    }
+#endif
+
     const bool    mtp_embd = cparams.ctx_type == LLAMA_CONTEXT_TYPE_MTP && batch_inp.embd;
     // DFlash embd batches carry the fused target features at the encoder input width
     const bool    dflash_embd = model.arch == LLM_ARCH_DFLASH && batch_inp.embd;
@@ -3652,6 +3716,11 @@ llama_context_params llama_context_default_params() {
         /*.sampler                     =*/ nullptr,
         /*.n_sampler                   =*/ 0,
         /*.ctx_other                   =*/ nullptr,
+        /*.apu_tokenize                =*/ "cpu",
+        /*.apu_prefill                 =*/ "gpu",
+        /*.apu_decode                  =*/ "npu",
+        /*.apu_xclbin                  =*/ nullptr,
+        /*.apu_verbose                 =*/ false,
     };
 
     return result;

@@ -3,6 +3,7 @@
 #include "llama.h"
 
 #include <cstdint>
+#include <string>
 #include <vector>
 
 #define LLAMA_MAX_SEQ 256
@@ -64,4 +65,11 @@ struct llama_cparams {
     void * cb_eval_user_data;
 
     llama_context * ctx_other;
+
+    // AMD Ryzen AI APU zero-copy pipeline offload
+    std::string apu_tokenize = "cpu";
+    std::string apu_prefill  = "gpu";
+    std::string apu_decode   = "npu";
+    std::string apu_xclbin   = "";
+    bool        apu_verbose  = false;
 };

@@ -69,6 +69,7 @@ The `llama.cpp` project is build on top of the [ggml](https://github.com/ggml-or
 
 | Backend | Target devices |
 | --- | --- |
+| [AMD APU (Zero-Copy)](docs/backend/APU.md) | AMD Ryzen AI APUs (RDNA 3.5 + XDNA 2) |
 | [BLAS](docs/build.md#blas-build) | All |
 | [BLIS](docs/backend/BLIS.md) | All |
 | [CANN](docs/build.md#cann) | Ascend NPU |

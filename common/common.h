@@ -502,6 +502,13 @@ struct common_params {
     struct common_params_speculative speculative;
     struct common_params_diffusion   diffusion;
 
+    // AMD Ryzen AI APU zero-copy pipeline configuration
+    std::string apu_tokenize = "cpu";
+    std::string apu_prefill  = "gpu";
+    std::string apu_decode   = "npu";
+    std::string apu_xclbin   = "";
+    bool        apu_verbose  = false;
+
     struct common_params_model model;
 
     std::set<std::string> model_alias;     // model aliases                                                 // NOLINT

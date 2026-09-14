@@ -145,6 +145,15 @@ option(LLAMA_OPENSSL    "llama: use openssl to support HTTPS" ON)
 option(LLAMA_SUBPROCESS "llama-common: use subprocess, required by server tools and server router mode" ${LLAMA_SUBPROCESS_DEFAULT})
 option(LLAMA_LLGUIDANCE "llama-common: include LLGuidance library for structured output in common utils" OFF)
 
+# AMD Ryzen AI APU Zero-Copy Backend
+option(LLAMA_APU_BACKEND "llama: enable AMD Ryzen AI APU zero-copy backend" ON)
+if (LLAMA_APU_BACKEND)
+    message(STATUS "AMD Ryzen AI APU zero-copy backend enabled (libzero_copy_model_runner)")
+    set(APU_BACKEND_DIR "${CMAKE_CURRENT_SOURCE_DIR}/../../zero-copy_model_runner" CACHE PATH "Path to zero-copy_model_runner")
+    include_directories(${APU_BACKEND_DIR}/include)
+    link_directories(${APU_BACKEND_DIR}/target/release)
+endif()
+
 
 # Required for relocatable CMake package
 include(${CMAKE_CURRENT_SOURCE_DIR}/cmake/build-info.cmake)

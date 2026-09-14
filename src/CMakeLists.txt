@@ -60,6 +60,12 @@ target_compile_features   (llama PRIVATE cxx_std_17) # don't bump
 
 target_link_libraries(llama PUBLIC ggml)
 
+if (LLAMA_APU_BACKEND)
+    target_link_libraries(llama PUBLIC ${APU_BACKEND_DIR}/target/release/libzero_copy_model_runner.a ${CMAKE_DL_LIBS} m)
+    target_include_directories(llama PUBLIC ${APU_BACKEND_DIR}/include)
+    target_compile_definitions(llama PUBLIC LLAMA_APU_BACKEND)
+endif()
+
 if (BUILD_SHARED_LIBS)
     set_target_properties(llama PROPERTIES POSITION_INDEPENDENT_CODE ON)
     target_compile_definitions(llama PRIVATE LLAMA_BUILD)

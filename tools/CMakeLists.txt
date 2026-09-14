@@ -42,4 +42,8 @@ else()
         add_subdirectory(tuning)
     endif()
     add_subdirectory(results)
+
+    if (LLAMA_APU_BACKEND)
+        add_subdirectory(apu-run)
+    endif()
 endif()

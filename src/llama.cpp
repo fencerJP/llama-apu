@@ -343,6 +343,7 @@ static std::pair<int, llama_model *> llama_model_load(struct gguf_context * meta
 
         model->hparams.vocab_only = params.vocab_only;
         model->hparams.no_alloc   = params.no_alloc;
+        model->model_path         = fname;
 
         try {
             model->load_hparams(ml);

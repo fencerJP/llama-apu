@@ -2830,6 +2830,78 @@ common_params_context common_params_parser_init(common_params & params, llama_ex
             }
         }
     ).set_env("LLAMA_ARG_N_GPU_LAYERS"));
+
+    // AMD Ryzen AI APU Zero-Copy Heterogeneous Engine Options
+    add_opt(common_arg(
+        {"--tokenize"}, "{cpu,gpu,npu}",
+        "override accelerator for tokenization on AMD Ryzen AI APU (default: cpu)",
+        [](common_params & params, const std::string & value) {
+            params.apu_tokenize = value;
+        }
+    ).set_env("LLAMA_APU_TOKENIZE"));
+
+    add_opt(common_arg(
+        {"--prefill"}, "{gpu,cpu,npu}",
+        "override accelerator for prompt prefill forward pass on AMD Ryzen AI APU (default: gpu)",
+        [](common_params & params, const std::string & value) {
+            params.apu_prefill = value;
+        }
+    ).set_env("LLAMA_APU_PREFILL"));
+
+    add_opt(common_arg(
+        {"--decode"}, "{npu,gpu,cpu}",
+        "override accelerator for autoregressive decode loop on AMD Ryzen AI APU (default: npu)",
+        [](common_params & params, const std::string & value) {
+            params.apu_decode = value;
+        }
+    ).set_env("LLAMA_APU_DECODE"));
+
+    add_opt(common_arg(
+        {"--gpu-based"},
+        "run as many pipeline stages as possible on RDNA 3.5 iGPU (tokenize=gpu, prefill=gpu, decode=gpu)",
+        [](common_params & params) {
+            params.apu_tokenize = "gpu";
+            params.apu_prefill  = "gpu";
+            params.apu_decode   = "gpu";
+        }
+    ));
+
+    add_opt(common_arg(
+        {"--cpu-based"},
+        "run as many pipeline stages as possible on host CPU (tokenize=cpu, prefill=cpu, decode=cpu)",
+        [](common_params & params) {
+            params.apu_tokenize = "cpu";
+            params.apu_prefill  = "cpu";
+            params.apu_decode   = "cpu";
+        }
+    ));
+
+    add_opt(common_arg(
+        {"--npu-based"},
+        "run as many pipeline stages as possible on XDNA 2 NPU (tokenize=npu, prefill=npu, decode=npu)",
+        [](common_params & params) {
+            params.apu_tokenize = "npu";
+            params.apu_prefill  = "npu";
+            params.apu_decode   = "npu";
+        }
+    ));
+
+    add_opt(common_arg(
+        {"--apu-xclbin"}, "PATH",
+        "override path to XCLBIN hardware graph microcode for AMD XDNA 2 NPU",
+        [](common_params & params, const std::string & value) {
+            params.apu_xclbin = value;
+        }
+    ).set_env("LLAMA_APU_XCLBIN"));
+
+    add_opt(common_arg(
+        {"--apu-verbose"},
+        "enable detailed APU hardware telemetry for zero-copy DMA-BUF handoffs and DRM timeline fences",
+        [](common_params & params) {
+            params.apu_verbose = true;
+        }
+    ));
+
     add_opt(common_arg(
         {"-sm", "--split-mode"}, "{none,layer,row,tensor}",
         "how to split the model across multiple GPUs, one of:\n"
