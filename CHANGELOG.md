@@ -7,7 +7,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
-## [1.0.0] - 2026-09-15
+## [0.2.1] - 2026-09-15
+
+### Added
+- **Native `llama` Multiplexer Binary Integration**: Bundled and installed the native compiled upstream `app/llama.cpp` multiplexer binary to seamlessly dispatch `llama cli`, `llama serve`, `llama bench`, `llama quantize`, `llama download`, and `llama completion` without requiring symlinks.
+- **Repository Cleanliness & Privacy**: Configured strict `.gitignore` patterns ensuring no internal metadata or transient files are tracked.
+
+---
+
+## [0.2.0] - 2026-09-15
+
+### Added
+- **Production XDNA 2 Hardware Binary Bank**: Bundled 37 pre-compiled production and experimental `.xclbin` profiles in `xclbins/` for Strix Point, Gorgon Point, Krackan Point, and Strix Halo.
+- **System-Wide XCLBIN Auto-Discovery**: Runtime container resolver and installer now automatically look up and register hardware profiles in `/usr/local/share/llama-apu/xclbins`, `~/.local/share/llama-apu/xclbins`, and `LLAMA_APU_XCLBINS_DIR`.
+
+---
+
+## [0.1.0] - 2026-09-15
 
 ### Added
 - **AMD Ryzen AI Zero-Copy APU Backend (`apu-backend`)**:

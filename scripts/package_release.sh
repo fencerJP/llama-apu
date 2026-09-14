@@ -4,7 +4,7 @@
 
 set -euo pipefail
 
-VERSION="${1:-v1.0.0}"
+VERSION="${1:-0.2.1}"
 ARCH="linux-x86_64"
 BUNDLE_NAME="llama-apu-${VERSION}-${ARCH}"
 OUTPUT_DIR="dist"
