@@ -16,6 +16,11 @@
 # ggml-org/llama-mtmd       : ngxson
 # ggml-org/llama-server     : ggerganov, ngxson, allozaur, angt, ServeurpersoCom
 # ggml-org/llama-ui           : allozaur
+# apu-backend                 : fencerJP
+
+*                                       @fencerJP
+/docs/backend/APU.md                    @fencerJP
+/xclbins/                               @fencerJP
 
 /.devops/*.Dockerfile                   @ngxson
 /.github/actions/                       @ggml-org/ci

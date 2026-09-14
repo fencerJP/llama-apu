@@ -59,6 +59,9 @@
 /.gitmodules
 /.clang-format
 /.clang-tidy
+/.devops/
+/.dockerignore
+/convert_hf_to_gguf_update.py
 
 # Build & Release Artifacts
 /tags
