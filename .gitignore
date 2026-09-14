@@ -46,6 +46,19 @@
 /AGENTS.md
 /AGENTS.local.md
 /CLAUDE.md
+/skills/
+/pocs/
+/build-xcframework.sh
+/convert_llama_ggml_to_gguf.py
+/ty.toml
+/.ecrc
+/.flake8
+/.pre-commit-config.yaml
+/mypy.ini
+/pyrightconfig.json
+/.gitmodules
+/.clang-format
+/.clang-tidy
 
 # Build & Release Artifacts
 /tags
