@@ -128,6 +128,7 @@ We evaluated 10 neural model configurations across 3 XCLBIN hardware binary vari
 ## Documentation Index
 
 - [CLI Reference Guide](CLI_GUIDE.md): Full command-line options, stage flags, and OpenAI API endpoint documentation.
+- [AMD APU Developer & Architecture Reference Guide](docs/AMD_APU_DEVELOPER_REFERENCE.md): In-depth guide covering silicon architecture, `.xclbin` graph compilation, Linux kernel UAPI (`dma-buf`), and timeline fences.
 - [Quantization Matrix](QUANTIZATION.md): Supported Q4–Q16 format specifications and sub-4-bit rejection policies.
 - [Hardware Support Matrix](HARDWARE_SUPPORT.md): Per-silicon architecture breakdown, driver nodes, and memory subsystem tuning.
 - [Changelog](CHANGELOG.md): Version history, updates, and release notes.
