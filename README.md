@@ -1,127 +1,142 @@
-# llama.cpp
+# llama-apu: AMD Ryzen AI APU Zero-Copy Runtime for llama.cpp
 
-![llama](https://raw.githubusercontent.com/ggml-org/llama.brand/refs/heads/master/cover/llama-cpp/cover-llama-cpp-dark.svg)
+[![License: MIT / Apache 2.0](https://img.shields.io/badge/License-MIT_%2F_Apache_2.0-blue.svg)](LICENSE)
+[![Target Hardware](https://img.shields.io/badge/Target-AMD_Ryzen_AI_(XDNA_2_+_RDNA_3.5)-red.svg)](HARDWARE_SUPPORT.md)
+[![Upstream Fork](https://img.shields.io/badge/Upstream_Fork-ggml--org%2Fllama.cpp-brightgreen.svg)](https://github.com/ggml-org/llama.cpp)
+[![Release](https://img.shields.io/github/v/release/fencerJP/llama-apu?color=orange)](https://github.com/fencerJP/llama-apu/releases)
 
-<div align="center">
+**`llama-apu`** is a specialized, production-grade fork of [ggml-org/llama.cpp](https://github.com/ggml-org/llama.cpp) engineered exclusively for **AMD Ryzen AI APUs** (AMD Strix Point, Gorgon Point, Krackan Point, and Strix Halo). 
 
-<b>LLM inference in C/C++</b>
+It introduces a high-performance **heterogeneous zero-copy runtime architecture** that orchestrates compute-heavy prompt prefill on the **RDNA 3.5 iGPU**, memory-bound autoregressive decode across the **XDNA 2 NPU (32-tile AIE2P)**, and SIMD sampling on **Zen 5 AVX-512 CPU cores**, unified through kernel `dma-buf` memory handoffs and DRM timeline fences.
 
-[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](https://opensource.org/licenses/MIT)
-[![Release](https://img.shields.io/github/v/release/ggml-org/llama.cpp?filter=v*&color=brightgreen)](https://github.com/ggml-org/llama.cpp/releases?q=tag:v0)
-[![Nightly](https://img.shields.io/github/v/release/ggml-org/llama.cpp?label=nightly&filter=b*&color=orange)](https://github.com/ggml-org/llama.cpp/releases?q=b)
-[![Server](https://img.shields.io/github/actions/workflow/status/ggml-org/llama.cpp/server.yml?label=Server)](https://github.com/ggml-org/llama.cpp/actions/workflows/server.yml)
-[![Docker](https://img.shields.io/github/actions/workflow/status/ggml-org/llama.cpp/docker.yml?label=Docker)](https://github.com/ggml-org/llama.cpp/actions/workflows/docker.yml)
-[![Winget](https://img.shields.io/github/actions/workflow/status/ggml-org/llama.cpp/winget.yml?label=Winget)](https://github.com/ggml-org/llama.cpp/actions/workflows/winget.yml)
+---
 
-[ggml](https://github.com/ggml-org/ggml) / [ops](https://github.com/ggml-org/llama.cpp/blob/master/docs/ops.md) / [maintainer PRs](https://github.com/ggml-org/llama.cpp/issues?q=is%3Apr%20is%3Aopen%20draft%3AFalse%20(author%3Argerganov%20OR%20author%3AKitaitiMakoto%20OR%20author%3Adanbev%20OR%20author%3Aaldehir%20OR%20author%3Amax-krasnyansky%20OR%20author%3ACISC%20OR%20author%3Aggerganov%20OR%20author%3Aam17an%20OR%20author%3Ajhen0409%20OR%20author%3Abartowski1182%20OR%20author%3Anikwen%20OR%20author%3Ahipudding%20OR%20author%3Aravi9%20OR%20author%3AServeurpersoCom%20OR%20author%3Apwilkin%20OR%20author%3Areeselevine%20OR%20author%3Angxson%20OR%20author%3Ajeffbolznv%20OR%20author%3Amarty1885%20OR%20author%3A0cc4m%20OR%20author%3ATitaniumtown%20OR%20author%3Aangt%20OR%20author%3AIMbackK%20OR%20author%3Aarthw%20OR%20author%3AJohannesGaessler%20OR%20author%3AORippler%20OR%20author%3Aruixiang63%20OR%20author%3Axctan%20OR%20author%3Aallozaur%20OR%20author%3Ayomaytk%20OR%20author%3Aaendk%20OR%20author%3Awine99%20OR%20author%3Agaugarg-nv%20OR%20author%3Ataronaeo%20OR%20author%3Aforforever73%20OR%20author%3Alhez%20OR%20author%3Anetrunnereve%20OR%20author%3Afairydreaming)%20sort%3Aupdated-desc) / [dev stats](https://github.com/ggml-org/llama.cpp-dev) / [lib llama API](https://github.com/ggml-org/llama.cpp/issues/9289) / [llama-server REST API](https://github.com/ggml-org/llama.cpp/issues/9291)
+## Upstream llama.cpp vs. llama-apu: Key Architectural Differences
 
-</div>
+While upstream [llama.cpp](https://github.com/ggml-org/llama.cpp) focuses on generic CPU and discrete GPU offloading across diverse platforms, **`llama-apu`** custom-tailors the execution pipeline specifically for AMD Unified Memory Architecture (UMA) APU silicon:
 
-## Quick start
+| Feature / Subsystem | Upstream `llama.cpp` | `llama-apu` (This Fork) |
+| :--- | :--- | :--- |
+| **Pipeline Acceleration** | Single accelerator (CPU or GPU) or static layer split | **Phase-partitioned heterogeneous pipeline**: Compute-heavy Prefill on iGPU $\to$ Memory-bound Decode on NPU $\to$ Sampling on AVX-512 CPU |
+| **Cross-Device Handoff** | Host-side memory copies (`memcpy` through host RAM) | **Zero-Copy Linux Prime `dma-buf`**: Direct cross-accelerator KV cache binding in physical LPDDR5X DRAM |
+| **Synchronization** | CPU polling and host-side synchronization | **Kernel DRM timeline fences (`drm_syncobj`)**: Non-blocking asynchronous hardware execution without CPU spinloops |
+| **NPU (XDNA 2) Offload** | Unsupported or generic NPU shims | **Native XDNA 2 AIE2P tile streaming**: Optimized 32-tile dataflow execution via `/dev/accel/accel0` |
+| **Hardware Microcode** | None / manual external setup | **Bundled 37-profile XDNA 2 XCLBIN bank**: Auto-resolved and auto-discovered in system search paths |
+| **CLI & Stage Overrides** | Generic `-ngl` / `-t` flags | **Granular stage routing**: `--tokenize`, `--prefill`, `--decode`, `--gpu-based`, `--cpu-based`, `--npu-based`, `--apu-xclbin`, `--apu-verbose` |
+| **Quantization Policy** | Sub-1-bit to 8-bit generic quants | **Q4–Q16 alignment matrix**: Native hardware support for Q4 through Q16 (`Q4_K_M`, `IQ4_NL`, `Q5_K_M`, `Q8_0`, `BF16`, `F16`), rejecting unaligned sub-4-bit quants that break tile memory strides |
+| **Hardware Diagnostics** | External or ad-hoc scripts | **Integrated `apu-doctor` & `apu-model`**: Built-in verification for kernel nodes (`renderD128`, `accel0`), permissions, and model inspection |
 
-A few options to get `llama.cpp` installed on your machine:
+---
 
-- Visit https://llama.app and follow the instructions
-- Run with Docker - see our [Docker documentation](docs/docker.md)
-- Download pre-built binaries from the [releases page](https://github.com/ggml-org/llama.cpp/releases)
-- Build from source by cloning this repository - check out [our build guide](docs/build.md)
+## Supported AMD Silicon Matrix
 
-Once installed:
+| Silicon Family | iGPU Prefill Engine | NPU Decode Engine | UMA Bandwidth | Target Profile |
+| :--- | :--- | :--- | :--- | :--- |
+| **AMD Strix Point** (HX 370 / 365) | 16 CUs RDNA 3.5 | 32-tile AIE2P (50 TOPS) | 136 GB/s LPDDR5X | Prefill: iGPU $\to$ Decode: NPU |
+| **AMD Gorgon Point** (HX 470) | 16 CUs RDNA 3.5 | 32-tile AIE2P (55 TOPS) | 136 GB/s LPDDR5X | Prefill: iGPU $\to$ Decode: NPU |
+| **AMD Krackan Point** (Ryzen AI 7) | 8 CUs RDNA 3.5 | 16-tile AIE2P (32 TOPS) | 120 GB/s LPDDR5X | Prefill: iGPU $\to$ Decode: NPU |
+| **AMD Strix Halo** (MAX+ 395) | 40 CUs RDNA 3.5 | 32-tile AIE2P (55 TOPS) | 273 GB/s (256-bit) | Prefill: iGPU $\to$ Decode: iGPU / NPU |
 
-```sh
-# Download and run a model directly from Hugging Face
-llama cli -hf ggml-org/Qwen3.5-0.8B-GGUF
+*For complete architectural specifications and kernel driver requirements, see [HARDWARE_SUPPORT.md](HARDWARE_SUPPORT.md).*
 
-# Launch OpenAI-compatible API server
-llama serve -hf ggml-org/Qwen3.5-0.8B-GGUF
+---
+
+## Quick Start
+
+### 1. Installation
+
+#### Option A: Pre-compiled Release Bundle (Recommended)
+Download the latest pre-compiled bundle from the [Releases page](https://github.com/fencerJP/llama-apu/releases):
+```bash
+tar -xzf llama-apu-0.2.1-linux-x86_64.tar.gz
+cd llama-apu-0.2.1-linux-x86_64
+sudo ./install.sh
 ```
 
-<table align="center">
-    <tr>
-        <td align="center" width=50%>
-            <img width="1310" height="888" alt="VLM session with `llama cli`" src="https://github.com/user-attachments/assets/88726b48-1713-48aa-a525-95a02e78afc4" />
-            <i>VLM session with <b>llama cli</b></i>
-        </td>
-        <td align="center">
-            <img width="1392" height="958" alt="Built-in web UI against `llama serve` running Qwen 3.6" src="https://github.com/user-attachments/assets/b402f972-2e32-4def-8771-8d849f08cf2e" />
-            <i>Built-in web UI against <b>llama serve</b></i>
-        </td>
-    </tr>
-<table>
+#### Option B: Build from Source
+```bash
+# 1. Build the Rust APU backend engine
+cd zero-copy_model_runner
+RUSTFLAGS="-C target-cpu=native" cargo build --release
 
-## Description
+# 2. Build the C++ frontend with APU backend enabled
+cd ../llamacpp-update/llama.cpp
+cmake -B build -DLLAMA_APU_BACKEND=ON -DCMAKE_BUILD_TYPE=Release
+cmake --build build --config Release -j$(nproc)
+```
 
-The main goal of `llama.cpp` is to enable LLM (and VLM) inference with minimal setup and state-of-the-art performance on
-a wide range of hardware - locally and in the cloud.
+### 2. Verify Hardware Environment
+```bash
+apu-doctor
+```
 
-- Plain C/C++ implementation without any dependencies
-- Apple silicon is a first-class citizen - optimized via ARM NEON, Accelerate and Metal frameworks
-- AVX, AVX2, AVX512 and AMX support for x86 architectures
-- RVV, ZVFH, ZFH, ZICBOP and ZIHINTPAUSE support for RISC-V architectures
-- 1.5-bit, 2-bit, 3-bit, 4-bit, 5-bit, 6-bit, and 8-bit integer quantization for faster inference and reduced memory use
-- Custom CUDA kernels for running LLMs on NVIDIA GPUs (support for AMD GPUs via HIP and Moore Threads GPUs via MUSA)
-- Vulkan and SYCL backend support
-- CPU+GPU hybrid inference to partially accelerate models larger than the total VRAM capacity
+### 3. Run Inference with the Native Multiplexer
+```bash
+# Single-prompt generation
+llama cli -m /path/to/model.gguf -p "Explain zero-copy memory architecture." -n 128
 
-The `llama.cpp` project is build on top of the [ggml](https://github.com/ggml-org/ggml) library.
+# Interactive conversation mode
+llama cli -m /path/to/model.gguf -cnv
 
-## Supported backends
+# Dedicated binary syntax is also supported
+llama-cli -m /path/to/model.gguf -p "What is the capital of France?" -n 64
+```
 
-| Backend | Target devices |
-| --- | --- |
-| [AMD APU (Zero-Copy)](docs/backend/APU.md) | AMD Ryzen AI APUs (RDNA 3.5 + XDNA 2) |
-| [BLAS](docs/build.md#blas-build) | All |
-| [BLIS](docs/backend/BLIS.md) | All |
-| [CANN](docs/build.md#cann) | Ascend NPU |
-| [CUDA](docs/build.md#cuda) | Nvidia GPU |
-| [HIP](docs/build.md#hip) | AMD GPU |
-| [Hexagon](docs/backend/snapdragon/README.md) | Snapdragon |
-| [IBM zDNN](docs/backend/zDNN.md) | IBM Z & LinuxONE |
-| [MUSA](docs/build.md#musa) | Moore Threads GPU |
-| [Metal](docs/build.md#metal-build) | Apple Silicon |
-| [OpenCL](docs/backend/OPENCL.md) | Adreno GPU |
-| [OpenVINO [In Progress]](docs/backend/OPENVINO.md) | Intel CPUs, GPUs, and NPUs |
-| [RPC](https://github.com/ggml-org/llama.cpp/tree/master/tools/rpc) | All |
-| [SYCL](docs/backend/SYCL.md) | Intel GPU |
-| [VirtGPU](docs/backend/VirtGPU.md) | VirtGPU APIR |
-| [Vulkan](docs/build.md#vulkan) | GPU |
-| [WebGPU](docs/build.md#webgpu) | All |
-| [ZenDNN](docs/build.md#zendnn) | AMD CPU |
+### 4. Launch OpenAI-Compatible API Server
+```bash
+llama serve -m /path/to/model.gguf --host 0.0.0.0 --port 8080 -c 4096
+```
 
-## Documentation
+---
 
-#### Tools
+## APU Stage Controls & Runtime Flags
 
-- [cli](tools/cli/README.md)
-- [completion](tools/completion/README.md)
-- [server](tools/server/README.md)
-- [GBNF grammars](grammars/README.md)
+| Flag | Values | Default | Description |
+| :--- | :--- | :--- | :--- |
+| `--tokenize` | `cpu`, `gpu`, `npu` | `cpu` | Selects accelerator for prompt tokenization and subword splitting. |
+| `--prefill` | `gpu`, `cpu`, `npu` | `gpu` | Selects accelerator for batched GEMM prompt evaluation (RDNA 3.5 iGPU). |
+| `--decode` | `npu`, `gpu`, `cpu` | `npu` | Selects accelerator for memory-bound token generation (XDNA 2 NPU). |
+| `--gpu-based` | Preset flag | `disabled` | Macro preset: routes tokenization, prefill, and decode to the RDNA 3.5 iGPU. |
+| `--cpu-based` | Preset flag | `disabled` | Macro preset: routes all stages to host Zen 5 CPU cores via AVX-512. |
+| `--npu-based` | Preset flag | `disabled` | Macro preset: routes execution across the XDNA 2 NPU. |
+| `--apu-xclbin <PATH>` | File path (`.xclbin`) | Auto-resolved | Explicit override for XDNA 2 hardware microcode profile. |
+| `--apu-verbose` | Boolean | `false` | Enables real-time DMA-BUF buffer allocation and DRM timeline fence telemetry. |
 
-#### Development
+*See [CLI_GUIDE.md](CLI_GUIDE.md) for full parameter specifications and REST API documentation.*
 
-- [How to build](docs/build.md)
-- [Running on Docker](docs/docker.md)
-- [Build on Android](docs/android.md)
-- [Multi-GPU usage](docs/multi-gpu.md)
-- [Performance troubleshooting](docs/development/token_generation_performance_tips.md)
-- [GGML tips & tricks](https://github.com/ggml-org/llama.cpp/wiki/GGML-Tips-&-Tricks)
-- [XCFramework](docs/xcframework.md)
-- [Completions](docs/completions.md)
-- [Models](docs/models.md)
-- [Release process](docs/release.md)
+---
 
-## Contributing
+## Small-scale preliminary xclbin comparison test results
 
-- Contributors can open PRs
-- Collaborators will be invited based on contributions
-- Maintainers can push to branches in the `llama.cpp` repo and merge PRs into the `master` branch
-- Any help with managing issues, PRs and projects is very appreciated!
-- Read the [CONTRIBUTING.md](CONTRIBUTING.md) for more information
+We evaluated 10 neural model configurations across 3 XCLBIN hardware binary variants (Vendor Built-in, Custom Enhanced with 64MB SRAM, Custom Mimic) on host AMD Ryzen AI silicon (**AMD Ryzen AI 9 HX 470 APU**) using a standardized 180-token systems architecture prompt.
 
-## Acknowledgements
+| Model Name | Model ID | Built-in TTFT | Built-in t/s | Enhanced TTFT | Enhanced t/s | Mimic TTFT | Mimic t/s | Output Quality & Acceptability |
+| :--- | :--- | :---: | :---: | :---: | :---: | :---: | :---: | :--- |
+| **Qwen2.5-0.5B-Instruct** | `qwen2.5-0.5b` | 6,032.8 ms | 14.3 t/s | 6,052.6 ms | 15.2 t/s | 6,388.9 ms | 14.1 t/s | **Acceptable (High)**: Structured PUM breakdown |
+| **Llama-3.2-1B-Instruct** | `llama-3.2-1b` | 12,676.1 ms | 7.3 t/s | 12,587.4 ms | 8.0 t/s | 12,413.8 ms | 8.3 t/s | **Acceptable (High)**: Coherent systems intro |
+| **Gemma-2-2B-IT** | `gemma-2-2b` | 3,692.6 ms | 13.4 t/s | 3,685.3 ms | 13.2 t/s | 3,550.9 ms | 12.7 t/s | **Acceptable (High)**: Direct technical headers |
+| **Spark-X2.5-1.7B** | `spark-x2.5-1.7b` | 18,627.5 ms | 4.8 t/s | 19,191.9 ms | 4.6 t/s | 18,269.2 ms | 4.8 t/s | **Acceptable (Coherent)**: Chain-of-thought analysis |
+| **K2-Horizon-1B-BF16** | `k2-horizon-1b` | 13,188.4 ms | 5.9 t/s | 13,382.4 ms | 6.1 t/s | 12,638.9 ms | 6.2 t/s | **Acceptable (Coherent)**: Systems architecture reasoning |
+| **Qwen3.5-0.8B-Q4_K_M** | `qwen3.5-0.8b` | 584.7 ms | 40.0 t/s | 582.1 ms | 39.7 t/s | 545.4 ms | 43.0 t/s | **Acceptable (Coherent)**: High-speed linear attention |
+| **Qwen2.5-3B-Instruct** | `qwen2.5-3b` | 4,044.0 ms | 9.9 t/s | 3,991.3 ms | 9.5 t/s | 3,931.6 ms | 9.8 t/s | **Acceptable (Coherent)**: Detailed comparative analysis |
+| **Llama-3.2-3B-Instruct** | `llama-3.2-3b` | 3,838.0 ms | 9.2 t/s | 3,719.0 ms | 9.7 t/s | 3,592.8 ms | 10.8 t/s | **Acceptable (High)**: Comprehensive technical breakdown |
+| **Gemma-4-E4B** | `gemma-4-e4b` | 6,026.1 ms | 7.8 t/s | 5,799.4 ms | 8.2 t/s | 5,745.3 ms | 8.3 t/s | **Acceptable (Coherent)**: Structured planning and points |
+| **DeepSeek-R1-0528-Qwen3-8B** | `deepseek-r1-qwen3-8b` | 5,575.8 ms | 4.9 t/s | 5,768.0 ms | 5.0 t/s | 5,878.6 ms | 5.0 t/s | **Acceptable (Fluent)**: Detailed reasoning process |
 
-- [yhirose/cpp-httplib](https://github.com/yhirose/cpp-httplib) - Single-header HTTP server, used by `llama-server` - MIT license
-- [nothings/stb](https://github.com/nothings/stb) - Single-header image format decoder, used by multimodal subsystem - Public domain
-- [nlohmann/json](https://github.com/nlohmann/json) - Single-header JSON library, used by various tools/examples - MIT License
-- [mackron/miniaudio](https://github.com/mackron/miniaudio) - Single-header audio format decoder, used by multimodal subsystem - Public domain
-- [sheredom/subprocess.h](https://github.com/sheredom/subprocess.h) - Single-header process launching solution for C and C++ - Public domain
+---
+
+## Documentation Index
+
+- [CLI Reference Guide](CLI_GUIDE.md): Full command-line options, stage flags, and OpenAI API endpoint documentation.
+- [Quantization Matrix](QUANTIZATION.md): Supported Q4–Q16 format specifications and sub-4-bit rejection policies.
+- [Hardware Support Matrix](HARDWARE_SUPPORT.md): Per-silicon architecture breakdown, driver nodes, and memory subsystem tuning.
+- [Changelog](CHANGELOG.md): Version history, updates, and release notes.
+- [APU Architecture Guide](docs/backend/APU.md): Deep-dive into DMA-BUF memory bridges and DRM timeline fences.
+
+---
+
+## Attribution & License
+
+- **Original Project**: This software is based on and derived from [ggml-org/llama.cpp](https://github.com/ggml-org/llama.cpp) by Georgi Gerganov and contributors, licensed under the [MIT License](LICENSE).
+- **APU Zero-Copy Backend**: Developed under Apache License, Version 2.0 / MIT.
+- **Attribution Policy**: Upstream file naming and core C/C++ data structures (`ggml.h`, `ggml_tensor`) are maintained intact as proper open-source attribution.
