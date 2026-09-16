@@ -72,10 +72,6 @@ struct llama_hparams {
     uint32_t n_expert = 0;
     uint32_t n_rel_attn_bkts = 0;
 
-    // K2 Horizon MoVA
-    uint32_t n_value_expert = 0;
-    uint32_t n_value_expert_used = 0;
-
     // TODO: this needs to be reworked
     int32_t  n_layer_kv_from_start = -1; // if non-negative, the first n_layer_kv_from_start layers have KV cache
 
@@ -130,6 +126,10 @@ struct llama_hparams {
     uint32_t expert_gating_func   = LLAMA_EXPERT_GATING_FUNC_TYPE_NONE;
     uint32_t moe_every_n_layers   = 0;
     uint32_t moe_latent_size      = 0;
+
+    // MoVA (K2-Horizon)
+    uint32_t n_value_expert      = 0;
+    uint32_t n_value_expert_used = 0;
 
     float f_norm_eps;
     float f_norm_rms_eps;
@@ -209,6 +209,12 @@ struct llama_hparams {
     float    kda_gate_lower_bound = -INFINITY;
     float    situ_beta            = 1.0f;
     float    situ_linear_beta     = 0.0f;   // 0 = no linear-beta transform on the up branch
+
+    // hrm-text (looped H/L stacks)
+    uint32_t n_hrm_layers_per_stack = 0;
+    uint32_t n_hrm_h_cycles = 0;
+    uint32_t n_hrm_l_cycles = 0;
+    bool     hrm_prefix_lm = false;
 
     bool ssm_dt_b_c_rms = false;
 

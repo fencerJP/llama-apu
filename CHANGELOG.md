@@ -5,6 +5,23 @@ All notable changes to the **llama-apu** project (AMD Ryzen AI APU Zero-Copy Bac
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.2.3] - 2026-09-17
+
+### Added
+- **RDNA 3.5 MoE Tile Heuristic Optimization**:
+  - Broadened MoE `ncols_opt` tile sizing in `ggml-cuda/mmq.cu` to include RDNA 3.5 architecture (`GGML_CUDA_CC_IS_RDNA3`), yielding +11% to +16% prefill speedup on Ryzen AI 9 HX 470 (Radeon 890M / gfx1150/1151).
+- **CPU Heap Corruption & Cache Line Sizing Fix**:
+  - Removed `std::hardware_destructive_interference_size` ambiguity in `ggml-cpu/ops.h` and disabled problematic PCH include ordering, preventing RoPE work-buffer undersizing and heap corruption on AVX-512 Zen 5 cores.
+- **Enhanced Tensor Parallelism & Reasoning Parsers**:
+  - Fixed split state and granularity for fused QKV attention layers on Gemma 4 and Qwen 3.5 architectures (`src/llama-model.cpp`).
+  - Added forced `\n</think>` token injection upon reasoning budget expiration for Qwen3-Coder models (`common/parsers/qwen3-coder.cpp`).
+  - Added `--version` build metadata reporting in `llama-bench`.
+  - Added support for `HrmTextForCausalLM` (DFM Mimir 1B) and `Maple 20B-A1B` ternary MoE architecture.
+  - Improved `im2col` strided memory access patterns for HIP/ROCm vision encoders.
+  - Fixed MIMO-2 SWA sliding-window attention pattern loading and Nemotron-H `layer_norm_epsilon` handling.
+
+---
+
 ## [0.2.2] - 2026-09-16
 
 ### Added

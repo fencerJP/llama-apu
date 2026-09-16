@@ -120,17 +120,17 @@ void llama_model_k2_horizon::load_arch_tensors(llama_model_loader & ml) {
         if (is_mova_layer) {
             layer.attn_v_gate = create_tensor(
                 tn(LLM_TENSOR_ATTN_V_GATE, "weight", i),
-                {n_embd, hparams.n_value_expert},
+                {n_embd, (int64_t)hparams.n_value_expert},
                 0
             );
             layer.attn_v_gate_b = create_tensor(
                 tn(LLM_TENSOR_ATTN_V_GATE, "bias", i),
-                {hparams.n_value_expert},
+                {(int64_t)hparams.n_value_expert},
                 TENSOR_NOT_REQUIRED
             );
             layer.attn_v_exps = create_tensor(
                 tn(LLM_TENSOR_ATTN_V_EXPS, "weight", i),
-                {n_embd, n_embd_v_gqa, hparams.n_value_expert},
+                {n_embd, n_embd_v_gqa, (int64_t)hparams.n_value_expert},
                 0
             );
         }
