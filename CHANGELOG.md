@@ -5,6 +5,29 @@ All notable changes to the **llama-apu** project (AMD Ryzen AI APU Zero-Copy Bac
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.2.2] - 2026-09-16
+
+### Added
+- **K2 Horizon Architecture Support**:
+  - Native compute graph implementation (`src/models/k2-horizon.cpp`) supporting dense and MoE configurations (K2-Horizon-7B and K2-Horizon-32B).
+  - Architecture registration in `src/llama-arch.cpp` and `src/llama-arch.h`.
+  - Tokenizer and vocabulary support (`src/llama-vocab.cpp`, `src/llama-vocab.h`, `models/templates/k2-horizon.jinja`).
+  - Hugging Face to GGUF conversion pipeline (`conversion/k2_horizon.py`).
+  - Zero-copy `.q4nx` container packaging with embedded XDNA 2 hardware binary bindings.
+- **Upstream ROCm & AMD APU Performance Improvements**:
+  - `llama`: Disabled lazy tensor loading by default on iGPUs for unified memory stability (`#28326`).
+  - `HIP`: Enabled FP32 accumulation in `fattn-mma` on MFMA devices for numerical accuracy (`#28576`).
+  - `HIP`: Enabled AllReduce for ROCm backends (`#27825`).
+  - `CUDA/HIP`: Flash Attention kernel tuning for `gfx1201` (`#28102`).
+  - `memory`: Avoided allocating V cache for indexer when unused, reducing memory footprint (`#28330`).
+  - `model`: Fixed MTP context KV cache allocation for DeepSeek-V2 and GLM4-MoE (`#28630`).
+  - `server`: Fixed LRU cache hang on concurrent multiple requests for the same model (`#28539`).
+  - `server`: Allowed model downloads at model limit (`#28530`).
+  - `webui`: Stopped re-probing disabled `/tools` endpoint on every message (`#28646`).
+  - `jinja`: Treated null left operand of `in` as plain lookup (`#28620`).
+  - `vendor`: Updated `cpp-httplib` to `0.56.0` (`#28787`).
+  - `llama`: Used `int32_t` for `llama_sampler_chain_n` return type (`#28631`).
+
 ---
 
 ## [0.2.1] - 2026-09-15
