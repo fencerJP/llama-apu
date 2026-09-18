@@ -1,0 +1,89 @@
+# Changelog
+
+All notable changes to the **llama-apu** project (AMD Ryzen AI APU Zero-Copy Backend) are documented in this file.
+
+The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
+and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+
+## [0.2.2] - 2026-09-16
+
+### Added
+- **K2 Horizon Architecture Support**:
+  - Native compute graph implementation (`src/models/k2-horizon.cpp`) supporting dense and MoE configurations (K2-Horizon-7B and K2-Horizon-32B).
+  - Architecture registration in `src/llama-arch.cpp` and `src/llama-arch.h`.
+  - Tokenizer and vocabulary support (`src/llama-vocab.cpp`, `src/llama-vocab.h`, `models/templates/k2-horizon.jinja`).
+  - Hugging Face to GGUF conversion pipeline (`conversion/k2_horizon.py`).
+  - Zero-copy `.q4nx` container packaging with embedded XDNA 2 hardware binary bindings.
+- **Upstream ROCm & AMD APU Performance Improvements**:
+  - `llama`: Disabled lazy tensor loading by default on iGPUs for unified memory stability (`#28326`).
+  - `HIP`: Enabled FP32 accumulation in `fattn-mma` on MFMA devices for numerical accuracy (`#28576`).
+  - `HIP`: Enabled AllReduce for ROCm backends (`#27825`).
+  - `CUDA/HIP`: Flash Attention kernel tuning for `gfx1201` (`#28102`).
+  - `memory`: Avoided allocating V cache for indexer when unused, reducing memory footprint (`#28330`).
+  - `model`: Fixed MTP context KV cache allocation for DeepSeek-V2 and GLM4-MoE (`#28630`).
+  - `server`: Fixed LRU cache hang on concurrent multiple requests for the same model (`#28539`).
+  - `server`: Allowed model downloads at model limit (`#28530`).
+  - `webui`: Stopped re-probing disabled `/tools` endpoint on every message (`#28646`).
+  - `jinja`: Treated null left operand of `in` as plain lookup (`#28620`).
+  - `vendor`: Updated `cpp-httplib` to `0.56.0` (`#28787`).
+  - `llama`: Used `int32_t` for `llama_sampler_chain_n` return type (`#28631`).
+
+---
+
+## [0.2.1] - 2026-09-15
+
+### Added
+- **Native `llama` Multiplexer Binary Integration**: Bundled and installed the native compiled upstream `app/llama.cpp` multiplexer binary to seamlessly dispatch `llama cli`, `llama serve`, `llama bench`, `llama quantize`, `llama download`, and `llama completion` without requiring symlinks.
+- **Repository Cleanliness & Privacy**: Configured strict `.gitignore` patterns ensuring no internal metadata or transient files are tracked.
+
+---
+
+## [0.2.0] - 2026-09-15
+
+### Added
+- **Production XDNA 2 Hardware Binary Bank**: Bundled 37 pre-compiled production and experimental `.xclbin` profiles in `xclbins/` for Strix Point, Gorgon Point, Krackan Point, and Strix Halo.
+- **System-Wide XCLBIN Auto-Discovery**: Runtime container resolver and installer now automatically look up and register hardware profiles in `/usr/local/share/llama-apu/xclbins`, `~/.local/share/llama-apu/xclbins`, and `LLAMA_APU_XCLBINS_DIR`.
+
+---
+
+## [0.1.0] - 2026-09-15
+
+### Added
+- **AMD Ryzen AI Zero-Copy APU Backend (`apu-backend`)**:
+  - Direct Linux Prime `dma-buf` cross-accelerator memory handoff between RDNA 3.5 iGPU and AMD XDNA 2 NPU (AIE2P).
+  - Explicit Linux DRM synchronization objects (`drm_syncobj`) and timeline fence tracking without CPU spinloops.
+  - Unified `TransformerContext` binding shared KV cache buffers in physical LPDDR5X DRAM with 64-byte cacheline alignment.
+- **Heterogeneous Pipeline Routing**:
+  - Batched GEMM prompt prefill offloaded to RDNA 3.5 iGPU (`gfx1150`).
+  - Autoregressive single-token GEMV decode streamed through 32 AIE2P spatial tiles on XDNA 2 NPU (`/dev/accel/accel0`).
+  - Native Zen 5 AVX-512 SIMD vectorization for sampling and token operations.
+- **Granular Accelerator CLI Flags**:
+  - `--tokenize {cpu,gpu,npu}`: Override prompt tokenization target.
+  - `--prefill {gpu,cpu,npu}`: Override compute-heavy prefill forward pass target.
+  - `--decode {npu,gpu,cpu}`: Override autoregressive decode loop target.
+  - `--gpu-based`, `--cpu-based`, `--npu-based`: Macro accelerator presets.
+  - `--apu-xclbin <PATH>`: Override path to compiled XCLBIN hardware graph microcode.
+  - `--apu-verbose`: Enable detailed DMA-BUF allocations and DRM timeline fence telemetry.
+- **Hardware Diagnostics & Tooling**:
+  - `apu-doctor`: Probes CPU AVX-512, `/dev/dri/renderD128`, `/dev/kfd`, `/dev/accel/accel0`, ROCm runtime, and user group permissions.
+  - `apu-model`: Subcommands `info`, `convert`, and `stamp` for GGUF metadata inspection, Q4–Q16 format conversion, and turnkey `.q4nx` container packaging with embedded XCLBINs.
+  - `apu-run`: Standalone C++ heterogeneous CLI runner linking `libzero_copy_model_runner.a`.
+- **Quantization Support Matrix (Q4 to Q16)**:
+  - Full ingestion of `Q4_0`, `Q4_1`, `Q4_K_M`, `Q4_K_S`, `IQ4_NL` (non-linear codebook mapping), `IQ4_XS`, `Q5_0`, `Q5_1`, `Q5_K_M`, `Q5_K_S`, `Q6_K`, `Q8_0`, `F16`, `BF16`, `F32`.
+  - Descriptive rejection of non-recommended sub-4-bit formats (`IQ1_*`, `IQ2_*`, `Q2_K`, `IQ3_*`, `Q3_K_*`) that break AIE2P tile alignment.
+- **Upstream `llama.cpp` Integration**:
+  - Seamless drop-in compatibility with `llama-cli` and `llama-server` (OpenAI REST API with SSE streaming).
+- **Silicon Architecture Support**:
+  - AMD Strix Point (Ryzen AI 9 HX 370 / 365).
+  - AMD Gorgon Point (Ryzen AI 9 HX 470).
+  - AMD Krackan Point (Ryzen AI 7).
+  - AMD Strix Halo (Ryzen AI Max+ 395) with 256-bit UMA hugepage memory bus tuning.
+- **Packaging & Deployment Automation**:
+  - `scripts/install.sh`: Unified single-command installer.
+  - `scripts/package_release.sh`: Self-contained tarball generator with SHA-256 verification.
+  - `scripts/99-amdxdna-apu.rules`: Udev access rules for non-root hardware nodes.
+  - `scripts/llama-server.service`: Hardened systemd daemon configuration.
+  - `.github/workflows/ci.yml` and `release.yml`: GitHub Actions continuous integration and automated release pipelines.
+
+### Preliminary Benchmarks
+- Included "Small-scale preliminary xclbin comparison test results" across 10 neural model families comparing Vendor Built-in, Custom Enhanced (64MB SRAM), and Custom Mimic XCLBINs on physical AMD Ryzen AI 9 HX 470 APU hardware.
