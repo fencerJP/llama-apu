@@ -1769,6 +1769,69 @@ common_params_context common_params_parser_init(common_params & params, llama_ex
                            }
                        }).set_env("LLAMA_ARG_FLASH_ATTN"));
     add_opt(common_arg(
+        {"--quest-sparsity"}, "FLOAT",
+        string_format("Quest dynamic KV cache page sparsity ratio in [0.0, 1.0) (default: %.2f, 0.0 = disabled)", params.quest_sparsity),
+        [](common_params & params, const std::string & value) {
+            params.quest_sparsity = std::stof(value);
+        }
+    ).set_env("LLAMA_ARG_QUEST_SPARSITY"));
+    add_opt(common_arg(
+        {"--quest-pages", "--quest-min-pages"}, "N",
+        string_format("Quest minimum retained KV cache pages (default: %u)", params.quest_min_pages),
+        [](common_params & params, int value) {
+            params.quest_min_pages = (uint32_t) value;
+        }
+    ).set_env("LLAMA_ARG_QUEST_MIN_PAGES"));
+    add_opt(common_arg(
+        {"--quest-page-size"}, "N",
+        string_format("Quest tokens per KV cache page (default: %u)", params.quest_page_size),
+        [](common_params & params, int value) {
+            params.quest_page_size = (uint32_t) value;
+        }
+    ).set_env("LLAMA_ARG_QUEST_PAGE_SIZE"));
+    add_opt(common_arg(
+        {"--chunked-kv"},
+        "enable chunked KV cache allocation aligned to hardware boundaries (default: enabled)",
+        [](common_params & params) {
+            params.chunked_kv = true;
+        }
+    ).set_env("LLAMA_ARG_CHUNKED_KV"));
+    add_opt(common_arg(
+        {"--no-chunked-kv"},
+        "disable chunked KV cache allocation",
+        [](common_params & params) {
+            params.chunked_kv = false;
+        }
+    ));
+    add_opt(common_arg(
+        {"--chunk-size", "--kv-chunk-size"}, "N",
+        string_format("Chunked KV cache block size in tokens (default: %u)", params.kv_chunk_size),
+        [](common_params & params, int value) {
+            params.kv_chunk_size = (uint32_t) value;
+        }
+    ).set_env("LLAMA_ARG_CHUNK_SIZE"));
+    add_opt(common_arg(
+        {"--triforce", "--spec-triforce"},
+        "enable TriForce hierarchical speculative decoding (default: disabled)",
+        [](common_params & params) {
+            params.triforce = true;
+        }
+    ).set_env("LLAMA_ARG_TRIFORCE"));
+    add_opt(common_arg(
+        {"--no-triforce"},
+        "disable TriForce hierarchical speculative decoding",
+        [](common_params & params) {
+            params.triforce = false;
+        }
+    ));
+    add_opt(common_arg(
+        {"--triforce-draft", "--triforce-draft-k"}, "N",
+        string_format("TriForce speculative draft lookahead window K (default: %u)", params.triforce_draft_k),
+        [](common_params & params, int value) {
+            params.triforce_draft_k = (uint32_t) value;
+        }
+    ).set_env("LLAMA_ARG_TRIFORCE_DRAFT"));
+    add_opt(common_arg(
         {"-p", "--prompt"}, "PROMPT",
         "prompt to start generation with; for system message, use -sys",
         [](common_params & params, const std::string & value) {

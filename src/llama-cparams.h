@@ -72,4 +72,17 @@ struct llama_cparams {
     std::string apu_decode   = "npu";
     std::string apu_xclbin   = "";
     bool        apu_verbose  = false;
+
+    // Quest dynamic page KV cache sparsity
+    float       quest_sparsity  = 0.0f;
+    uint32_t    quest_min_pages = 16;
+    uint32_t    quest_page_size = 16;
+
+    // Chunked KV Allocation (enabled by default)
+    bool        chunked_kv      = true;
+    uint32_t    chunk_size      = 32;
+
+    // TriForce hierarchical speculative decoding (disabled by default)
+    bool        triforce        = false;
+    uint32_t    triforce_draft_k= 4;
 };

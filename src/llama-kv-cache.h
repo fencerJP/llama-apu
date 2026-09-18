@@ -4,6 +4,7 @@
 #include "llama-graph.h"
 #include "llama-kv-cells.h"
 #include "llama-memory.h"
+#include "llama-kv-cache-quest.h"
 
 #include <unordered_map>
 #include <vector>
@@ -235,6 +236,16 @@ public:
     // true if llama_kv_cell_ext holds information that has to survive a state save/restore
     bool has_cell_ext() const;
 
+    // Quest dynamic page KV sparsity
+    void set_quest_params(const llama_quest_params & qparams);
+    const llama_quest_tracker & get_quest() const { return quest; }
+    llama_quest_tracker & get_quest() { return quest; }
+
+    // Chunked KV Allocation
+    void set_chunked_kv_params(bool enabled, uint32_t size);
+    bool get_chunked_kv() const { return chunked_kv; }
+    uint32_t get_chunk_size() const { return chunk_size; }
+
     // for every token of the ubatch, the ids of the n tokens that precede it in its sequence
     // example for M-RoPE image case: tokens A B X X X C, where X is a 3-token image at pos 2 spanning positions 2..4:
     //   tok: A B X X X C
@@ -312,6 +323,13 @@ private:
 
     // model layer id -> KV cache layer id
     std::unordered_map<int32_t, int32_t> map_layer_ids;
+
+    // Quest dynamic page KV tracker
+    llama_quest_tracker quest;
+
+    // Chunked KV allocation
+    bool chunked_kv = true;
+    uint32_t chunk_size = 32;
 
     size_t total_size() const;
 

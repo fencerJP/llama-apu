@@ -509,6 +509,19 @@ struct common_params {
     std::string apu_xclbin   = "";
     bool        apu_verbose  = false;
 
+    // Quest dynamic page-level KV cache sparsity
+    float       quest_sparsity  = 0.0f;
+    uint32_t    quest_min_pages = 16;
+    uint32_t    quest_page_size = 16;
+
+    // Chunked KV Allocation (enabled by default)
+    bool        chunked_kv      = true;
+    uint32_t    kv_chunk_size   = 32;
+
+    // TriForce hierarchical speculative decoding (disabled by default)
+    bool        triforce        = false;
+    uint32_t    triforce_draft_k= 4;
+
     struct common_params_model model;
 
     std::set<std::string> model_alias;     // model aliases                                                 // NOLINT

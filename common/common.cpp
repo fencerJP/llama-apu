@@ -1758,6 +1758,15 @@ struct llama_context_params common_context_params_to_llama(const common_params &
     cparams.apu_xclbin   = params.apu_xclbin.empty() ? nullptr : params.apu_xclbin.c_str();
     cparams.apu_verbose  = params.apu_verbose;
 
+    cparams.quest_sparsity  = params.quest_sparsity;
+    cparams.quest_min_pages = params.quest_min_pages;
+    cparams.quest_page_size = params.quest_page_size;
+
+    cparams.chunked_kv       = params.chunked_kv;
+    cparams.chunk_size       = params.kv_chunk_size;
+    cparams.triforce         = params.triforce;
+    cparams.triforce_draft_k = params.triforce_draft_k;
+
     return cparams;
 }
 

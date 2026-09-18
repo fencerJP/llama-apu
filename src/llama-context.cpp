@@ -7,6 +7,7 @@
 #include "llama-batch.h"
 #include "llama-io.h"
 #include "llama-memory.h"
+#include "llama-kv-cache.h"
 #include "llama-mmap.h"
 #include "llama-model.h"
 #include "llama-ext.h"
@@ -248,6 +249,15 @@ llama_context::llama_context(
     // with causal attention, the batch size is limited by the context size
     cparams.n_batch = cparams.causal_attn ? std::min(cparams.n_ctx, params.n_batch) : params.n_batch;
 
+    cparams.quest_sparsity  = params.quest_sparsity;
+    cparams.quest_min_pages = params.quest_min_pages;
+    cparams.quest_page_size = params.quest_page_size;
+
+    cparams.chunked_kv       = params.chunked_kv;
+    cparams.chunk_size       = params.chunk_size;
+    cparams.triforce         = params.triforce;
+    cparams.triforce_draft_k = params.triforce_draft_k;
+
     cparams.n_ubatch = std::min(cparams.n_batch, params.n_ubatch == 0 ? params.n_batch : params.n_ubatch);
 
     cparams.n_outputs_max = params.n_outputs_max == 0 || llama_model_has_encoder(&model) ? cparams.n_batch : params.n_outputs_max;
@@ -397,6 +407,10 @@ llama_context::llama_context(
         };
 
         memory.reset(model.create_memory(params_mem, cparams));
+        if (auto * kv = dynamic_cast<llama_kv_cache *>(memory.get())) {
+            kv->set_quest_params({cparams.quest_sparsity, cparams.quest_min_pages, cparams.quest_page_size});
+            kv->set_chunked_kv_params(cparams.chunked_kv, cparams.chunk_size);
+        }
     }
 
     // init backends
@@ -3721,6 +3735,13 @@ llama_context_params llama_context_default_params() {
         /*.apu_decode                  =*/ "npu",
         /*.apu_xclbin                  =*/ nullptr,
         /*.apu_verbose                 =*/ false,
+        /*.quest_sparsity              =*/ 0.0f,
+        /*.quest_min_pages             =*/ 16,
+        /*.quest_page_size             =*/ 16,
+        /*.chunked_kv                  =*/ true,
+        /*.chunk_size                  =*/ 32,
+        /*.triforce                    =*/ false,
+        /*.triforce_draft_k            =*/ 4,
     };
 
     return result;

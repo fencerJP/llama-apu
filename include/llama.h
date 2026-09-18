@@ -423,6 +423,19 @@ extern "C" {
         const char * apu_decode;
         const char * apu_xclbin;
         bool         apu_verbose;
+
+        // Quest dynamic page-level KV cache sparsity
+        float        quest_sparsity;   // KV page sparsity threshold in [0.0, 1.0) (0.0 = disabled)
+        uint32_t     quest_min_pages;  // Minimum pages to retain during pruning
+        uint32_t     quest_page_size;  // Token page size (default 16)
+
+        // Chunked KV Allocation (enabled by default)
+        bool         chunked_kv;       // Align KV allocation to hardware chunk boundaries (default true)
+        uint32_t     chunk_size;       // Token chunk block size (default 32)
+
+        // TriForce hierarchical speculative decoding (disabled by default)
+        bool         triforce;         // Enable TriForce multi-tier speculative decoding (default false)
+        uint32_t     triforce_draft_k; // Speculative lookahead window K (default 4)
     };
 
     struct llama_model_tensor_override {

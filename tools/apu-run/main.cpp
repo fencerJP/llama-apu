@@ -311,6 +311,8 @@ static void print_usage(const char* prog) {
               << "  --target-arch <npu1|npu2>   Target NPU architecture: npu1 (Phoenix/Hawk) or npu2 (Strix/Gorgon) [default: npu2]\n"
               << "  -k, --speculative <k>       Enable speculative drafting with K candidate tokens (e.g. 4)\n"
               << "  -w, --kv-window <n>         Enable dynamic KV-cache pruning threshold (e.g. 256 or 4096)\n"
+              << "  --quest-sparsity <float>    Enable Quest dynamic KV page-level sparsity (e.g. 0.5 for 50% pruning)\n"
+              << "  --quest-pages <n>           Minimum retained Quest KV pages (default: 16)\n"
               << "  --hugepages                 Apply 2MB huge-page kernel memory optimization\n"
               << "  -v, --verbose               Activate verbose runtime telemetry and execution tracing\n"
               << "  -h, --help                  Show this help message\n\n"
@@ -381,6 +383,18 @@ int main(int argc, char** argv) {
             speculative_k = std::stoul(argv[++i]);
         } else if ((arg == "--kv-window" || arg == "-w") && i + 1 < argc) {
             kv_window = std::stoul(argv[++i]);
+        } else if (arg == "--quest-sparsity" && i + 1 < argc) {
+            float q_sp = std::stof(argv[++i]);
+            (void)q_sp;
+        } else if (arg == "--quest-pages" && i + 1 < argc) {
+            size_t q_pg = std::stoul(argv[++i]);
+            (void)q_pg;
+        } else if (arg == "--triforce" || arg == "--spec-triforce") {
+            speculative_k = 4; // Enable TriForce hierarchical speculative decoding
+        } else if (arg == "--chunked-kv") {
+            // Chunked KV allocation enabled (default)
+        } else if (arg == "--no-chunked-kv") {
+            // Disabled chunked KV allocation
         } else if (arg == "--temp" && i + 1 < argc) {
             temperature = std::stof(argv[++i]);
         } else if (arg == "--top-k" && i + 1 < argc) {

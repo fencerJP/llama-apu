@@ -1776,13 +1776,30 @@ void llama_kv_cache::set_input_kq_mask(ggml_tensor * dst, const llama_ubatch * u
 
     if (dst->type == GGML_TYPE_F16) {
         set_input_kq_mask_impl<ggml_fp16_t>(args, (ggml_fp16_t *) dst->data, causal_attn);
+        if (quest.is_enabled()) {
+            const std::vector<bool> active_pages = quest.compute_active_pages(0, (uint32_t)n_kv, nullptr, (uint32_t)hparams.n_head(0), (uint32_t)hparams.n_head_kv(0));
+            quest.apply_mask((ggml_fp16_t *) dst->data, n_kv, active_pages, llama_cast<ggml_fp16_t>(-INFINITY));
+        }
     } else {
         set_input_kq_mask_impl<float>(args, (float *) dst->data, causal_attn);
+        if (quest.is_enabled()) {
+            const std::vector<bool> active_pages = quest.compute_active_pages(0, (uint32_t)n_kv, nullptr, (uint32_t)hparams.n_head(0), (uint32_t)hparams.n_head_kv(0));
+            quest.apply_mask((float *) dst->data, n_kv, active_pages, -INFINITY);
+        }
     }
 
     //const int64_t t_end = ggml_time_us();
 
     //LLAMA_LOG_ERROR("%s: kq mask time: %0.3f ms\n", __func__, (t_end - t_start)/1000.0);
+}
+
+void llama_kv_cache::set_quest_params(const llama_quest_params & qparams) {
+    quest = llama_quest_tracker(hparams.n_layer_all, (uint32_t)hparams.n_head_kv(0), (uint32_t)hparams.n_embd_head_k(0), qparams);
+}
+
+void llama_kv_cache::set_chunked_kv_params(bool enabled, uint32_t size) {
+    chunked_kv = enabled;
+    chunk_size = size > 0 ? size : 32;
 }
 
 void llama_kv_cache::set_input_pos_bucket(ggml_tensor * dst, const llama_ubatch * ubatch) const {
