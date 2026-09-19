@@ -194,7 +194,8 @@ mod tests {
     use super::*;
     use crate::backend::{DeviceBackend, MockDeviceBackend};
     use crate::engine::DecodeEngine;
-    use crate::memory::MemoryBridge;
+    use crate::memory::{ChunkedKvConfig, MemoryBridge};
+    use std::sync::Arc;
 
     #[test]
     fn test_triforce_lifecycle_and_statistics() {

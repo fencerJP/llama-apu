@@ -1,6 +1,6 @@
 [package]
 name = "zero-copy-model-runner"
-version = "0.3.0"
+version = "0.3.1"
 edition = "2021"
 authors = ["Heterogeneous APU Orchestrator Contributors"]
 description = "Production-grade user-space heterogeneous LLM inference runtime orchestrator for AMD APUs"
