@@ -59,39 +59,50 @@ sudo ./install.sh
 git clone https://github.com/fencerJP/llama-apu.git
 cd llama-apu
 
-# 1. Build the Rust APU backend engine
-cd zero-copy_model_runner
-RUSTFLAGS="-C target-cpu=native" cargo build --release
-cd ..
-
-# 2. Build the C++ frontend with APU backend enabled
+# Unified single-command build (CMake automatically compiles the Rust APU engine via Cargo):
 cmake -B build -DLLAMA_APU_BACKEND=ON -DCMAKE_BUILD_TYPE=Release
 cmake --build build --config Release -j$(nproc)
 
-# Turnkey single-command build & install:
-./scripts/install.sh
+# Turnkey install:
+sudo ./scripts/install.sh
 ```
 
 ### 2. Verify Hardware Environment
 ```bash
-apu-doctor
+llama doctor
+# (or 'llama-apu doctor' / 'apu-doctor')
 ```
 
-### 3. Run Inference with the Native Multiplexer
+### 3. Run Inference with the Unified Multiplexer
 ```bash
-# Single-prompt generation
+# Direct flag syntax (auto-detects .q4nx zero-copy APU containers and .gguf models):
+llama -m /path/to/model.q4nx -p "Explain zero-copy memory architecture." -n 128
+
+# Using the llama-apu symlink or dedicated subcommands:
+llama-apu -m /path/to/model.q4nx -p "What is AMD APU?" -n 64
+llama run -m /path/to/model.q4nx -p "What is AMD APU?" -n 64
 llama cli -m /path/to/model.gguf -p "Explain zero-copy memory architecture." -n 128
 
-# Interactive conversation mode
+# Interactive conversation mode:
 llama cli -m /path/to/model.gguf -cnv
-
-# Dedicated binary syntax is also supported
-llama-cli -m /path/to/model.gguf -p "What is the capital of France?" -n 64
 ```
 
 ### 4. Launch OpenAI-Compatible API Server
 ```bash
 llama serve -m /path/to/model.gguf --host 0.0.0.0 --port 8080 -c 4096
+# (or 'llama-apu serve ...' / 'llama-server ...')
+```
+
+### 5. Model Management, Conversion & Synthesis
+```bash
+# Convert/quantize GGUF to zero-copy .q4nx container with embedded XCLBIN
+llama convert -i /path/to/model.gguf -o /path/to/model.q4nx
+
+# Inspect model metadata and embedded XCLBIN status
+llama model info /path/to/model.q4nx
+
+# Synthesize tailored XCLBIN hardware graph for XDNA 2 NPU
+llama synth /path/to/model.q4nx /path/to/output.xclbin
 ```
 
 ---

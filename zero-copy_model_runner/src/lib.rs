@@ -6,17 +6,20 @@
 
 pub mod backend;
 pub mod container;
+pub mod doctor;
 pub mod engine;
 pub mod ffi;
 pub mod memory;
+pub mod model_cli;
 pub mod router;
+pub mod synth_cli;
 pub mod topology;
 pub mod uapi;
 
 pub use ffi::{
     apu_backend_allocate_shared_kv, apu_backend_dispatch_decode_step, apu_backend_dispatch_prefill,
-    apu_backend_free, apu_backend_get_hyperparams, apu_backend_load_model, ApuBackendContext,
-    ApuModelHyperparams,
+    apu_backend_doctor, apu_backend_free, apu_backend_get_hyperparams, apu_backend_load_model,
+    apu_backend_model, apu_backend_synth, ApuBackendContext, ApuModelHyperparams,
 };
 
 pub use backend::{open_or_mock, BackendError, DeviceBackend, DeviceType, MockDeviceBackend, PhysicalDeviceBackend};

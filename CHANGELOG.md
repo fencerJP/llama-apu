@@ -22,6 +22,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Extended Architecture Profiles & Metadata Capacity**:
   - Expanded GGUF container metadata key scan limit from 256 to 2048 keys in `src/container/xclbin_builder.rs` to support massive MoE architectures.
   - Added hardware topology profiles for Google Gemma 4 31B, Qwen3.8-27B Cold-Fusion, Qwen3-Coder-Next, Sarvam-105B, Laguna-S-2.1, Qwen3.8-Flash-Next, DeepSeek-V4-Flash variants, and GLM-5.3-Flash.
+- **Single-Program & Single-Repository Unified Architecture**:
+  - Unified Rust APU backend (`zero-copy_model_runner`) and C++ front-end into a single repository and integrated build system.
+  - CMake now automatically compiles the Rust acceleration engine via Cargo during standard `cmake --build` invocations as a first-class dependency.
+  - Retained and enhanced the core `llama` multiplexer (with `llama-apu` symlink/alias), ensuring 100% uninterrupted backward compatibility for programmatic callers (including Lemonade).
+  - Integrated direct flag routing (`llama -m ... -p ...`) that auto-detects `.q4nx` zero-copy APU containers and `.gguf` models.
+  - Embedded APU management commands directly into `llama` / `llama-apu`: `doctor` (hardware/driver diagnostics), `convert` (model conversion and stamping), `synth` (XCLBIN synthesis), and `run` (zero-copy inference).
 - **Quantization Reference & Evaluation Matrix**:
   - Added comprehensive technical analysis in `docs/quantization_alternatives.md` comparing BiLLM, SpinQuant, BitNet b1.58, TQ1_0, TQ2_0, T-ACE, FLUTE, NanoQuant, and mitigations (QuaRot, ReSpinQuant, KronQ, OffQ, AYOT).
   - Documented projected decode throughputs (up to 262 tok/s on MoE models).

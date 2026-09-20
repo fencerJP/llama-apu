@@ -78,7 +78,7 @@ fi
 echo -e "\n${BOLD}[3/4] Installing Executables to $INSTALL_DIR...${RESET}"
 
 # Install Rust utilities
-for tool in apu-doctor apu-model; do
+for tool in apu-doctor apu-model apu-synth; do
     SRC="$APU_BACKEND_DIR/target/release/$tool"
     if [ -f "$SRC" ]; then
         echo -e "  -> Installing ${GREEN}$tool${RESET}"
@@ -87,14 +87,14 @@ for tool in apu-doctor apu-model; do
     fi
 done
 
-# Install C++ binaries from llama.cpp build (including unified 'llama' multiplexer)
+# Install C++ binaries and multiplexers (llama & llama-apu)
 if [ -d "$LLAMA_CPP_DIR/build/bin" ]; then
-    for bin in llama llama-cli llama-server apu-run llama-bench llama-quantize; do
+    for bin in llama llama-apu llama-cli llama-server apu-run llama-bench llama-quantize; do
         SRC="$LLAMA_CPP_DIR/build/bin/$bin"
-        if [ -f "$SRC" ]; then
+        if [ -f "$SRC" ] || [ -L "$SRC" ]; then
             echo -e "  -> Installing ${GREEN}$bin${RESET}"
-            cp "$SRC" "$INSTALL_DIR/$bin"
-            chmod +x "$INSTALL_DIR/$bin"
+            cp -d "$SRC" "$INSTALL_DIR/$bin"
+            chmod +x "$INSTALL_DIR/$bin" 2>/dev/null || true
         fi
     done
 fi

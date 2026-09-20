@@ -23,6 +23,48 @@ int llama_quantize(int argc, char ** argv);
 int llama_perplexity(int argc, char ** argv);
 int llama_download(int argc, char ** argv);
 
+#ifdef LLAMA_APU_BACKEND
+#include "apu_backend.h"
+
+int apu_run(int argc, char ** argv);
+
+static int llama_apu_doctor(int /*argc*/, char ** /*argv*/) {
+    return apu_backend_doctor();
+}
+
+static int llama_apu_convert(int argc, char ** argv) {
+    std::vector<const char *> args;
+    args.push_back("apu-model");
+    if (argc >= 1 && std::string(argv[0]) == "convert") {
+        for (int i = 0; i < argc; ++i) {
+            args.push_back(argv[i]);
+        }
+    } else if (argc >= 1 && std::string(argv[0]) == "model") {
+        for (int i = 1; i < argc; ++i) {
+            args.push_back(argv[i]);
+        }
+        if (args.size() == 1) {
+            args.push_back("--help");
+        }
+    } else {
+        args.push_back("convert");
+        for (int i = 0; i < argc; ++i) {
+            args.push_back(argv[i]);
+        }
+    }
+    return apu_backend_model(static_cast<int>(args.size()), args.data());
+}
+
+static int llama_apu_synth(int argc, char ** argv) {
+    std::vector<const char *> args;
+    args.push_back("apu-synth");
+    for (int i = 1; i < argc; ++i) {
+        args.push_back(argv[i]);
+    }
+    return apu_backend_synth(static_cast<int>(args.size()), args.data());
+}
+#endif
+
 // Self-update is only supported for binaries built with llama-install.sh
 static int llama_update(int argc, char ** argv) {
     (void) argc;
@@ -62,19 +104,25 @@ struct command {
 #endif
 
 static const command cmds[] = {
-    {"serve",         "HTTP API server",                                    {"server"},   false,         llama_server       },
-    {"cli",           "Command-line interactive interface",                 {"client"},   false,         llama_cli          },
-    {"update",        "Update llama to the latest release",                 {},           UPDATE_HIDDEN, llama_update       },
-    {"download",      "Download a model",                                   {"get"},      false,         llama_download     },
-    {"completion",    "Text completion",                                    {"complete"}, true,          llama_completion   },
-    {"bench",         "Benchmark prompt processing and text generation",    {},           true,          llama_bench        },
-    {"batched-bench", "Benchmark batched decoding performance",             {},           true,          llama_batched_bench},
-    {"fit-params",    "Compute parameters to fit a model in device memory", {},           true,          llama_fit_params   },
-    {"quantize",      "Quantize a model",                                   {},           true,          llama_quantize     },
-    {"perplexity",    "Compute model perplexity and KL divergence",         {},           true,          llama_perplexity   },
-    {"version",       "Show version",                                       {},           false,         version,           true },
-    {"licenses",      "Show third-party licenses",                          {"credits"},  false,         licenses,          true },
-    {"help",          "Show available commands",                            {},           false,         help,              true },
+    {"serve",         "HTTP API server",                                    {"server"},           false,         llama_server       },
+    {"cli",           "Command-line interactive interface",                 {"client", "run"},    false,         llama_cli          },
+    {"update",        "Update llama to the latest release",                 {},                   UPDATE_HIDDEN, llama_update       },
+    {"download",      "Download a model",                                   {"get"},              false,         llama_download     },
+    {"completion",    "Text completion",                                    {"complete"},         true,          llama_completion   },
+    {"bench",         "Benchmark prompt processing and text generation",    {},                   false,         llama_bench        },
+    {"batched-bench", "Benchmark batched decoding performance",             {},                   true,          llama_batched_bench},
+    {"fit-params",    "Compute parameters to fit a model in device memory", {},                   true,          llama_fit_params   },
+    {"quantize",      "Quantize a model",                                   {},                   true,          llama_quantize     },
+    {"perplexity",    "Compute model perplexity and KL divergence",         {},                   true,          llama_perplexity   },
+#ifdef LLAMA_APU_BACKEND
+    {"run",           "AMD Ryzen AI APU zero-copy inference runner",        {"apu-run"},          false,         apu_run            },
+    {"doctor",        "AMD Ryzen AI APU hardware and driver diagnostics",   {"apu-doctor"},       false,         llama_apu_doctor   },
+    {"convert",       "Convert/quantize GGUF to zero-copy .q4nx container", {"model", "apu-model"}, false,       llama_apu_convert  },
+    {"synth",         "Synthesize XCLBIN hardware graph for XDNA 2 NPU",    {"apu-synth"},        false,         llama_apu_synth    },
+#endif
+    {"version",       "Show version",                                       {},                   false,         version,           true },
+    {"licenses",      "Show third-party licenses",                          {"credits"},          false,         licenses,          true },
+    {"help",          "Show available commands",                            {},                   false,         help,              true },
 };
 
 #undef UPDATE_HIDDEN
@@ -94,7 +142,8 @@ static int licenses(int /*argc*/, char ** /*argv*/) {
 static int help(int argc, char ** argv) {
     const bool show_all = argc >= 2 && std::string(argv[1]) == "all";
 
-    printf("Usage: %s <command> [options]\n\nAvailable commands:\n", progname);
+    printf("Usage: %s <command> [options]\n", progname);
+    printf("   or: %s [options]  (defaults to 'cli' for inference)\n\nAvailable commands:\n", progname);
 
     for (const auto & cmd : cmds) {
         if (show_all || !cmd.hidden) {
@@ -102,6 +151,18 @@ static int help(int argc, char ** argv) {
         }
     }
     printf("\n");
+
+#ifdef LLAMA_APU_BACKEND
+    printf("AMD Ryzen AI APU Stage Routing Options (usable with cli and serve):\n");
+    printf("  --tokenize <cpu|gpu|npu>   Stage placement for tokenization (default: cpu)\n");
+    printf("  --prefill  <gpu|cpu|npu>   Stage placement for prompt prefill (default: gpu)\n");
+    printf("  --decode   <npu|gpu|cpu>   Stage placement for token decode (default: npu)\n");
+    printf("  --gpu-based                Preset: route tokenize, prefill, and decode to iGPU\n");
+    printf("  --cpu-based                Preset: route tokenize, prefill, and decode to CPU\n");
+    printf("  --npu-based                Preset: route tokenize, prefill, and decode to NPU\n");
+    printf("  --xclbin <path>            Explicit XCLBIN microcode binary path\n");
+    printf("  --apu-verbose              Enable detailed zero-copy APU execution telemetry\n\n");
+#endif
 
     if (!show_all) {
         printf("Run '%s help all' to show additional commands.\n", progname);
@@ -141,6 +202,29 @@ int main(int argc, char ** argv) {
 #endif
             return cmd.func(argc - 1, argv + 1);
         }
+    }
+
+    // Direct flag invocation fallback (e.g. llama -m model.q4nx -p "hello")
+    if (argc >= 2 && argv[1][0] == '-') {
+#ifdef LLAMA_APU_BACKEND
+        bool is_q4nx = false;
+        for (int i = 1; i < argc; ++i) {
+            std::string a = argv[i];
+            if (a.size() >= 5 && a.substr(a.size() - 5) == ".q4nx") {
+                is_q4nx = true;
+                break;
+            }
+        }
+        if (is_q4nx) {
+            return apu_run(argc, argv);
+        }
+#endif
+#ifdef _WIN32
+        _putenv_s("LLAMA_APP_CMD", "cli");
+#else
+        setenv("LLAMA_APP_CMD", "cli", 1);
+#endif
+        return llama_cli(argc, argv);
     }
 
     fprintf(stderr, "error: unknown command '%s'\n", arg.c_str());

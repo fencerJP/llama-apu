@@ -47,13 +47,14 @@ cd "$REPO_ROOT"
 rm -rf "$OUTPUT_DIR/${BUNDLE_NAME}"
 mkdir -p "$OUTPUT_DIR/${BUNDLE_NAME}"/{bin,lib,include,etc/udev/rules.d,etc/systemd/system,etc/default,docs}
 
-# Binaries (including the unified 'llama' multiplexer binary)
+# Binaries (including the unified 'llama' multiplexer and 'llama-apu' symlink)
 cp "$APU_BACKEND_DIR/target/release/apu-doctor" "$OUTPUT_DIR/${BUNDLE_NAME}/bin/"
 cp "$APU_BACKEND_DIR/target/release/apu-model" "$OUTPUT_DIR/${BUNDLE_NAME}/bin/"
+cp "$APU_BACKEND_DIR/target/release/apu-synth" "$OUTPUT_DIR/${BUNDLE_NAME}/bin/"
 
-for bin in llama llama-cli llama-server apu-run llama-bench llama-quantize; do
-    if [ -f "$LLAMA_CPP_DIR/build/bin/$bin" ]; then
-        cp "$LLAMA_CPP_DIR/build/bin/$bin" "$OUTPUT_DIR/${BUNDLE_NAME}/bin/"
+for bin in llama llama-apu llama-cli llama-server apu-run llama-bench llama-quantize; do
+    if [ -f "$LLAMA_CPP_DIR/build/bin/$bin" ] || [ -L "$LLAMA_CPP_DIR/build/bin/$bin" ]; then
+        cp -d "$LLAMA_CPP_DIR/build/bin/$bin" "$OUTPUT_DIR/${BUNDLE_NAME}/bin/"
     fi
 done
 

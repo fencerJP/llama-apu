@@ -4,9 +4,26 @@ This manual documents the command-line interfaces, server daemon, and model mana
 
 ---
 
-## 1. Upstream `llama-cli`
+## 1. Unified Multiplexer: `llama` & `llama-apu` (and `llama-cli`)
 
-When built with `-DLLAMA_APU_BACKEND=ON`, upstream `llama-cli` leverages the `apu-backend` runtime library for zero-copy APU execution.
+When built with `-DLLAMA_APU_BACKEND=ON`, the core `llama` executable serves as the unified flagship multiplexer, with `llama-apu` provided as a direct symlink/alias. The executable preserves **100% backward compatibility for Lemonade** and programmatic callers while integrating all zero-copy APU hardware acceleration capabilities.
+
+### Available Subcommands & Calling Modes
+
+```bash
+# Direct flag execution (auto-detects .q4nx zero-copy APU containers and .gguf models):
+llama -m /models/qwen2.5-3b.q4nx -p "Explain quantum computing." -n 128
+llama-apu -m /models/llama-3.2-3b.gguf -p "Write a sorting algorithm." --gpu-based
+
+# Explicit subcommands:
+llama cli -m /models/model.gguf -p "Prompt"            # Interactive / prompt inference
+llama run -m /models/model.q4nx -p "Prompt"            # Dedicated zero-copy APU runner
+llama serve -m /models/model.gguf --port 8080          # OpenAI-compatible HTTP API server
+llama doctor                                           # APU hardware & UAPI driver diagnostics
+llama convert -i model.gguf -o model.q4nx              # Quantize & convert to .q4nx container
+llama synth model.q4nx output.xclbin                   # Synthesize XCLBIN hardware graph
+llama bench -m /models/model.gguf                      # Performance benchmarking
+```
 
 ### Key Usage Flags & Parameters
 

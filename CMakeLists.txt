@@ -149,11 +149,30 @@ option(LLAMA_LLGUIDANCE "llama-common: include LLGuidance library for structured
 option(LLAMA_APU_BACKEND "llama: enable AMD Ryzen AI APU zero-copy backend" ON)
 if (LLAMA_APU_BACKEND)
     message(STATUS "AMD Ryzen AI APU zero-copy backend enabled (libzero_copy_model_runner)")
+    add_compile_definitions(LLAMA_APU_BACKEND)
     if (EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/zero-copy_model_runner")
         set(APU_BACKEND_DIR "${CMAKE_CURRENT_SOURCE_DIR}/zero-copy_model_runner" CACHE PATH "Path to zero-copy_model_runner" FORCE)
     else()
         set(APU_BACKEND_DIR "${CMAKE_CURRENT_SOURCE_DIR}/../../zero-copy_model_runner" CACHE PATH "Path to zero-copy_model_runner")
     endif()
+
+    find_program(CARGO_BIN cargo)
+    if (CARGO_BIN)
+        add_custom_target(zero_copy_model_runner_build
+            COMMAND ${CARGO_BIN} build --release
+            WORKING_DIRECTORY ${APU_BACKEND_DIR}
+            BYPRODUCTS
+                ${APU_BACKEND_DIR}/target/release/libzero_copy_model_runner.a
+                ${APU_BACKEND_DIR}/target/release/apu-doctor
+                ${APU_BACKEND_DIR}/target/release/apu-model
+                ${APU_BACKEND_DIR}/target/release/apu-synth
+            COMMENT "Building Rust zero-copy APU backend with Cargo..."
+        )
+    else()
+        message(WARNING "cargo not found; expecting pre-built libzero_copy_model_runner.a in ${APU_BACKEND_DIR}/target/release")
+        add_custom_target(zero_copy_model_runner_build)
+    endif()
+
     include_directories(${APU_BACKEND_DIR}/include)
     link_directories(${APU_BACKEND_DIR}/target/release)
 endif()

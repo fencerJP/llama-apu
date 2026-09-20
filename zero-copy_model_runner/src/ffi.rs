@@ -673,6 +673,51 @@ pub unsafe extern "C" fn apu_backend_free(ctx: *mut ApuBackendContext) {
     }
 }
 
+/// Run AMD Ryzen AI APU hardware diagnostics and print report to stdout.
+#[no_mangle]
+pub extern "C" fn apu_backend_doctor() -> i32 {
+    crate::doctor::print_doctor_report();
+    0
+}
+
+/// Run APU model manager (convert, stamp, info, list).
+#[no_mangle]
+pub unsafe extern "C" fn apu_backend_model(argc: i32, argv: *const *const c_char) -> i32 {
+    if argc <= 0 || argv.is_null() {
+        return crate::model_cli::run_model_cli(vec!["apu-model".to_string()]);
+    }
+    let mut args = Vec::with_capacity(argc as usize);
+    for i in 0..argc {
+        let ptr = *argv.offset(i as isize);
+        if ptr.is_null() {
+            continue;
+        }
+        if let Ok(s) = CStr::from_ptr(ptr).to_str() {
+            args.push(s.to_string());
+        }
+    }
+    crate::model_cli::run_model_cli(args)
+}
+
+/// Run XCLBIN hardware graph synthesizer.
+#[no_mangle]
+pub unsafe extern "C" fn apu_backend_synth(argc: i32, argv: *const *const c_char) -> i32 {
+    if argc <= 0 || argv.is_null() {
+        return crate::synth_cli::run_synth_cli(vec!["apu-synth".to_string()]);
+    }
+    let mut args = Vec::with_capacity(argc as usize);
+    for i in 0..argc {
+        let ptr = *argv.offset(i as isize);
+        if ptr.is_null() {
+            continue;
+        }
+        if let Ok(s) = CStr::from_ptr(ptr).to_str() {
+            args.push(s.to_string());
+        }
+    }
+    crate::synth_cli::run_synth_cli(args)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

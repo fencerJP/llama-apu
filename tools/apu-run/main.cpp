@@ -325,7 +325,7 @@ static void print_usage(const char* prog) {
               << "  " << prog << " --verbose -m models/ggml-vocab-phi-3.q4nx -k 4\n";
 }
 
-int main(int argc, char** argv) {
+int apu_run(int argc, char** argv) {
     bool verbose = false;
     std::string model_path = "";
     std::string xclbin_override = "";
@@ -716,4 +716,11 @@ int main(int argc, char** argv) {
 
     return 0;
 }
+
+#ifndef LLAMA_APU_NO_MAIN
+int main(int argc, char** argv) {
+    return apu_run(argc, argv);
+}
+#endif
+
 

@@ -283,6 +283,31 @@ int apu_backend_create_xclbin_embedded_formatted(
  */
 void apu_backend_free(ApuBackendContext* ctx);
 
+/**
+ * Run AMD Ryzen AI APU hardware diagnostics and print report to stdout.
+ *
+ * @return 0 on success, non-zero on failure.
+ */
+int apu_backend_doctor(void);
+
+/**
+ * Run APU model manager CLI (convert, stamp, info, list).
+ *
+ * @param argc Number of command line arguments.
+ * @param argv Array of argument strings.
+ * @return Exit status code (0 for success).
+ */
+int apu_backend_model(int argc, const char ** argv);
+
+/**
+ * Run XCLBIN hardware graph synthesizer CLI.
+ *
+ * @param argc Number of command line arguments.
+ * @param argv Array of argument strings.
+ * @return Exit status code (0 for success).
+ */
+int apu_backend_synth(int argc, const char ** argv);
+
 #ifdef __cplusplus
 }
 #endif
