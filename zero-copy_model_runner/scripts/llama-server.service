@@ -1,0 +1,34 @@
+[Unit]
+Description=llama-server Daemon (AMD Ryzen AI APU Zero-Copy Backend)
+After=network.target local-fs.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+EnvironmentFile=-/etc/default/llama-server
+ExecStart=/usr/local/bin/llama-server \
+  -m ${LLAMA_MODEL} \
+  --host ${LLAMA_HOST} \
+  --port ${LLAMA_PORT} \
+  -c ${LLAMA_CTX_SIZE} \
+  -b ${LLAMA_BATCH_SIZE} \
+  -ngl ${LLAMA_NGL} \
+  ${LLAMA_APU_PRESET} \
+  ${LLAMA_EXTRA_ARGS}
+
+Restart=on-failure
+RestartSec=5s
+
+# Hardware Access Permissions
+SupplementaryGroups=render video kfd
+
+# Sandboxing & Security Hardening
+ProtectSystem=full
+ProtectHome=read-only
+PrivateTmp=true
+NoNewPrivileges=true
+LimitNOFILE=65536
+LimitMEMLOCK=infinity
+
+[Install]
+WantedBy=multi-user.target

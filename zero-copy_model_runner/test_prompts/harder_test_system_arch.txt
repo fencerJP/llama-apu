@@ -1,0 +1,22 @@
+You are an expert low-level systems architect and Linux kernel driver engineer specializing in heterogeneous computing on unified-memory APU architectures (specifically AMD Ryzen AI Strix Point HX 370 and Strix Halo silicon).
+
+Please provide an exhaustive, multi-tier architectural evaluation of cross-accelerator zero-copy memory pipelines operating across RDNA 3.5 iGPUs and XDNA 2 NPUs (AIE2P spatial tile array).
+
+In your analysis, address each of the following technical dimensions in rigorous detail:
+1. Physical Unified Memory Topology and Subsystem Invariants:
+   - Compare Linux Prime DMA-BUF against standard DRM GEM memory allocation models for cross-device sharing.
+   - Explain the physical mechanics of exporting an AMDGPU GEM buffer object backed by coherent system RAM into an anonymous dma-buf file descriptor and importing it into the AMDXDNA / XRT kernel driver without duplicating memory pages.
+   - Detail the CPU and GPU cache coherency requirements, specifically focusing on why explicit synchronization brackets (DMA_BUF_IOCTL_SYNC with DMA_BUF_SYNC_START and DMA_BUF_SYNC_END flags, both READ and WRITE) are strictly mandatory before and after host inspection of GPU/NPU memory regions.
+   - Evaluate cache-line alignment requirements (such as strict 64-byte alignment versus 4KB and 2MB huge-page boundaries) and why misaligned access degrades NPU AXI-MM stream burst transactions.
+   - Contrast unified memory NUMA tiering on Strix Halo (up to 128GB unified LPDDR5X-8000 with 256-bit memory bus providing over 250 GB/s bandwidth) with standard client PCIe discrete GPU topologies.
+
+2. Hardware Synchronization and Lock-Free Inter-Device Coordination:
+   - Analyze how DRM synchronization objects (drm_syncobj) and timeline fences eliminate the need for host CPU busy-waiting, polling loops, or mutex locking during cross-accelerator handoffs.
+   - Trace the exact kernel control flow when an RDNA 3.5 iGPU prefill pass completes and atomically increments a timeline point, unblocking the AMDXDNA NPU scheduler ring to begin autoregressive token generation.
+   - Contrast this Linux kernel UAPI timeline fence mechanism with alternative implementations such as Apple Metal shared event queues, CUDA stream events, and Vulkan timeline semaphores.
+   - Detail the edge cases of GPU hang detection, fence timeouts, and driver recovery mechanisms when an iGPU prefill kernel hangs or experiences page faults.
+
+3. SRAM Banking, Memory Bandwidth Contention, and Roofline Bottlenecks:
+   - Examine the internal memory hierarchy of the XDNA 2 AIE2P tile array, contrasting the 48MB versus 64MB on-chip SRAM bank configuration against unified LPDDR5X memory bandwidth.
+   - Detail what happens when concurrent workloads (e.g. background display scanning, GPU render pipelines, and NPU stream-switches) compete for memory controller channels, and explain how speculative drafting and sliding-window KV cache pruning mitigate memory bus saturation.
+   - Provide concrete algorithmic guidelines for configuring kernel buffer layouts on mobile APUs to maximize energy efficiency and arithmetic density.

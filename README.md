@@ -53,16 +53,23 @@ cd llama-apu-0.4.0-linux-x86_64
 sudo ./install.sh
 ```
 
-#### Option B: Build from Source
+#### Option B: Build from Source (Unified Repository)
 ```bash
+# Clone the unified repository
+git clone https://github.com/fencerJP/llama-apu.git
+cd llama-apu
+
 # 1. Build the Rust APU backend engine
 cd zero-copy_model_runner
 RUSTFLAGS="-C target-cpu=native" cargo build --release
+cd ..
 
 # 2. Build the C++ frontend with APU backend enabled
-cd ../llamacpp-update/llama.cpp
 cmake -B build -DLLAMA_APU_BACKEND=ON -DCMAKE_BUILD_TYPE=Release
 cmake --build build --config Release -j$(nproc)
+
+# Turnkey single-command build & install:
+./scripts/install.sh
 ```
 
 ### 2. Verify Hardware Environment

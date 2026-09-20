@@ -31,7 +31,14 @@ fi
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
-LLAMA_CPP_DIR="$(cd "$REPO_ROOT/../llamacpp-update/llama.cpp" 2>/dev/null || cd "$REPO_ROOT" && pwd)"
+LLAMA_CPP_DIR="$REPO_ROOT"
+if [ -d "$REPO_ROOT/zero-copy_model_runner" ]; then
+    APU_BACKEND_DIR="$REPO_ROOT/zero-copy_model_runner"
+elif [ -d "$REPO_ROOT/../zero-copy_model_runner" ]; then
+    APU_BACKEND_DIR="$REPO_ROOT/../zero-copy_model_runner"
+else
+    APU_BACKEND_DIR="$REPO_ROOT"
+fi
 
 # 2. Determine Destination Directory
 INSTALL_DIR="/usr/local/bin"
@@ -46,12 +53,12 @@ echo -e "${CYAN}Target installation directory: ${BOLD}${INSTALL_DIR}${RESET}"
 
 # 3. Build Rust APU Backend
 echo -e "\n${BOLD}[1/4] Building Rust Hardware Acceleration Engine (libzero_copy_model_runner)...${RESET}"
-cd "$REPO_ROOT"
+cd "$APU_BACKEND_DIR"
 if command -v cargo >/dev/null 2>&1; then
     RUSTFLAGS="-C target-cpu=native" cargo build --release
 else
     echo -e "${YELLOW}Warning: cargo not found. Checking for pre-compiled binaries...${RESET}"
-    if [ ! -f "$REPO_ROOT/target/release/libzero_copy_model_runner.a" ]; then
+    if [ ! -f "$APU_BACKEND_DIR/target/release/libzero_copy_model_runner.a" ]; then
         echo -e "${RED}Error: cargo is required to build the APU backend from source.${RESET}"
         exit 1
     fi
@@ -61,7 +68,7 @@ fi
 echo -e "\n${BOLD}[2/4] Building C++ llama.cpp Front-End with Zero-Copy APU Backend...${RESET}"
 if [ -d "$LLAMA_CPP_DIR" ] && [ -f "$LLAMA_CPP_DIR/CMakeLists.txt" ]; then
     cd "$LLAMA_CPP_DIR"
-    cmake -B build -DLLAMA_APU_BACKEND=ON -DAPU_BACKEND_DIR="$REPO_ROOT"
+    cmake -B build -DLLAMA_APU_BACKEND=ON -DAPU_BACKEND_DIR="$APU_BACKEND_DIR"
     cmake --build build --config Release -j"$(nproc)"
 else
     echo -e "${YELLOW}Notice: llama.cpp directory not found at $LLAMA_CPP_DIR; skipping C++ build step.${RESET}"
@@ -72,7 +79,7 @@ echo -e "\n${BOLD}[3/4] Installing Executables to $INSTALL_DIR...${RESET}"
 
 # Install Rust utilities
 for tool in apu-doctor apu-model; do
-    SRC="$REPO_ROOT/target/release/$tool"
+    SRC="$APU_BACKEND_DIR/target/release/$tool"
     if [ -f "$SRC" ]; then
         echo -e "  -> Installing ${GREEN}$tool${RESET}"
         cp "$SRC" "$INSTALL_DIR/$tool"

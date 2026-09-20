@@ -70,6 +70,8 @@
 /.build/
 /build*
 /target/
+/zero-copy_model_runner/target/
+**/target/
 /dist/
 /release
 /debug

@@ -21,17 +21,24 @@ echo -e "${BOLD}${BLUE}=========================================================
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
-LLAMA_CPP_DIR="$(cd "$REPO_ROOT/../llamacpp-update/llama.cpp" 2>/dev/null || cd "$REPO_ROOT" && pwd)"
+LLAMA_CPP_DIR="$REPO_ROOT"
+if [ -d "$REPO_ROOT/zero-copy_model_runner" ]; then
+    APU_BACKEND_DIR="$REPO_ROOT/zero-copy_model_runner"
+elif [ -d "$REPO_ROOT/../zero-copy_model_runner" ]; then
+    APU_BACKEND_DIR="$REPO_ROOT/../zero-copy_model_runner"
+else
+    APU_BACKEND_DIR="$REPO_ROOT"
+fi
 
 # 1. Build Rust Release Artifacts
 echo -e "\n${BOLD}[1/5] Building Rust APU Backend Engine...${RESET}"
-cd "$REPO_ROOT"
+cd "$APU_BACKEND_DIR"
 RUSTFLAGS="-C target-cpu=native" cargo build --release
 
 # 2. Build C++ llama.cpp Release Artifacts
 echo -e "\n${BOLD}[2/5] Building C++ llama.cpp Front-End...${RESET}"
 cd "$LLAMA_CPP_DIR"
-cmake -B build -DLLAMA_APU_BACKEND=ON -DAPU_BACKEND_DIR="$REPO_ROOT" -DCMAKE_BUILD_TYPE=Release
+cmake -B build -DLLAMA_APU_BACKEND=ON -DAPU_BACKEND_DIR="$APU_BACKEND_DIR" -DCMAKE_BUILD_TYPE=Release
 cmake --build build --config Release -j"$(nproc)"
 
 # 3. Assemble Release Directory
@@ -41,8 +48,8 @@ rm -rf "$OUTPUT_DIR/${BUNDLE_NAME}"
 mkdir -p "$OUTPUT_DIR/${BUNDLE_NAME}"/{bin,lib,include,etc/udev/rules.d,etc/systemd/system,etc/default,docs}
 
 # Binaries (including the unified 'llama' multiplexer binary)
-cp "$REPO_ROOT/target/release/apu-doctor" "$OUTPUT_DIR/${BUNDLE_NAME}/bin/"
-cp "$REPO_ROOT/target/release/apu-model" "$OUTPUT_DIR/${BUNDLE_NAME}/bin/"
+cp "$APU_BACKEND_DIR/target/release/apu-doctor" "$OUTPUT_DIR/${BUNDLE_NAME}/bin/"
+cp "$APU_BACKEND_DIR/target/release/apu-model" "$OUTPUT_DIR/${BUNDLE_NAME}/bin/"
 
 for bin in llama llama-cli llama-server apu-run llama-bench llama-quantize; do
     if [ -f "$LLAMA_CPP_DIR/build/bin/$bin" ]; then
@@ -51,13 +58,13 @@ for bin in llama llama-cli llama-server apu-run llama-bench llama-quantize; do
 done
 
 # Libraries & Headers
-if [ -f "$REPO_ROOT/target/release/libzero_copy_model_runner.so" ]; then
-    cp "$REPO_ROOT/target/release/libzero_copy_model_runner.so" "$OUTPUT_DIR/${BUNDLE_NAME}/lib/"
+if [ -f "$APU_BACKEND_DIR/target/release/libzero_copy_model_runner.so" ]; then
+    cp "$APU_BACKEND_DIR/target/release/libzero_copy_model_runner.so" "$OUTPUT_DIR/${BUNDLE_NAME}/lib/"
 fi
-if [ -f "$REPO_ROOT/target/release/libzero_copy_model_runner.a" ]; then
-    cp "$REPO_ROOT/target/release/libzero_copy_model_runner.a" "$OUTPUT_DIR/${BUNDLE_NAME}/lib/"
+if [ -f "$APU_BACKEND_DIR/target/release/libzero_copy_model_runner.a" ]; then
+    cp "$APU_BACKEND_DIR/target/release/libzero_copy_model_runner.a" "$OUTPUT_DIR/${BUNDLE_NAME}/lib/"
 fi
-cp -r "$REPO_ROOT/include/"* "$OUTPUT_DIR/${BUNDLE_NAME}/include/"
+cp -r "$APU_BACKEND_DIR/include/"* "$OUTPUT_DIR/${BUNDLE_NAME}/include/"
 cp "$LLAMA_CPP_DIR/include/llama.h" "$OUTPUT_DIR/${BUNDLE_NAME}/include/" 2>/dev/null || true
 
 # Configurations
