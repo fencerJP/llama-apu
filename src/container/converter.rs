@@ -66,6 +66,18 @@ pub fn parse_gguf_metadata<P: AsRef<Path>>(path: P) -> io::Result<(String, Model
 
     let arch_name = if filename.contains("spark") {
         "spark2_5".to_string()
+    } else if filename.contains("gemma4") || filename.contains("gemma-4") {
+        "gemma4".to_string()
+    } else if filename.contains("cold-fusion") || filename.contains("cold_fusion") {
+        "qwen3_8".to_string()
+    } else if filename.contains("deepseek") {
+        "deepseek_v4".to_string()
+    } else if filename.contains("glm") {
+        "glm5".to_string()
+    } else if filename.contains("sarvam") {
+        "sarvam".to_string()
+    } else if filename.contains("laguna") {
+        "laguna".to_string()
     } else if filename.contains("llama") {
         "llama".to_string()
     } else if filename.contains("qwen") {
@@ -86,7 +98,11 @@ pub fn parse_gguf_metadata<P: AsRef<Path>>(path: P) -> io::Result<(String, Model
         || filename.contains("gemma")
         || filename.contains("ornith")
         || filename.contains("qwythos")
-        || filename.contains("thinkingcap");
+        || filename.contains("thinkingcap")
+        || filename.contains("glm")
+        || filename.contains("deepseek")
+        || filename.contains("sarvam")
+        || filename.contains("laguna");
     let default_vocab = if is_large_vocab {
         262144
     } else if filename.contains("spark") {
@@ -116,6 +132,25 @@ pub fn parse_gguf_metadata<P: AsRef<Path>>(path: P) -> io::Result<(String, Model
     };
 
     Ok((arch_name, hyperparams))
+}
+
+/// Returns true if the quantization format is supported by the APU orchestrator.
+pub fn is_quantization_supported(quant_name: &str) -> bool {
+    match quant_name.to_uppercase().as_str() {
+        // Supported 4-bit to 16-bit spectrum
+        "IQ4_NL" | "Q4_K_M" | "Q4_K_S" | "Q4_0" | "Q4_1" | "IQ4_XS" |
+        "Q5_K_M" | "Q5_K_S" | "Q5_0" | "Q5_1" | "Q6_K" | "Q8_0" |
+        "F16" | "BF16" | "F32" => true,
+
+        // High-fidelity 1-bit BiLLM & PrismML Bonsai support
+        "BILLM" | "Q1_BILLM" | "Q1_0_G128" | "Q1_0" => true,
+
+        // Legacy unaligned sub-4-bit quants remain rejected
+        "IQ1_S" | "IQ1_M" | "IQ2_XXS" | "IQ2_XS" | "IQ2_S" | "Q2_K" |
+        "IQ3_XXS" | "IQ3_S" | "Q3_K_S" | "Q3_K_M" | "Q3_K_L" => false,
+
+        _ => false,
+    }
 }
 
 /// Compute default `.q4nx` destination path alongside the input `.gguf` file.

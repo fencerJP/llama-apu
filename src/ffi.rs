@@ -53,6 +53,7 @@ pub struct ApuBackendContext {
     pub backend: Arc<dyn DeviceBackend>,
     pub prefill_engine: RocmPrefillEngine,
     pub decode_engine: XrtDecodeEngine,
+    pub cpu_worker: crate::engine::CpuWorkerEngine,
     pub sampler: Sampler,
     pub shared_kv: Option<SharedBuffer>,
     pub speculative: Option<SpeculativeOrchestrator>,
@@ -103,6 +104,7 @@ pub unsafe extern "C" fn apu_backend_load_model(
     let mut prefill_engine = RocmPrefillEngine::new_with_backend(backend.clone());
     prefill_engine.set_vocab_limit(model.header.hyperparams.vocab_size.max(320_000));
     let mut decode_engine = XrtDecodeEngine::new_with_backend(backend.clone());
+    let mut cpu_worker = crate::engine::CpuWorkerEngine::new();
 
     let gguf_source_path = if model_path_str.ends_with(".gguf") {
         Some(std::path::PathBuf::from(model_path_str))
@@ -121,6 +123,7 @@ pub unsafe extern "C" fn apu_backend_load_model(
             let trans = Arc::new(std::sync::Mutex::new(Some(crate::engine::TransformerContext::new(Arc::clone(&r_arc)))));
             prefill_engine.set_shared_transformer(Arc::clone(&trans));
             decode_engine.set_shared_transformer(Arc::clone(&trans));
+            cpu_worker.set_shared_transformer(Arc::clone(&trans));
         }
     }
 
@@ -136,6 +139,7 @@ pub unsafe extern "C" fn apu_backend_load_model(
         backend,
         prefill_engine,
         decode_engine,
+        cpu_worker,
         sampler,
         shared_kv: None,
         speculative: None,
@@ -231,16 +235,24 @@ pub unsafe extern "C" fn apu_backend_dispatch_prefill(
     };
 
     let res = match context.prefill_engine.dispatch_prefill(
-        req,
+        req.clone(),
         kv_handle,
         syncobj_fd,
         timeline_point,
     ) {
         Ok(r) => r,
-        Err(e) => {
-            eprintln!("[apu_backend_prefill ERROR] {:?}", e);
-            return -3;
-        }
+        Err(_) => match context.cpu_worker.dispatch_prefill(
+            req,
+            kv_handle,
+            syncobj_fd,
+            timeline_point,
+        ) {
+            Ok(r) => r,
+            Err(e) => {
+                eprintln!("[apu_backend_prefill ERROR] {:?}", e);
+                return -3;
+            }
+        },
     };
 
     *out_initial_token = res.initial_token_id;
@@ -273,13 +285,21 @@ pub unsafe extern "C" fn apu_backend_dispatch_decode_step(
     };
 
     let step_res = match context.decode_engine.dispatch_decode_step(
-        req,
+        req.clone(),
         wait_syncobj_fd,
         wait_timeline_point,
         signal_timeline_point,
     ) {
         Ok(r) => r,
-        Err(_) => return -2,
+        Err(_) => match context.cpu_worker.dispatch_decode_step(
+            req,
+            wait_syncobj_fd,
+            wait_timeline_point,
+            signal_timeline_point,
+        ) {
+            Ok(r) => r,
+            Err(_) => return -2,
+        },
     };
 
     *out_token = step_res.output_token_id;

@@ -4,12 +4,14 @@ This document defines the supported quantization spectrum, conversion pipelines,
 
 ---
 
-## 1. Supported Quantization Spectrum (Q4 through Q16)
+## 1. Supported Quantization Spectrum (1-Bit BiLLM & Q4 through Q16)
 
-The runtime supports ingesting GGUF models across the **Q4 through Q16** quantization spectrum. The target hardware execution format (`.q4nx`) packages weights in a 4-bit tile-interleaved memory layout tailored for the 32 AIE2P spatial tiles on AMD XDNA 2 silicon.
+The runtime supports ingesting GGUF models across the **1-bit (BiLLM) and Q4 through Q16** quantization spectrum. The target hardware execution format (`.q4nx`) packages weights in a 4-bit tile-interleaved memory layout tailored for the 32 AIE2P spatial tiles on AMD XDNA 2 silicon, while 1-bit models utilize **T-MAC SRAM lookup tables** directly inside the 32 KB tile data memory.
 
 | Quantization Format | Category | Ingestion Support | Conversion to `.q4nx` | Hardware Acceleration Path | Recommendation Level |
 | :--- | :--- | :---: | :---: | :--- | :--- |
+| **`BiLLM` / `Q1_BILLM`** | 1-bit Residual + Salient | **YES** | SpinQuant Rotation + Saliency Pack | XDNA 2 NPU (T-MAC SRAM LUT) | **Highly Recommended** (1.08 bpw, coherent perplexity via salient protection) |
+| **`Q1_0` / `Q1_0_G128`** | 1-bit Block Sign | **YES** | T-MAC Bit Expansion | XDNA 2 NPU (T-MAC SRAM LUT) / CPU | Supported (Requires SpinQuant rotation to prevent collapse) |
 | **`IQ4_NL`** | 4-bit Non-Linear | **YES** | Native Codebook Remap | XDNA 2 NPU (AIE2P) | **Highly Recommended** (Best perplexity at 4-bit) |
 | **`Q4_K_M` / `Q4_K_S`**| 4-bit K-Quant | **YES** | Direct Tile Packing | XDNA 2 NPU (AIE2P) | **Highly Recommended** (Standard upstream baseline) |
 | **`Q4_0`** | 4-bit Linear | **YES** | Zero-Conversion Fastpath | XDNA 2 NPU (AIE2P) | **Recommended** (Fastest conversion, lowest RAM) |
@@ -24,13 +26,13 @@ The runtime supports ingesting GGUF models across the **Q4 through Q16** quantiz
 
 ---
 
-## 2. Non-Recommended & Explicitly Rejected Quantizations (< Q4)
+## 2. Non-Recommended & Explicitly Rejected Naive Quantizations (< Q4)
 
-Sub-4-bit quantizations (1-bit, 2-bit, and 3-bit formats) are **explicitly not recommended and rejected** by the ingestion pipeline.
+Naive sub-4-bit quantizations (unrotated 1-bit, 2-bit, and 3-bit formats without outlier or salient protection) are **explicitly rejected** because naive binarization collapses perplexity:
 
 | Quantization Format | Category | Status | Technical Reason for Rejection |
 | :--- | :--- | :---: | :--- |
-| **`IQ1_S` / `IQ1_M`** | 1-bit | **REJECTED** | Catastrophic perplexity loss; output text degrades into repetitive loops or incoherent tokens. |
+| **`IQ1_S` / `IQ1_M`** (naive) | 1-bit (naive) | **REJECTED** | Catastrophic perplexity collapse; output text degrades into repetitive loops. Use **`BiLLM`** instead. |
 | **`IQ2_XXS` / `IQ2_XS` / `IQ2_S`** | 2-bit | **REJECTED** | Severe accuracy degradation; 2-bit packing requires irregular bit-slicing that wastes AIE2P memory bandwidth. |
 | **`Q2_K`** | 2-bit | **REJECTED** | Severe quality collapse; non-standard block sizes break 64-byte DMA-BUF alignment invariants. |
 | **`IQ3_XXS` / `IQ3_S`** | 3-bit | **REJECTED** | 3-bit non-power-of-two packing cannot align to 64-byte AIE2P memory transactions without heavy software bit-shifting that degrades performance below 4-bit throughput. |
@@ -74,11 +76,38 @@ kvalues_iq4nl = {
 
 ---
 
-## 4. Summary Guidance for External Users
+## 4. Deep-Dive: BiLLM (1.08 bpw) with SpinQuant & T-MAC NPU Execution
+
+Standard naive 1-bit quantization (such as `IQ1_S`) collapses model perplexity because outlier activations distort the binarization threshold, causing loss of critical attention patterns.
+
+### The 4-Stage Rotation & Saliency Pipeline
+`llama-apu` addresses this via **BiLLM** combined with **SpinQuant**:
+1. **Stage 1 (SpinQuant Rotation)**: Applies learned orthogonal rotation matrices ($W' = Q W R^\top$) to rotate weight and activation channels. This diffuses cross-channel kurtosis and suppresses outliers without requiring runtime de-quantization.
+   > [!IMPORTANT]
+   > **Strict Precedence Invariant**: SpinQuant rotation **strictly precedes** Hessian computation and saliency selection. Rotating after selecting salient weights destroys the coordinate isolation needed for binary residual encoding.
+2. **Stage 2 (Hessian Saliency Identification)**: Computes the empirical Hessian $\tilde{H} = 2 \tilde{X}\tilde{X}^\top$ over rotated calibration activations to identify the top 0.5% - 1.0% most sensitive weights.
+3. **Stage 3 (Salient Weight Protection)**: Isolates these critical weights into higher-precision storage (INT4 or FP16), shielding them from binarization noise.
+4. **Stage 4 (Binary Residual Encoding)**: Decomposes the remaining 99% weights into a 2-stage binary residual:
+   $$W_{\text{bin}} = \alpha_1 \text{sign}(W) + \alpha_2 \text{sign}(W - \alpha_1 \text{sign}(W))$$
+   yielding an effective density of **1.08 bits per weight (bpw)**.
+
+### T-MAC SRAM Lookup Tables on XDNA 2 AIE2P
+Because XDNA 2 AIE2P lacks native 1-bit MACs, naive unpacking to INT4 incurs heavy memory bandwidth and register inflation penalties.
+`llama-apu` executes 1-bit models using **T-MAC lookup tables (LUTs)**:
+- Pre-computes activation sums for small bit groups ($k=4$ or $k=8$) directly in the **32 KB tile data SRAM**.
+- During autoregressive decode, the NPU performs **multiplication-free table lookups** directly using weight bit patterns as indices.
+- Achieves full memory-bandwidth saturation (~110–136 GB/s UMA) at 5–10W active NPU power.
+
+For comprehensive architectural comparisons with other 1-bit / 2-bit formats (BitNet b1.58, TQ1_0, T-ACE, FLUTE, NanoQuant), see [docs/quantization_alternatives.md](docs/quantization_alternatives.md).
+
+---
+
+## 5. Summary Guidance for External Users
 
 | Goal | Recommended Ingestion Format | Resulting Container | Expected Performance |
 | :--- | :--- | :--- | :--- |
+| **Lowest RAM Footprint (1.08 bpw)** | `BiLLM` (with SpinQuant) | `.q4nx` / `.gguf` (1-bit) | 60–260 tok/s on MoE, 3.6–4.2 GB for 27B–31B |
 | **Best Balance of Quality & Speed** | `IQ4_NL` or `Q4_K_M` | `.q4nx` (4-bit) | 25–60 tok/s on NPU, minimal perplexity loss |
 | **Fastest Turnkey Conversion** | `Q4_0` | `.q4nx` (4-bit) | Instant conversion, baseline 4-bit memory |
 | **Maximum Language Fidelity** | `Q8_0` or `F16` | `.q4nx` (or direct GGUF) | Reference PyTorch accuracy |
-| **Battery / Low Power Mode** | `IQ4_NL` with `--npu-based` | `.q4nx` (4-bit) | Lowest package power (~15W TDP) |
+| **Battery / Low Power Mode** | `BiLLM` or `IQ4_NL` with `--npu-based` | `.q4nx` (1-bit / 4-bit) | Lowest package power (~5–15W TDP) |

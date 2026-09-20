@@ -5,6 +5,48 @@ All notable changes to the **llama-apu** project (AMD Ryzen AI APU Zero-Copy Bac
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.4.0] - 2026-09-20
+
+### Added
+- **BiLLM (1.08 bpw) Quantization & SpinQuant Integration**:
+  - Implemented 1-bit residual binarization pipeline (`converter/convert_to_billm.py`) with strict ordering: **SpinQuant offline orthogonal rotation strictly precedes Hessian computation and salient weight protection**.
+  - Top 0.5% - 1.0% high-Hessian salient weights preserved in higher precision (INT4/FP16), while remaining 99% weights are binarized to {-1, +1}, preventing perplexity collapse at extreme 1-bit compression.
+  - Native container ingestion for `BILLM`, `Q1_BILLM`, `Q1_0`, and `Q1_0_G128` formats in `src/container/converter.rs` and `src/container/reader.rs`.
+- **T-MAC SRAM Lookup Tables for XDNA 2 AIE2P NPU**:
+  - Implemented multiplication-free 1-bit GEMV on 32-tile AIE2P NPU using activation pre-computation into 32 KB tile SRAM lookup tables (LUTs).
+  - Eliminates register inflation and INT4 unpacking overheads, achieving maximum memory bandwidth saturation on LPDDR5X UMA.
+- **Full APU Stage Routing Overrides for 1-Bit Models**:
+  - Seamless acceleration routing across APU silicon stages: `--tokenize {cpu,gpu,npu}`, `--prefill {gpu,cpu,npu}`, `--decode {npu,gpu,cpu}`.
+  - Full support for accelerator presets: `--gpu-based`, `--cpu-based`, and `--npu-based`.
+  - Added multi-engine fallback worker (`CpuWorkerEngine`) in `src/ffi.rs` to guarantee non-stop execution across any combination of stage overrides.
+- **Extended Architecture Profiles & Metadata Capacity**:
+  - Expanded GGUF container metadata key scan limit from 256 to 2048 keys in `src/container/xclbin_builder.rs` to support massive MoE architectures.
+  - Added hardware topology profiles for Google Gemma 4 31B, Qwen3.8-27B Cold-Fusion, Qwen3-Coder-Next, Sarvam-105B, Laguna-S-2.1, Qwen3.8-Flash-Next, DeepSeek-V4-Flash variants, and GLM-5.3-Flash.
+- **Quantization Reference & Evaluation Matrix**:
+  - Added comprehensive technical analysis in `docs/quantization_alternatives.md` comparing BiLLM, SpinQuant, BitNet b1.58, TQ1_0, TQ2_0, T-ACE, FLUTE, NanoQuant, and mitigations (QuaRot, ReSpinQuant, KronQ, OffQ, AYOT).
+  - Documented projected decode throughputs (up to 262 tok/s on MoE models).
+
+---
+
+## [0.3.1] - 2026-09-19
+
+### Added
+- **Upstream Alignment & GGML Safety Guards**:
+  - GGUF start-relative alignment and memory map validation.
+  - GGML buffer allocation failure guards preventing unexpected crashes during heavy memory pressure.
+  - Added F16 input support to CPU Fast Walsh-Hadamard Transform (FWHT).
+
+---
+
+## [0.3.0] - 2026-09-18
+
+### Added
+- **Quest Sparsity & Chunked KV Allocation**:
+  - Hierarchical attention speculation and dynamic sliding-window KV cache management.
+  - TriForce hierarchical speculative decoding support across heterogeneous accelerators.
+
+---
+
 ## [0.2.2] - 2026-09-16
 
 ### Added

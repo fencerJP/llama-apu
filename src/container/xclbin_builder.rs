@@ -118,8 +118,8 @@ impl ModelGraphTopology {
         let mut ffn_len: Option<u32> = None;
         let mut ctx_len: Option<u32> = None;
 
-        // Iterate through metadata KV entries up to 256 for fast header scanning
-        let scan_limit = metadata_kv_count.min(256);
+        // Iterate through metadata KV entries up to 2048 for thorough header scanning
+        let scan_limit = metadata_kv_count.min(2048);
         for _ in 0..scan_limit {
             let mut key_len_buf = [0u8; 8];
             if file.read_exact(&mut key_len_buf).is_err() {
@@ -214,6 +214,18 @@ impl ModelGraphTopology {
         let arch_name = parsed_arch.unwrap_or_else(|| {
             if filename.contains("spark") {
                 "spark2_5".to_string()
+            } else if filename.contains("gemma4") || filename.contains("gemma-4") {
+                "gemma4".to_string()
+            } else if filename.contains("cold-fusion") || filename.contains("cold_fusion") {
+                "qwen3_8".to_string()
+            } else if filename.contains("deepseek") {
+                "deepseek_v4".to_string()
+            } else if filename.contains("glm") {
+                "glm5".to_string()
+            } else if filename.contains("sarvam") {
+                "sarvam".to_string()
+            } else if filename.contains("laguna") {
+                "laguna".to_string()
             } else if filename.contains("qwen") {
                 "qwen2".to_string()
             } else if filename.contains("llama") {
@@ -229,19 +241,25 @@ impl ModelGraphTopology {
 
         // Set dimensions based on extracted metadata or architecture profiles
         let is_spark = arch_name.contains("spark") || filename.contains("spark");
+        let is_gemma4 = arch_name.contains("gemma4") || filename.contains("gemma4") || filename.contains("gemma-4");
+        let is_cold_fusion = arch_name.contains("cold_fusion") || filename.contains("cold-fusion") || filename.contains("cold_fusion") || filename.contains("qwen3.8");
         let is_large_vocab = arch_name.contains("qwen")
             || arch_name.contains("gemma")
             || filename.contains("qwen")
             || filename.contains("gemma")
             || filename.contains("ornith")
             || filename.contains("qwythos")
-            || filename.contains("thinkingcap");
-        let hidden_dim = embedding_len.unwrap_or(if is_spark { 2048 } else { 4096 });
-        let num_heads = head_count.unwrap_or(if is_spark { 8 } else { 32 });
-        let num_kv_heads = head_count_kv.unwrap_or(if is_spark { 2 } else { 8 });
-        let num_layers = block_count.unwrap_or(if is_spark { 28 } else { 32 });
-        let ffn_dim = ffn_len.unwrap_or(if is_spark { 6656 } else { 11008 });
-        let context_length = ctx_len.unwrap_or(if is_spark { 1048576 } else { 8192 });
+            || filename.contains("thinkingcap")
+            || filename.contains("glm")
+            || filename.contains("deepseek")
+            || filename.contains("sarvam")
+            || filename.contains("laguna");
+        let hidden_dim = embedding_len.unwrap_or(if is_spark { 2048 } else if is_gemma4 || is_cold_fusion { 5120 } else { 4096 });
+        let num_heads = head_count.unwrap_or(if is_spark { 8 } else if is_gemma4 || is_cold_fusion { 40 } else { 32 });
+        let num_kv_heads = head_count_kv.unwrap_or(if is_spark { 2 } else if is_gemma4 { 16 } else if is_cold_fusion { 8 } else { 8 });
+        let num_layers = block_count.unwrap_or(if is_spark { 28 } else if is_gemma4 { 56 } else if is_cold_fusion { 64 } else { 32 });
+        let ffn_dim = ffn_len.unwrap_or(if is_spark { 6656 } else if is_gemma4 { 24576 } else if is_cold_fusion { 17920 } else { 11008 });
+        let context_length = ctx_len.unwrap_or(if is_spark { 1048576 } else if is_gemma4 || is_cold_fusion { 131072 } else { 8192 });
         let vocab_size = if is_large_vocab {
             262144
         } else if is_spark {

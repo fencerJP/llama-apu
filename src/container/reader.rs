@@ -56,6 +56,8 @@ pub enum TensorDType {
     F64 = 28,
     IQ1_M = 29,
     BF16 = 30,
+    Q1_0 = 41,
+    BILLM = 42,
     Unknown(u32),
 }
 
@@ -91,6 +93,8 @@ impl From<u32> for TensorDType {
             28 => TensorDType::F64,
             29 => TensorDType::IQ1_M,
             30 => TensorDType::BF16,
+            41 => TensorDType::Q1_0,
+            42 => TensorDType::BILLM,
             other => TensorDType::Unknown(other),
         }
     }
@@ -119,7 +123,9 @@ impl TensorDType {
             | TensorDType::I8
             | TensorDType::I16
             | TensorDType::I32
-            | TensorDType::I64 => true,
+            | TensorDType::I64
+            | TensorDType::Q1_0
+            | TensorDType::BILLM => true,
             _ => false,
         }
     }
@@ -468,6 +474,34 @@ impl<'a> TensorView<'a> {
                         }
                         if c1 < cols {
                             exact_block_sum += (KVALUES_IQ4NL[idx1] as f32) * vec[c1];
+                        }
+                    }
+                    sum += exact_block_sum * scale;
+                }
+                sum
+            }
+            TensorDType::Q1_0 | TensorDType::BILLM => {
+                let blocks_per_row = (cols + 127) / 128;
+                let row_bytes = blocks_per_row * 18;
+                let row_data = &self.data[row_idx * row_bytes..(row_idx + 1) * row_bytes];
+                let mut sum = 0.0f32;
+
+                for b in 0..blocks_per_row {
+                    let chunk = &row_data[b * 18..(b + 1) * 18];
+                    let scale = f16_to_f32(u16::from_le_bytes([chunk[0], chunk[1]]));
+                    let qs = &chunk[2..18];
+                    let base_col = b * 128;
+
+                    // T-MAC style fast SIMD bit-expansion & accumulation
+                    let mut exact_block_sum = 0.0f32;
+                    for k in 0..16 {
+                        let byte = qs[k];
+                        for j in 0..8 {
+                            let c = base_col + k * 8 + j;
+                            if c < cols {
+                                let sign = if (byte >> j) & 1 == 1 { 1.0f32 } else { -1.0f32 };
+                                exact_block_sum += sign * vec[c];
+                            }
                         }
                     }
                     sum += exact_block_sum * scale;
