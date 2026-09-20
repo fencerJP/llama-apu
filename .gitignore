@@ -82,6 +82,7 @@
 /out/
 /tmp/
 /scratch/
+/old/
 /test_models/
 /autogen-*.md
 /common/build-info.cpp

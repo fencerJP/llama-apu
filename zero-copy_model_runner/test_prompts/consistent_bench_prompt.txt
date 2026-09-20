@@ -1,8 +1,0 @@
-You are an expert low-level systems architect specializing in heterogeneous computing on unified-memory APU architectures.
-
-Please provide a technical comparison of cross-accelerator zero-copy memory pipelines operating across integrated GPUs and dedicated NPUs versus discrete PCIe GPU topologies.
-
-In your evaluation, address the following three dimensions:
-1. Physical Unified Memory: Explain how exporting an AMDGPU GEM buffer backed by coherent system RAM into a Linux dma-buf descriptor enables zero-copy Key-Value cache sharing between iGPU prefill and NPU decode without host-side memcpy overhead.
-2. Hardware Synchronization: Contrast DRM synchronization objects (drm_syncobj) and timeline fences against host CPU busy-polling for inter-accelerator handoff.
-3. Bandwidth and Efficiency: Detail trade-offs in memory bandwidth saturation, thermal package envelope (15W-45W vs 250W+), and time-to-first-token (TTFT) latency.

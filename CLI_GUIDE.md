@@ -153,14 +153,15 @@ apu-model convert --input <INPUT_PATH> --output <OUTPUT_PATH> [OPTIONS]
 | `--target <NAME>` | `-t` | String | `auto` | Silicon target identifier (`strix-point`, `gorgon-point`, `krackan-point`, `strix-halo`). |
 | `--verbose` | `-v` | Flag | `false` | Print detailed conversion telemetry and tensor mapping. |
 
-**Supported Quantizations (Q4 to Q16):**
+**Supported Quantizations (1-Bit BiLLM & Q4 to Q16):**
+- **1-bit**: `BILLM`, `Q1_BILLM` (1.08 bpw with SpinQuant offline rotation and salient weight protection), `Q1_0`, `Q1_0_G128` (T-MAC SRAM lookup table execution on XDNA 2 NPU).
 - **4-bit**: `Q4_0`, `Q4_1`, `Q4_K_M`, `Q4_K_S`, `IQ4_NL` (non-linear codebook mapping), `IQ4_XS`.
 - **5-bit & 6-bit**: `Q5_0`, `Q5_1`, `Q5_K_M`, `Q5_K_S`, `Q6_K`.
 - **8-bit**: `Q8_0` (standard baseline).
 - **16-bit**: `F16`, `BF16`, `F32`.
 
 **Unsupported Formats Policy:**
-Sub-4-bit formats (`IQ1_*`, `IQ2_*`, `Q2_K`, `IQ3_*`, `Q3_K_*`) are explicitly **rejected** with descriptive error messages because unaligned memory bit-strides break AIE2P tile DMAs and exhibit unacceptable perplexity loss.
+Naive uncompensated sub-4-bit formats (`IQ1_*`, `IQ2_*`, `Q2_K`, `IQ3_*`, `Q3_K_*` without SpinQuant rotation or salient protection) are explicitly **rejected** with descriptive error messages because unaligned memory bit-strides break AIE2P tile DMAs and exhibit catastrophic perplexity collapse. Use `BiLLM` instead for extreme 1-bit compression.
 
 **Examples:**
 ```bash

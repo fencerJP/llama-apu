@@ -135,11 +135,16 @@ We evaluated 10 neural model configurations across 3 XCLBIN hardware binary vari
 ## Documentation Index
 
 - [CLI Reference Guide](CLI_GUIDE.md): Full command-line options, stage flags, and OpenAI API endpoint documentation.
-- [AMD APU Developer & Architecture Reference Guide](docs/AMD_APU_DEVELOPER_REFERENCE.md): In-depth guide covering silicon architecture, `.xclbin` graph compilation, Linux kernel UAPI (`dma-buf`), and timeline fences.
-- [Quantization Matrix](QUANTIZATION.md): Supported Q4–Q16 format specifications and sub-4-bit rejection policies.
+- [Quantization Matrix](QUANTIZATION.md): Supported 1-bit BiLLM and Q4–Q16 format specifications and sub-4-bit policies.
+- [Quantization Alternatives & 1-Bit Analysis](docs/quantization_alternatives.md): In-depth comparison of BiLLM, SpinQuant, BitNet b1.58, T-MAC, and 10-model evaluation matrix.
 - [Hardware Support Matrix](HARDWARE_SUPPORT.md): Per-silicon architecture breakdown, driver nodes, and memory subsystem tuning.
-- [Changelog](CHANGELOG.md): Version history, updates, and release notes.
+- [Technical Specifications](docs/spec.md): Silicon constraints, UAPI ioctl structs, and zero-copy buffer definitions.
+- [System Constitution & Invariants](docs/constitution.md): Non-negotiable runtime invariants (zero host memcpy, DRM timeline fences).
+- [C4 Architecture Model](docs/c4_architecture.md): Component, container, and context diagrams of the heterogeneous APU orchestrator.
+- [AMD APU Developer & Architecture Reference Guide](docs/AMD_APU_DEVELOPER_REFERENCE.md): In-depth guide covering silicon architecture, `.xclbin` graph compilation, Linux kernel UAPI (`dma-buf`), and timeline fences.
 - [APU Architecture Guide](docs/backend/APU.md): Deep-dive into DMA-BUF memory bridges and DRM timeline fences.
+- [Troubleshooting & Diagnostics](docs/TROUBLESHOOTING.md): Kernel node permissions, udev rules, and common issue resolutions.
+- [Changelog](CHANGELOG.md): Version history, updates, and release notes.
 
 ---
 
