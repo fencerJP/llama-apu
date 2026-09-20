@@ -23,7 +23,7 @@ While upstream [llama.cpp](https://github.com/ggml-org/llama.cpp) focuses on gen
 | **NPU (XDNA 2) Offload** | Unsupported or generic NPU shims | **Native XDNA 2 AIE2P tile streaming**: Optimized 32-tile dataflow execution via `/dev/accel/accel0` |
 | **Hardware Microcode** | None / manual external setup | **Bundled 37-profile XDNA 2 XCLBIN bank**: Auto-resolved and auto-discovered in system search paths |
 | **CLI & Stage Overrides** | Generic `-ngl` / `-t` flags | **Granular stage routing**: `--tokenize`, `--prefill`, `--decode`, `--gpu-based`, `--cpu-based`, `--npu-based`, `--apu-xclbin`, `--apu-verbose` |
-| **Quantization Policy** | Sub-1-bit to 8-bit generic quants | **Q4–Q16 alignment matrix**: Native hardware support for Q4 through Q16 (`Q4_K_M`, `IQ4_NL`, `Q5_K_M`, `Q8_0`, `BF16`, `F16`), rejecting unaligned sub-4-bit quants that break tile memory strides |
+| **Quantization Policy** | Sub-1-bit to 8-bit generic quants | **BiLLM (1.08 bpw) + Q4–Q16 Spectrum**: Native 1-bit BiLLM with SpinQuant offline rotation and T-MAC SRAM LUT on NPU; native Q4 through Q16 (`Q4_K_M`, `IQ4_NL`, `Q5_K_M`, `Q8_0`, `BF16`, `F16`), rejecting unaligned naive sub-4-bit formats |
 | **Hardware Diagnostics** | External or ad-hoc scripts | **Integrated `apu-doctor` & `apu-model`**: Built-in verification for kernel nodes (`renderD128`, `accel0`), permissions, and model inspection |
 
 ---
@@ -48,8 +48,8 @@ While upstream [llama.cpp](https://github.com/ggml-org/llama.cpp) focuses on gen
 #### Option A: Pre-compiled Release Bundle (Recommended)
 Download the latest pre-compiled bundle from the [Releases page](https://github.com/fencerJP/llama-apu/releases):
 ```bash
-tar -xzf llama-apu-0.2.1-linux-x86_64.tar.gz
-cd llama-apu-0.2.1-linux-x86_64
+tar -xzf llama-apu-0.4.0-linux-x86_64.tar.gz
+cd llama-apu-0.4.0-linux-x86_64
 sudo ./install.sh
 ```
 
