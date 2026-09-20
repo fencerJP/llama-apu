@@ -506,6 +506,7 @@ llama_context::llama_context(
         const char * xclbin_override = cparams.apu_xclbin.empty() ? nullptr : cparams.apu_xclbin.c_str();
         int rc = apu_backend_load_model(model.model_path.c_str(), xclbin_override, &apu_ctx);
         if (rc == 0 && apu_ctx != nullptr) {
+            apu_backend_set_stage_routing(apu_ctx, cparams.apu_prefill.c_str(), cparams.apu_decode.c_str());
             size_t kv_capacity = 64 * 1024 * 1024;
             apu_backend_allocate_shared_kv(apu_ctx, kv_capacity, &apu_dmabuf_fd);
             if (cparams.apu_verbose) {

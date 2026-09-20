@@ -79,6 +79,20 @@ int apu_backend_allocate_shared_kv(
 );
 
 /**
+ * Configure stage routing targets (prefill: "gpu"|"cpu"|"npu", decode: "npu"|"gpu"|"cpu").
+ *
+ * @param ctx Active apu-backend context.
+ * @param prefill Target accelerator for prefill phase ("gpu", "cpu", "npu").
+ * @param decode Target accelerator for decode phase ("npu", "gpu", "cpu").
+ * @return 0 on success, non-zero on error.
+ */
+int apu_backend_set_stage_routing(
+    ApuBackendContext* ctx,
+    const char* prefill,
+    const char* decode
+);
+
+/**
  * Dispatch a compute-heavy prompt prefill pass on the RDNA 3.5 iGPU.
  *
  * Attention Key and Value matrices are projected directly into the shared dma-buf.

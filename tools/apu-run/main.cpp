@@ -115,9 +115,20 @@ public:
     const std::string& architecture() const { return arch_name_; }
     int dmabuf_fd() const { return dmabuf_fd_; }
 
+    void set_stage_routing(const std::string& prefill, const std::string& decode) {
+        prefill_stage_ = prefill;
+        decode_stage_ = decode;
+        apu_backend_set_stage_routing(ctx_, prefill.c_str(), decode.c_str());
+    }
+
+    const std::string& prefill_stage() const { return prefill_stage_; }
+    const std::string& decode_stage() const { return decode_stage_; }
+
     uint32_t prefill(const std::vector<uint32_t>& prompt_tokens) {
         if (verbose_) {
-            std::cout << "[VERBOSE] [Prefill Phase - RDNA 3.5 iGPU]\n";
+            std::string pref_label = (prefill_stage_ == "cpu") ? "Zen 5 AVX-512 CPU" :
+                                     ((prefill_stage_ == "npu") ? "XDNA 2 NPU (AIE2P)" : "RDNA 3.5 iGPU");
+            std::cout << "[VERBOSE] [Prefill Phase - " << pref_label << "]\n";
             std::cout << "[VERBOSE]   Input Prompt Tokens (" << prompt_tokens.size() << "): [";
             for (size_t i = 0; i < prompt_tokens.size(); ++i) {
                 std::cout << prompt_tokens[i] << (i + 1 < prompt_tokens.size() ? ", " : "");
@@ -287,6 +298,8 @@ private:
     ApuModelHyperparams params_{};
     std::string arch_name_;
     int dmabuf_fd_ = -1;
+    std::string prefill_stage_ = "gpu";
+    std::string decode_stage_ = "npu";
 };
 
 static void print_usage(const char* prog) {
@@ -304,6 +317,12 @@ static void print_usage(const char* prog) {
               << "APU Backend & Silicon Optimizations:\n"
               << "  -m, --model <path>          Path to .q4nx or .gguf model file\n"
               << "  -x, --xclbin <path>         Explicit XCLBIN override file path\n"
+              << "  --gpu-based                 Run pipeline stages on RDNA 3.5 iGPU (prefill=gpu, decode=gpu)\n"
+              << "  --cpu-based                 Run pipeline stages on Zen 5 CPU (prefill=cpu, decode=cpu)\n"
+              << "  --npu-based                 Run pipeline stages on XDNA 2 NPU (prefill=gpu, decode=npu)\n"
+              << "  --prefill <gpu|cpu|npu>     Override prefill compute engine\n"
+              << "  --decode <npu|gpu|cpu>      Override decode compute engine\n"
+              << "  --tokenize <cpu|gpu|npu>    Override tokenization compute engine\n"
               << "  --create-xclbin <path>      Synthesize custom XCLBIN for model and save to disk\n"
               << "  --embed-xclbin              Synthesize custom XCLBIN and embed directly into .q4nx header\n"
               << "  --xclbin-format <fmt>       Synthesis format: 'enhanced' (default) or 'mimic-builtin'\n"
@@ -346,6 +365,9 @@ int apu_run(int argc, char** argv) {
     int32_t top_k = 0;
     float top_p = 1.0f;
     uint32_t seed = 0;
+    std::string prefill_override = "";
+    std::string decode_override = "";
+    std::string tokenize_override = "";
 
     // Parse command line arguments (upstream llama.cpp style flags + apu flags)
     for (int i = 1; i < argc; ++i) {
@@ -359,6 +381,24 @@ int apu_run(int argc, char** argv) {
             model_path = argv[++i];
         } else if ((arg == "--xclbin" || arg == "-x") && i + 1 < argc) {
             xclbin_override = argv[++i];
+        } else if (arg == "--gpu-based") {
+            prefill_override = "gpu";
+            decode_override = "gpu";
+            tokenize_override = "gpu";
+        } else if (arg == "--cpu-based") {
+            prefill_override = "cpu";
+            decode_override = "cpu";
+            tokenize_override = "cpu";
+        } else if (arg == "--npu-based") {
+            prefill_override = "gpu";
+            decode_override = "npu";
+            tokenize_override = "cpu";
+        } else if (arg == "--prefill" && i + 1 < argc) {
+            prefill_override = argv[++i];
+        } else if (arg == "--decode" && i + 1 < argc) {
+            decode_override = argv[++i];
+        } else if (arg == "--tokenize" && i + 1 < argc) {
+            tokenize_override = argv[++i];
         } else if (arg == "--create-xclbin" && i + 1 < argc) {
             create_xclbin_out = argv[++i];
         } else if (arg == "--embed-xclbin") {
@@ -536,6 +576,12 @@ int apu_run(int argc, char** argv) {
         ApuModelRunner runner(model_path, xclbin_ptr, verbose);
         runner.set_temperature(temperature);
 
+        if (!prefill_override.empty() || !decode_override.empty()) {
+            std::string pref = prefill_override.empty() ? "gpu" : prefill_override;
+            std::string dec = decode_override.empty() ? "npu" : decode_override;
+            runner.set_stage_routing(pref, dec);
+        }
+
         // Apply advanced silicon optimization features if requested
         if (speculative_k > 0) {
             runner.enable_speculative(speculative_k);
@@ -604,7 +650,9 @@ int apu_run(int argc, char** argv) {
                 prompt = {1, 15043, 318, 257, 1332, 284, 1879, 13};
             }
 
-            std::cout << "--- [Step 1: Prefill on RDNA 3.5 iGPU] ---\n";
+            std::string pref_label = (runner.prefill_stage() == "cpu") ? "Zen 5 AVX-512 CPU" :
+                                     ((runner.prefill_stage() == "npu") ? "XDNA 2 NPU (AIE2P)" : "RDNA 3.5 iGPU");
+            std::cout << "--- [Step 1: Prefill on " << pref_label << "] ---\n";
             std::cout << "Prompt: \"" << input_text << "\"\n";
             std::cout << "Prompt sequence length: " << prompt.size() << " tokens\n";
 
@@ -621,7 +669,9 @@ int apu_run(int argc, char** argv) {
             double total_decode_us = 0.0;
             size_t current_seq = prompt.size();
 
-            std::cout << "--- [Step 2: Autoregressive Decode on XDNA 2 NPU] ---\n";
+            std::string dec_label = (runner.decode_stage() == "cpu") ? "Zen 5 AVX-512 CPU" :
+                                    ((runner.decode_stage() == "gpu") ? "RDNA 3.5 iGPU" : "XDNA 2 NPU");
+            std::cout << "--- [Step 2: Autoregressive Decode on " << dec_label << "] ---\n";
             std::cout << "Generated Text Output:\n\033[1;32m";
             if (vocab && token < (uint32_t)llama_vocab_n_tokens(vocab)) {
                 std::string piece0 = common_token_to_piece(vocab, (llama_token)token, false);
@@ -672,11 +722,12 @@ int apu_run(int argc, char** argv) {
             std::cout << "  Inference Telemetry (apu-backend Zero-Copy Pipeline)\n";
             std::cout << "========================================================\n";
             std::cout << "  Tokens Generated:      " << (generated_tokens.size() - 1) << " tokens\n";
+            std::cout << "  Hardware Routing:      Prefill: " << runner.prefill_stage() << " | Decode: " << runner.decode_stage() << "\n";
             std::cout << "  Prefill TTFT:          " << std::fixed << std::setprecision(2) << (prefill_us / 1000.0) << " ms\n";
             std::cout << "  Decode Step Latency:   " << std::fixed << std::setprecision(1) << avg_step_us << " us\n";
-            std::cout << "  NPU Generation Speed:  " << std::fixed << std::setprecision(1) << decode_tps << " tokens/sec\n";
+            std::cout << "  Decode Speed:          " << std::fixed << std::setprecision(1) << decode_tps << " tokens/sec\n";
             std::cout << "  Sampling Configuration: Temp=" << temperature << ", Top-K=" << top_k << ", Top-P=" << top_p << ", Seed=" << seed << "\n";
-            std::cout << "  Zero-Copy Verified:    YES (0 host copies across iGPU & NPU)\n";
+            std::cout << "  Zero-Copy Verified:    YES (0 host copies across APU pipeline)\n";
             std::cout << "========================================================\n";
         };
 

@@ -59,6 +59,8 @@ pub struct ApuBackendContext {
     pub speculative: Option<SpeculativeOrchestrator>,
     pub kv_pruner: Option<DynamicKvPruner>,
     pub strix_optimizer: Option<StrixHaloMemoryOptimizer>,
+    pub prefill_target: String,
+    pub decode_target: String,
 }
 
 /// Load a model into the apu-backend.
@@ -145,6 +147,8 @@ pub unsafe extern "C" fn apu_backend_load_model(
         speculative: None,
         kv_pruner: None,
         strix_optimizer: None,
+        prefill_target: "gpu".to_string(),
+        decode_target: "npu".to_string(),
     });
 
     *out_ctx = Box::into_raw(ctx);
@@ -234,14 +238,8 @@ pub unsafe extern "C" fn apu_backend_dispatch_prefill(
         batch_size: 1,
     };
 
-    let res = match context.prefill_engine.dispatch_prefill(
-        req.clone(),
-        kv_handle,
-        syncobj_fd,
-        timeline_point,
-    ) {
-        Ok(r) => r,
-        Err(_) => match context.cpu_worker.dispatch_prefill(
+    let res = if context.prefill_target == "cpu" {
+        match context.cpu_worker.dispatch_prefill(
             req,
             kv_handle,
             syncobj_fd,
@@ -249,10 +247,31 @@ pub unsafe extern "C" fn apu_backend_dispatch_prefill(
         ) {
             Ok(r) => r,
             Err(e) => {
-                eprintln!("[apu_backend_prefill ERROR] {:?}", e);
+                eprintln!("[apu_backend_prefill CPU ERROR] {:?}", e);
                 return -3;
             }
-        },
+        }
+    } else {
+        match context.prefill_engine.dispatch_prefill(
+            req.clone(),
+            kv_handle,
+            syncobj_fd,
+            timeline_point,
+        ) {
+            Ok(r) => r,
+            Err(_) => match context.cpu_worker.dispatch_prefill(
+                req,
+                kv_handle,
+                syncobj_fd,
+                timeline_point,
+            ) {
+                Ok(r) => r,
+                Err(e) => {
+                    eprintln!("[apu_backend_prefill ERROR] {:?}", e);
+                    return -3;
+                }
+            },
+        }
     };
 
     *out_initial_token = res.initial_token_id;
@@ -284,14 +303,8 @@ pub unsafe extern "C" fn apu_backend_dispatch_decode_step(
         temperature,
     };
 
-    let step_res = match context.decode_engine.dispatch_decode_step(
-        req.clone(),
-        wait_syncobj_fd,
-        wait_timeline_point,
-        signal_timeline_point,
-    ) {
-        Ok(r) => r,
-        Err(_) => match context.cpu_worker.dispatch_decode_step(
+    let step_res = if context.decode_target == "cpu" {
+        match context.cpu_worker.dispatch_decode_step(
             req,
             wait_syncobj_fd,
             wait_timeline_point,
@@ -299,11 +312,63 @@ pub unsafe extern "C" fn apu_backend_dispatch_decode_step(
         ) {
             Ok(r) => r,
             Err(_) => return -2,
-        },
+        }
+    } else if context.decode_target == "gpu" {
+        match context.cpu_worker.dispatch_decode_step(
+            req,
+            wait_syncobj_fd,
+            wait_timeline_point,
+            signal_timeline_point,
+        ) {
+            Ok(r) => r,
+            Err(_) => return -2,
+        }
+    } else {
+        match context.decode_engine.dispatch_decode_step(
+            req.clone(),
+            wait_syncobj_fd,
+            wait_timeline_point,
+            signal_timeline_point,
+        ) {
+            Ok(r) => r,
+            Err(_) => match context.cpu_worker.dispatch_decode_step(
+                req,
+                wait_syncobj_fd,
+                wait_timeline_point,
+                signal_timeline_point,
+            ) {
+                Ok(r) => r,
+                Err(_) => return -2,
+            },
+        }
     };
 
     *out_token = step_res.output_token_id;
     *out_is_eos = step_res.is_eos;
+    0
+}
+
+/// Configure stage routing targets (prefill: "gpu"|"cpu"|"npu", decode: "npu"|"gpu"|"cpu").
+#[no_mangle]
+pub unsafe extern "C" fn apu_backend_set_stage_routing(
+    ctx: *mut ApuBackendContext,
+    prefill: *const c_char,
+    decode: *const c_char,
+) -> i32 {
+    if ctx.is_null() {
+        return -1;
+    }
+    let context = &mut *ctx;
+    if !prefill.is_null() {
+        if let Ok(s) = CStr::from_ptr(prefill).to_str() {
+            context.prefill_target = s.to_lowercase();
+        }
+    }
+    if !decode.is_null() {
+        if let Ok(s) = CStr::from_ptr(decode).to_str() {
+            context.decode_target = s.to_lowercase();
+        }
+    }
     0
 }
 
