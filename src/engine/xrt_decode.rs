@@ -83,6 +83,11 @@ impl XrtDecodeEngine {
         self.model_reader = Some(reader);
     }
 
+    /// Retrieve the attached model reader if available.
+    pub fn model_reader(&self) -> Option<Arc<GgufModelReader>> {
+        self.model_reader.clone()
+    }
+
     /// Create an engine bound directly to a custom or pre-configured `DeviceBackend`.
     pub fn new_with_backend(backend: Arc<dyn DeviceBackend>) -> Self {
         let is_mock = backend.is_mock();
@@ -270,12 +275,11 @@ impl DecodeEngine for XrtDecodeEngine {
             let elapsed_us = start_time.elapsed().as_micros() as u64;
             (out_id, out_id == eos_id, elapsed_us)
         } else {
-            let out_id = DeterministicReferenceOracle::next_decode_step_token(
+            let (out_id, eos) = DeterministicReferenceOracle::next_decode_step_with_reader(
                 request.input_token_id,
                 request.sequence_index,
+                self.model_reader.as_deref(),
             );
-            let eos = out_id == DeterministicReferenceOracle::EOS_TOKEN_ID
-                || out_id == DeterministicReferenceOracle::EOS_TOKEN_ID_ALT;
             (out_id, eos, 28_000)
         };
 

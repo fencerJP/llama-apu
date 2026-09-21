@@ -168,7 +168,7 @@ We evaluated 10 neural model configurations across 3 XCLBIN hardware binary vari
 
 ## Acknowledgments & Community Attribution
 
-We extend our sincere thanks and deep appreciation to **Atomic-Germ / Guanaco** for foundational inspirations, technical insights, and architectural guidance across low-bit binarization pipelines, orthogonal rotation strategies, saliency isolation heuristics, and dynamic memory orchestration that significantly shaped and accelerated the development of this project.
+Special thanks to **[Atomic-Germ / Guanaco](https://github.com/Atomic-Germ/Guanaco)** for pioneering **on-demand NVMe/disk streaming of Mixture-of-Experts (MoE) expert weights in llama.cpp**. Guanaco's core approach — tracking router-selected top-k experts per token, keeping only a bounded pool of "hot" experts resident in RAM, and streaming unpinned expert weight slices from NVMe on demand via `io_uring` / `madvise` — enables 100B+ MoE models to run on hardware where total RAM is smaller than the full model. This directly inspired our MoE router matrix SRAM pinning, active expert memory budgeting, and out-of-core MoE execution pipeline for running massive 35B–320B models (DeepSeek-V4, Sarvam-105B, GLM-5.3-Flash) on AMD Ryzen AI APUs with shared UMA DRAM.
 
 ---
 

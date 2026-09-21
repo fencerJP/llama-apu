@@ -711,6 +711,15 @@ impl ModelTokenizer {
         }
         out
     }
+
+    /// Decode all tokens in sequence without stopping at EOS.
+    pub fn decode_tokens_all(&self, tokens: &[u32]) -> String {
+        let mut out = String::new();
+        for &t in tokens {
+            out.push_str(&self.decode_token(t));
+        }
+        out
+    }
 }
 
 /// High-Performance Zero-Copy GGUF Model Reader.

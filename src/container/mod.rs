@@ -192,14 +192,61 @@ impl Q4nxModel {
             .map(|p| p.as_ref().to_string_lossy().to_string())
             .unwrap_or_else(|| self.file_path.clone());
 
-        // Re-write container with embedded XCLBIN
-        Self::create_container(
-            &out_path,
-            &self.header.arch_name,
-            self.header.hyperparams,
-            Some(new_xclbin),
-            &self.payload_data,
-        )?;
+        let temp_out = if out_path == self.file_path {
+            format!("{}.tmp_stamp", out_path)
+        } else {
+            out_path.clone()
+        };
+
+        {
+            let mut source_file = File::open(&self.file_path)?;
+            source_file.seek(SeekFrom::Start(self.header.payload_offset))?;
+
+            let mut out_file = OpenOptions::new()
+                .create(true)
+                .write(true)
+                .truncate(true)
+                .open(&temp_out)?;
+
+            let mut header_buf = [0u8; HEADER_FIXED_SIZE];
+            header_buf[0..4].copy_from_slice(&Q4NX_MAGIC);
+            header_buf[4..8].copy_from_slice(&Q4NX_CURRENT_VERSION.to_le_bytes());
+            let arch_bytes = self.header.arch_name.as_bytes();
+            let copy_len = arch_bytes.len().min(31);
+            header_buf[8..8 + copy_len].copy_from_slice(&arch_bytes[..copy_len]);
+
+            header_buf[40..44].copy_from_slice(&self.header.hyperparams.hidden_dim.to_le_bytes());
+            header_buf[44..48].copy_from_slice(&self.header.hyperparams.num_heads.to_le_bytes());
+            header_buf[48..52].copy_from_slice(&self.header.hyperparams.num_kv_heads.to_le_bytes());
+            header_buf[52..56].copy_from_slice(&self.header.hyperparams.num_layers.to_le_bytes());
+            header_buf[56..60].copy_from_slice(&self.header.hyperparams.vocab_size.to_le_bytes());
+            header_buf[60..64].copy_from_slice(&self.header.hyperparams.context_length.to_le_bytes());
+
+            let xclbin_offset = HEADER_FIXED_SIZE as u64;
+            let xclbin_size = new_xclbin.len() as u64;
+            let raw_payload_offset = xclbin_offset + xclbin_size;
+            let payload_offset = (raw_payload_offset + 63) & !63;
+
+            header_buf[64..72].copy_from_slice(&xclbin_offset.to_le_bytes());
+            header_buf[72..80].copy_from_slice(&xclbin_size.to_le_bytes());
+            header_buf[96..104].copy_from_slice(&payload_offset.to_le_bytes());
+            header_buf[104..112].copy_from_slice(&self.header.payload_size.to_le_bytes());
+
+            out_file.write_all(&header_buf)?;
+            out_file.write_all(new_xclbin)?;
+
+            let padding_needed = (payload_offset - raw_payload_offset) as usize;
+            if padding_needed > 0 {
+                out_file.write_all(&vec![0u8; padding_needed])?;
+            }
+
+            io::copy(&mut source_file, &mut out_file)?;
+            out_file.flush()?;
+        }
+
+        if out_path == self.file_path {
+            std::fs::rename(&temp_out, &out_path)?;
+        }
 
         self.xclbin_data = new_xclbin.to_vec();
         self.header.xclbin_size = new_xclbin.len() as u64;

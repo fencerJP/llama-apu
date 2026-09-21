@@ -341,8 +341,22 @@ where
                 println!("Streaming and quantizing weights directly to disk...");
 
                 // Execute the streaming quantizer engine
-                let mut cmd = std::process::Command::new("python3");
-                cmd.arg("old/converter/convert_to_billm.py")
+                let script_candidates = [
+                    PathBuf::from("old/converter/convert_to_billm.py"),
+                    PathBuf::from("converter/convert_to_billm.py"),
+                    PathBuf::from("/home/fencer/.openclaw/workspace/projects/zero-copy_model_runner/old/converter/convert_to_billm.py"),
+                    PathBuf::from("/home/fencer/.openclaw/workspace/projects/zero-copy_model_runner/converter/convert_to_billm.py"),
+                ];
+                let script_path = script_candidates.iter().find(|p| p.exists()).cloned().unwrap_or_else(|| PathBuf::from("old/converter/convert_to_billm.py"));
+
+                let python_candidates = [
+                    PathBuf::from("/home/fencer/.openclaw/workspace/projects/zero-copy_model_runner/.venv/bin/python3"),
+                    PathBuf::from("python3"),
+                ];
+                let python_bin = python_candidates.iter().find(|p| p.exists() || p.to_str() == Some("python3")).cloned().unwrap_or_else(|| PathBuf::from("python3"));
+
+                let mut cmd = std::process::Command::new(python_bin);
+                cmd.arg(&script_path)
                     .arg("--model-id").arg(model_dir)
                     .arg("--output").arg(&out_path)
                     .arg("--format").arg(if is_bare { "bare" } else { "embedded" })

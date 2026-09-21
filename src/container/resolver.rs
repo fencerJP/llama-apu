@@ -255,15 +255,7 @@ pub fn auto_match_profile<'a>(
         }
     }
 
-    let matching_count = profiles
-        .iter()
-        .filter(|p| {
-            let prof_lower = p.name.to_lowercase();
-            base_families.iter().any(|&f| model_lower.contains(f) && prof_lower.contains(f))
-        })
-        .count();
-
-    if best_score >= 20 || (best_score >= 10 && matching_count == 1) {
+    if best_score >= 10 {
         return best_profile;
     }
 
@@ -368,7 +360,31 @@ pub fn resolve_xclbin_profile(
         return Ok(matched.clone());
     }
 
-    // 4. Interactive fallback via stdin/stdout
+    // 4. In non-interactive / daemon / server mode, auto-select best candidate without blocking
+    if unsafe { libc::isatty(libc::STDIN_FILENO) } == 0 {
+        let model_lower = model_identifier.to_lowercase();
+        // Try to find any profile with overlapping family tokens
+        let fallback = profiles
+            .iter()
+            .find(|p| {
+                let prof_lower = p.name.to_lowercase();
+                for term in &["deepseek", "qwen", "gemma", "llama", "phi", "mistral", "lfm", "whisper", "gpt"] {
+                    if model_lower.contains(term) && prof_lower.contains(term) {
+                        return true;
+                    }
+                }
+                false
+            })
+            .unwrap_or(&profiles[0]);
+
+        eprintln!(
+            "[APU BACKEND] Non-interactive environment: auto-selected hardware profile [{}] for model '{}'",
+            fallback.name, model_identifier
+        );
+        return Ok(fallback.clone());
+    }
+
+    // 5. Interactive fallback via stdin/stdout
     let stdin = io::stdin();
     let stdout = io::stdout();
     let selected = interactive_select_profile(&profiles, stdin.lock(), stdout)?;

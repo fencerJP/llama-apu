@@ -165,5 +165,25 @@ $$\text{Projected Decode (tok/s)} = \frac{\text{Effective UMA Memory Bandwidth (
 
 ## 7. Acknowledgments & Community Attribution
 
-Special gratitude to **Atomic-Germ / Guanaco** for foundational inspirations, technical insights, and architectural guidance across low-bit binarization pipelines, orthogonal rotation strategies, saliency isolation heuristics, and dynamic memory optimizations that directly influenced the design of our extreme-compression APU inference kernels.
+Special thanks to **[Atomic-Germ / Guanaco](https://github.com/Atomic-Germ/Guanaco)** for pioneering **on-demand NVMe/disk streaming of Mixture-of-Experts (MoE) expert weights in llama.cpp**. Guanaco's core insight — that MoE models only activate a handful of experts per token (e.g., top-8 of 256 per layer), and by keeping only "hot" experts resident in RAM and dynamically streaming unpinned expert weight slices from NVMe on demand via `io_uring` / `madvise`, 100B+ MoE models can run on RAM-constrained edge hardware — directly inspired our **MoE router matrix SRAM pinning**, **active expert memory budgeting**, and **out-of-core MoE expert execution pipeline** that enable running 35B–320B models on AMD Ryzen AI APUs.
 
+---
+
+## 8. Academic References
+
+For the full list of papers that informed this project's quantization algorithms, inference architecture, and hardware design, see **[docs/REFERENCES.md](REFERENCES.md)**.
+
+Key papers referenced in this document:
+
+| Method | Paper | ArXiv |
+| :--- | :--- | :--- |
+| **BiLLM** | Huang et al., "BiLLM: Pushing the Limit of Post-Training Quantization for LLMs" | [2402.04291](https://arxiv.org/abs/2402.04291) |
+| **SpinQuant** | Liu et al., "SpinQuant: LLM Quantization with Learned Rotations" (Meta FAIR) | [2405.16406](https://arxiv.org/abs/2405.16406) |
+| **T-MAC** | Wei et al., "T-MAC: CPU Renaissance via Table Lookup for Low-Bit LLM Deployment" (Microsoft) | [2407.09720](https://arxiv.org/abs/2407.09720) |
+| **BitNet b1.58** | Ma et al., "The Era of 1-bit LLMs" (Microsoft) | [2402.17764](https://arxiv.org/abs/2402.17764) |
+| **QuaRot** | Ashkboos et al., "QuaRot: Outlier-Free 4-Bit Inference in Rotated LLMs" | [2404.00456](https://arxiv.org/abs/2404.00456) |
+| **QuIP#** | Tseng et al., "QuIP#: Even Better LLM Quantization with Hadamard Incoherence" (Cornell) | [2402.04396](https://arxiv.org/abs/2402.04396) |
+| **GPTQ** | Frantar et al., "GPTQ: Accurate Post-Training Quantization" (ETH Zürich) | [2210.17323](https://arxiv.org/abs/2210.17323) |
+| **FLUTE** | Buckley et al., "Fast Matrix Multiplications for Lookup Table-Quantized LLMs" | [2407.10960](https://arxiv.org/abs/2407.10960) |
+| **H₂O** | Zhang et al., "H₂O: Heavy-Hitter Oracle for Efficient Generative Inference" | [2306.14048](https://arxiv.org/abs/2306.14048) |
+| **Roofline** | Williams, Waterman, Patterson, "Roofline: An Insightful Visual Performance Model" | CACM 2009 |

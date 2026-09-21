@@ -243,7 +243,7 @@ pub fn load_or_convert_model<P: AsRef<Path>, Q: AsRef<Path>>(
             return Ok(model);
         }
 
-        // Bare .q4nx: resolve XCLBIN profile and stamp it into the header by default
+        // Bare .q4nx: resolve XCLBIN profile and attach in-memory without rewriting/truncating the on-disk file
         let xclbin_bytes = match resolve_xclbin_profile(filename, xclbin_ref, None) {
             Ok(profile) => profile.read_bytes()?,
             Err(_) => {
@@ -256,7 +256,8 @@ pub fn load_or_convert_model<P: AsRef<Path>, Q: AsRef<Path>>(
                 builder.generate_xclbin_bytes()?
             }
         };
-        model.stamp_xclbin(&xclbin_bytes, None::<&Path>)?;
+        model.xclbin_data = xclbin_bytes;
+        model.header.xclbin_size = model.xclbin_data.len() as u64;
         return Ok(model);
     }
 
@@ -269,7 +270,6 @@ pub fn load_or_convert_model<P: AsRef<Path>, Q: AsRef<Path>>(
                 if model.has_embedded_xclbin() {
                     return Ok(model);
                 }
-                // Bare existing .q4nx: stamp it
                 let xclbin_bytes = match resolve_xclbin_profile(filename, xclbin_ref, None) {
                     Ok(profile) => profile.read_bytes()?,
                     Err(_) => {
@@ -282,7 +282,8 @@ pub fn load_or_convert_model<P: AsRef<Path>, Q: AsRef<Path>>(
                         builder.generate_xclbin_bytes()?
                     }
                 };
-                model.stamp_xclbin(&xclbin_bytes, None::<&Path>)?;
+                model.xclbin_data = xclbin_bytes;
+                model.header.xclbin_size = model.xclbin_data.len() as u64;
                 return Ok(model);
             }
         }

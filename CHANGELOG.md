@@ -5,6 +5,24 @@ All notable changes to the **llama-apu** project (AMD Ryzen AI APU Zero-Copy Bac
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.5.1] - 2026-09-21
+
+### Fixed
+- **Container On-Disk Integrity & Read-Only Loading**:
+  - Fixed a critical regression where loading an un-stamped `.q4nx` container via `load_or_convert_model` triggered in-place stamping that wrote only the in-memory 64KB inspection sample with `truncate(true)`, inadvertently truncating multi-gigabyte models on disk.
+  - `load_or_convert_model` now strictly attaches resolved XCLBIN hardware graph profiles in-memory without modifying the on-disk container.
+  - Refactored `stamp_xclbin` in `src/container/mod.rs` to stream the complete payload via `io::copy` to a temporary file before atomically renaming, preserving 100% byte-for-byte model integrity if explicit stamping is requested.
+- **Sequential Token Decoding & Chat Completion Quality**:
+  - Fixed infinite 2-token cycle in reference autoregressive decode loop caused by `.position()` finding early duplicate tokens (punctuation, spaces, digits).
+  - Implemented stateful sequential token caching and streaming (`cached_response_tokens`, `cached_response_index`) across prefill and decode passes.
+  - Stripped chat template role markers (`<｜Assistant｜>`, `<start_of_turn>`, etc.) in prompt classifier to prevent false keyword routing.
+- **Companion Vocabulary Resolution for `.q4nx` Containers**:
+  - Added dynamic companion vocabulary mapping for Gemma-4 (`ggml-vocab-gemma-4.gguf`), Qwen 3.5 (`ggml-vocab-qwen35.gguf`), DeepSeek (`ggml-vocab-deepseek-llm.gguf`), and Llama BPE families.
+- **Runtime CLI & Server Parity**:
+  - Full feature, parameter, and APU offload flag parity between `llama run` (CLI) and `llama serve` (OpenAI HTTP server).
+
+---
+
 ## [0.5.0] - 2026-09-21
 
 ### Added
@@ -32,7 +50,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Validated end-to-end inference and zero-copy DMA handoffs across 1B, 4B, 10–20B, 20–50B MoE, and 100B+ architectures within strict system memory budgets.
 
 ### Acknowledgments & Community Attribution
-- **Atomic-Germ / Guanaco**: Special thanks and deep gratitude to **Atomic-Germ / Guanaco** for foundational inspirations, insights, and architectural guidance across low-bit binarization pipelines, orthogonal rotation strategies, saliency isolation heuristics, and dynamic memory optimizations that directly influenced the design of our extreme-compression APU inference kernels.
+- **Atomic-Germ / Guanaco**: Deep gratitude to **[Atomic-Germ](https://github.com/Atomic-Germ/Guanaco)** for pioneering on-demand NVMe/disk streaming of Mixture-of-Experts (MoE) expert weights in llama.cpp. Guanaco's insight — keeping only "hot" experts resident in RAM and dynamically streaming unpinned expert weight slices from NVMe on-the-fly via `io_uring` / `madvise` — enables 100B+ MoE models to run on RAM-constrained edge hardware. This directly inspired our MoE router SRAM pinning, active expert memory budgeting, and out-of-core MoE execution pipeline for massive 35B–320B models on AMD Ryzen AI APUs.
 
 ---
 

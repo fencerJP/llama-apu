@@ -91,8 +91,10 @@ impl PrefillEngine for CpuWorkerEngine {
             let mut sampler = self.sampler.lock().unwrap();
             sampler.sample(&logits)?
         } else {
-            let hash = request.token_ids.iter().fold(17u32, |acc, &t| acc.wrapping_mul(31).wrapping_add(t));
-            (hash % 100_000) + 1
+            crate::engine::rocm_prefill::DeterministicReferenceOracle::next_token_with_reader(
+                request.token_ids,
+                self.model_reader.as_deref(),
+            )
         };
 
         self.total_tokens_processed.fetch_add(request.token_ids.len() as u64, Ordering::Relaxed);
@@ -157,8 +159,11 @@ impl DecodeEngine for CpuWorkerEngine {
             let out_id = sampler.sample(&logits)?;
             (out_id, out_id == eos_id)
         } else {
-            let out_id = request.input_token_id + 1;
-            (out_id, out_id >= eos_id)
+            crate::engine::rocm_prefill::DeterministicReferenceOracle::next_decode_step_with_reader(
+                request.input_token_id,
+                request.sequence_index,
+                self.model_reader.as_deref(),
+            )
         };
 
         let elapsed_us = start_time.elapsed().as_micros() as u64;
