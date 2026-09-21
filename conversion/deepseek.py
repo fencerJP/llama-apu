@@ -523,6 +523,7 @@ class DeepseekV32Model(DeepseekV2Model):
 
 
 @ModelBase.register("DeepseekV4ForCausalLM")
+@ModelBase.register("DeepseekV41ForCausalLM")
 @ModelBase.example("deepseek-ai/DeepSeek-V4-Flash-Base")
 class DeepseekV4Model(TextModel):
     model_arch = gguf.MODEL_ARCH.DEEPSEEK4
@@ -537,6 +538,8 @@ class DeepseekV4Model(TextModel):
 
         with open(self.dir_model / "config.json", "r", encoding="utf-8") as f:
             raw_hparams = json.load(f)
+        if "text_config" in raw_hparams and isinstance(raw_hparams["text_config"], dict):
+            raw_hparams = {**raw_hparams, **raw_hparams["text_config"]}
         for key, value in raw_hparams.items():
             self.hparams.setdefault(key, value)
 
@@ -571,6 +574,8 @@ class DeepseekV4Model(TextModel):
                 self.gguf_writer.add_chat_template(f.read())
 
     def index_tensors(self, remote_hf_model_id: str | None = None) -> dict[str, Callable[[], Tensor]]:
+        if "text_config" in self.hparams and isinstance(self.hparams["text_config"], dict):
+            self.hparams = {**self.hparams, **self.hparams["text_config"]}
         type(self)._dsv4_main_layers = self.hparams["num_hidden_layers"]
         type(self)._dsv4_nextn_layers = self.hparams.get("num_nextn_predict_layers", 0)
         return super().index_tensors(remote_hf_model_id=remote_hf_model_id)
@@ -578,7 +583,7 @@ class DeepseekV4Model(TextModel):
     @classmethod
     def filter_tensors(cls, item: tuple[str, Callable[[], Tensor]]) -> tuple[str, Callable[[], Tensor]] | None:
         name, gen = item
-        if name.startswith(("aligner.", "image_")):
+        if name.startswith(("aligner.", "image_", "vision.")) or ".engram." in name:
             return None
         if name.startswith("mtp."):
             if not cls.mtp_only:
@@ -682,7 +687,7 @@ class DeepseekV4Model(TextModel):
         self.gguf_writer.add_hyper_connection_count(hparams["hc_mult"])
         self.gguf_writer.add_hyper_connection_sinkhorn_iterations(hparams["hc_sinkhorn_iters"])
         self.gguf_writer.add_hyper_connection_epsilon(hparams["hc_eps"])
-        self.gguf_writer.add_hash_layer_count(hparams["num_hash_layers"])
+        self.gguf_writer.add_hash_layer_count(hparams.get("num_hash_layers", 0))
         if self.model_arch == gguf.MODEL_ARCH.DEEPSEEK4:
             self.gguf_writer.add_embedding_length_out(hparams["hidden_size"] * hparams["hc_mult"])
         if self.mtp_only and (num_nextn_predict_layers := hparams.get("num_nextn_predict_layers", 0)) > 0:
@@ -748,7 +753,7 @@ class DeepseekV4Model(TextModel):
     def _write_hash_routing_tensors(self) -> list[str]:
         consumed: list[str] = []
 
-        for bid in range(self.hparams["num_hash_layers"]):
+        for bid in range(self.hparams.get("num_hash_layers", 0)):
             name = f"layers.{bid}.ffn.gate.tid2eid"
             if name not in self.model_tensors:
                 raise KeyError(f"Missing hash routing tensor {name}")
@@ -768,10 +773,10 @@ class DeepseekV4Model(TextModel):
 
         consumed: list[str] = []
         main_layers = self.hparams["num_hidden_layers"]
-        if not self.mtp_only:
+        if not self.mtp_only and self.hparams.get("num_hash_layers", 0) > 0:
             consumed.extend(self._write_hash_routing_tensors())
-        elif self.hparams["num_hash_layers"] > 0:
-            for bid in range(self.hparams["num_hash_layers"]):
+        elif self.hparams.get("num_hash_layers", 0) > 0:
+            for bid in range(self.hparams.get("num_hash_layers", 0)):
                 name = f"layers.{bid}.ffn.gate.tid2eid"
                 if name in self.model_tensors:
                     consumed.extend(self._write_hash_routing_tensors())
@@ -847,6 +852,8 @@ class DeepseekV4Model(TextModel):
             "attn.compressor.norm.weight": (gguf.MODEL_TENSOR.ATTN_COMPRESSOR_NORM, ".weight"),
             "attn.indexer.wq_b.weight": (gguf.MODEL_TENSOR.INDEXER_ATTN_Q_B, ".weight"),
             "attn.indexer.weights_proj.weight": (gguf.MODEL_TENSOR.INDEXER_PROJ, ".weight"),
+            "attn.indexer.wk.weight": (gguf.MODEL_TENSOR.INDEXER_ATTN_K, ".weight"),
+            "attn.indexer.k_norm.weight": (gguf.MODEL_TENSOR.INDEXER_K_NORM, ".weight"),
             "attn.indexer.compressor.ape": (gguf.MODEL_TENSOR.INDEXER_COMPRESSOR_APE, ".weight"),
             "attn.indexer.compressor.wkv.weight": (gguf.MODEL_TENSOR.INDEXER_COMPRESSOR_WKV, ".weight"),
             "attn.indexer.compressor.wgate.weight": (gguf.MODEL_TENSOR.INDEXER_COMPRESSOR_WGATE, ".weight"),
@@ -882,7 +889,7 @@ class DeepseekV4Model(TextModel):
             return []
 
         # hash layers route text tokens via tid2eid and image tokens via bias_vl; gate.bias is unused
-        if name.endswith(".ffn.gate.bias") and bid is not None and bid < self.hparams["num_hash_layers"]:
+        if name.endswith(".ffn.gate.bias") and bid is not None and bid < self.hparams.get("num_hash_layers", 0):
             return []
 
         tensor_key, suffix = self._map_dsv4_tensor_name(name, bid)

@@ -19,7 +19,8 @@ pub mod uapi;
 pub use ffi::{
     apu_backend_allocate_shared_kv, apu_backend_dispatch_decode_step, apu_backend_dispatch_prefill,
     apu_backend_doctor, apu_backend_free, apu_backend_get_hyperparams, apu_backend_load_model,
-    apu_backend_model, apu_backend_synth, ApuBackendContext, ApuModelHyperparams,
+    apu_backend_model, apu_backend_set_kv_quant_type, apu_backend_set_router_sram_pinning,
+    apu_backend_set_stage_routing, apu_backend_synth, ApuBackendContext, ApuModelHyperparams,
 };
 
 pub use backend::{open_or_mock, BackendError, DeviceBackend, DeviceType, MockDeviceBackend, PhysicalDeviceBackend};

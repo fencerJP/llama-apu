@@ -189,6 +189,24 @@ public:
         }
     }
 
+    void set_kv_quant_type(int quant_type) {
+        int rc = apu_backend_set_kv_quant_type(ctx_, quant_type);
+        if (rc == 0 && verbose_) {
+            const char* name = (quant_type == APU_KV_QUANT_FP16) ? "FP16" :
+                               (quant_type == APU_KV_QUANT_INT8) ? "INT8" :
+                               (quant_type == APU_KV_QUANT_INT4) ? "INT4" : "Auto";
+            std::cout << "[VERBOSE] KV Cache Quantization set to: " << name << "\n";
+        }
+    }
+
+    void set_router_sram_pinning(bool enabled, size_t limit_mb = 32) {
+        int rc = apu_backend_set_router_sram_pinning(ctx_, enabled ? 1 : 0, limit_mb);
+        if (rc == 0 && verbose_) {
+            std::cout << "[VERBOSE] Router Matrix SRAM Pinning: " << (enabled ? "ENABLED" : "DISABLED")
+                      << " (Ceiling: " << limit_mb << " MB)\n";
+        }
+    }
+
     std::vector<uint32_t> speculative_step(uint32_t seed_token, size_t sequence_index, bool& is_eos, double* out_us = nullptr) {
         uint32_t accepted_tokens[8] = {0};
         size_t accepted_count = 0;
@@ -332,6 +350,11 @@ static void print_usage(const char* prog) {
               << "  -w, --kv-window <n>         Enable dynamic KV-cache pruning threshold (e.g. 256 or 4096)\n"
               << "  --quest-sparsity <float>    Enable Quest dynamic KV page-level sparsity (e.g. 0.5 for 50% pruning)\n"
               << "  --quest-pages <n>           Minimum retained Quest KV pages (default: 16)\n"
+              << "  --kv-cache-type <type>      KV cache quantization format: 'fp16', 'int8', 'int4', or 'auto' (default: auto)\n"
+              << "  --no-kv-quant               Disable KV cache quantization (force FP16)\n"
+              << "  --router-sram <on|off>      Enable/disable MoE router matrix ($W_gate) on-chip SRAM pinning\n"
+              << "  --no-router-sram            Disable MoE router matrix SRAM pinning\n"
+              << "  --router-sram-limit-mb <mb> Maximum SRAM ceiling for router matrices in MB (default: 32)\n"
               << "  --hugepages                 Apply 2MB huge-page kernel memory optimization\n"
               << "  -v, --verbose               Activate verbose runtime telemetry and execution tracing\n"
               << "  -h, --help                  Show this help message\n\n"
@@ -368,6 +391,9 @@ int apu_run(int argc, char** argv) {
     std::string prefill_override = "";
     std::string decode_override = "";
     std::string tokenize_override = "";
+    int kv_quant_override = -1;
+    int router_sram_override = -1;
+    size_t router_sram_limit_mb = 32;
 
     // Parse command line arguments (upstream llama.cpp style flags + apu flags)
     for (int i = 1; i < argc; ++i) {
@@ -435,6 +461,27 @@ int apu_run(int argc, char** argv) {
             // Chunked KV allocation enabled (default)
         } else if (arg == "--no-chunked-kv") {
             // Disabled chunked KV allocation
+        } else if (arg == "--kv-cache-type" && i + 1 < argc) {
+            std::string q = argv[++i];
+            if (q == "fp16" || q == "none" || q == "f16") kv_quant_override = APU_KV_QUANT_FP16;
+            else if (q == "int8" || q == "q8") kv_quant_override = APU_KV_QUANT_INT8;
+            else if (q == "int4" || q == "q4") kv_quant_override = APU_KV_QUANT_INT4;
+            else if (q == "auto") kv_quant_override = APU_KV_QUANT_AUTO;
+            else {
+                std::cerr << "[Warning] Unknown --kv-cache-type: " << q << ", defaulting to auto\n";
+                kv_quant_override = APU_KV_QUANT_AUTO;
+            }
+        } else if (arg == "--no-kv-quant") {
+            kv_quant_override = APU_KV_QUANT_FP16;
+        } else if (arg == "--router-sram" && i + 1 < argc) {
+            std::string r = argv[++i];
+            if (r == "off" || r == "false" || r == "0") router_sram_override = 0;
+            else if (r == "on" || r == "true" || r == "1") router_sram_override = 1;
+            else router_sram_override = 1;
+        } else if (arg == "--no-router-sram") {
+            router_sram_override = 0;
+        } else if (arg == "--router-sram-limit-mb" && i + 1 < argc) {
+            router_sram_limit_mb = std::stoul(argv[++i]);
         } else if (arg == "--temp" && i + 1 < argc) {
             temperature = std::stof(argv[++i]);
         } else if (arg == "--top-k" && i + 1 < argc) {
@@ -591,6 +638,12 @@ int apu_run(int argc, char** argv) {
         }
         if (hugepages) {
             runner.apply_strix_halo_tuning(true);
+        }
+        if (kv_quant_override >= 0) {
+            runner.set_kv_quant_type(kv_quant_override);
+        }
+        if (router_sram_override >= 0) {
+            runner.set_router_sram_pinning(router_sram_override == 1, router_sram_limit_mb);
         }
 
         const auto& hp = runner.hyperparams();

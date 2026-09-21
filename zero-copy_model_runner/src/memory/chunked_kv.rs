@@ -64,6 +64,17 @@ pub struct ChunkedKvConfig {
     pub token_byte_stride: usize,
 }
 
+impl ChunkedKvConfig {
+    /// Adjust token byte stride based on active Key-Value cache quantization.
+    pub fn with_quant_type(mut self, quant_type: crate::memory::kv_quant::KvCacheQuantType, base_fp16_stride: usize) -> Self {
+        let ratio = quant_type.effective_bytes_per_element() / 2.0;
+        let quantized_stride = ((base_fp16_stride as f32 * ratio).ceil() as usize).max(16);
+        // Align to 16-byte boundary for SIMD load efficiency
+        self.token_byte_stride = (quantized_stride + 15) & !15;
+        self
+    }
+}
+
 impl Default for ChunkedKvConfig {
     fn default() -> Self {
         Self {

@@ -292,6 +292,31 @@ int apu_backend_create_xclbin_embedded_formatted(
     const char* out_q4nx_path
 );
 
+/* KV Cache Quantization Types */
+#define APU_KV_QUANT_FP16  0
+#define APU_KV_QUANT_INT8  1
+#define APU_KV_QUANT_INT4  2
+#define APU_KV_QUANT_AUTO  3
+
+/**
+ * Configure Key-Value cache quantization format (FP16, INT8, INT4, or Auto).
+ *
+ * @param ctx Active context.
+ * @param quant_type One of APU_KV_QUANT_* constants.
+ * @return 0 on success, non-zero on error.
+ */
+int apu_backend_set_kv_quant_type(ApuBackendContext* ctx, int quant_type);
+
+/**
+ * Configure on-chip SRAM router matrix (W_gate) pinning for MoE models.
+ *
+ * @param ctx Active context.
+ * @param enabled 1 to enable, 0 to disable.
+ * @param limit_mb Maximum SRAM budget ceiling in megabytes (e.g. 32).
+ * @return 0 on success, non-zero on error.
+ */
+int apu_backend_set_router_sram_pinning(ApuBackendContext* ctx, int enabled, size_t limit_mb);
+
 /**
  * Destroy context and cleanly release all hardware rings, mappings, and file descriptors.
  */

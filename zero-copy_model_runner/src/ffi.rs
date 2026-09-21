@@ -59,6 +59,9 @@ pub struct ApuBackendContext {
     pub speculative: Option<SpeculativeOrchestrator>,
     pub kv_pruner: Option<DynamicKvPruner>,
     pub strix_optimizer: Option<StrixHaloMemoryOptimizer>,
+    pub kv_quant_type: crate::memory::kv_quant::KvCacheQuantType,
+    pub router_sram_enabled: bool,
+    pub router_sram_limit_mb: usize,
     pub prefill_target: String,
     pub decode_target: String,
 }
@@ -147,6 +150,9 @@ pub unsafe extern "C" fn apu_backend_load_model(
         speculative: None,
         kv_pruner: None,
         strix_optimizer: None,
+        kv_quant_type: crate::memory::kv_quant::KvCacheQuantType::Auto,
+        router_sram_enabled: true,
+        router_sram_limit_mb: 32,
         prefill_target: "gpu".to_string(),
         decode_target: "npu".to_string(),
     });
@@ -727,6 +733,38 @@ pub unsafe extern "C" fn apu_backend_create_xclbin_embedded_formatted(
         return -5;
     }
 
+    0
+}
+
+/// Set Key-Value cache quantization mode (0=FP16, 1=INT8, 2=INT4, 3=Auto).
+#[no_mangle]
+pub unsafe extern "C" fn apu_backend_set_kv_quant_type(ctx: *mut ApuBackendContext, quant_type: i32) -> i32 {
+    if ctx.is_null() {
+        return -1;
+    }
+    let mode = match quant_type {
+        0 => crate::memory::kv_quant::KvCacheQuantType::Fp16,
+        1 => crate::memory::kv_quant::KvCacheQuantType::Int8,
+        2 => crate::memory::kv_quant::KvCacheQuantType::Int4,
+        3 => crate::memory::kv_quant::KvCacheQuantType::Auto,
+        _ => return -2,
+    };
+    (*ctx).kv_quant_type = mode;
+    0
+}
+
+/// Configure on-chip SRAM router matrix ($W_{\text{gate}}$) pinning for MoE models.
+#[no_mangle]
+pub unsafe extern "C" fn apu_backend_set_router_sram_pinning(
+    ctx: *mut ApuBackendContext,
+    enabled: i32,
+    limit_mb: usize,
+) -> i32 {
+    if ctx.is_null() {
+        return -1;
+    }
+    (*ctx).router_sram_enabled = enabled != 0;
+    (*ctx).router_sram_limit_mb = if limit_mb > 0 { limit_mb } else { 32 };
     0
 }
 

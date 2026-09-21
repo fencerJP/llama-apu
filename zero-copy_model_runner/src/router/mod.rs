@@ -57,14 +57,51 @@ impl fmt::Display for SiliconFamily {
     }
 }
 
+/// Configuration for MoE expert buffering, dynamic memory saturation, and PILOT lookahead.
+#[derive(Debug, Clone, PartialEq)]
+pub struct MoeRoutingConfig {
+    /// Whether MoE expert disk buffering is enabled (default: true for MoE, dormant for dense).
+    pub experts_buffering: bool,
+    /// Manual override for hot expert layers saturated into DRAM.
+    pub moe_hot_experts: Option<usize>,
+    /// Whether to generate an updatable .imatrix.gguf via analytical projection.
+    pub create_imatrix: bool,
+    /// PILOT lookahead depth in layers (default: 2).
+    pub lookahead_depth: usize,
+    /// PILOT mass pruning threshold (default: 0.90).
+    pub pilot_mass: f32,
+    /// Key-Value cache quantization mode (FP16, INT8, INT4, or Auto).
+    pub kv_quant_type: crate::memory::kv_quant::KvCacheQuantType,
+    /// Whether on-chip SRAM router matrix pinning is enabled.
+    pub router_sram: bool,
+    /// Maximum SRAM budget allocated for router matrices in megabytes.
+    pub router_sram_limit_mb: usize,
+}
+
+impl Default for MoeRoutingConfig {
+    fn default() -> Self {
+        Self {
+            experts_buffering: true,
+            moe_hot_experts: None,
+            create_imatrix: false,
+            lookahead_depth: 2,
+            pilot_mass: 0.90,
+            kv_quant_type: crate::memory::kv_quant::KvCacheQuantType::Auto,
+            router_sram: true,
+            router_sram_limit_mb: 32,
+        }
+    }
+}
+
 /// Resolved multi-stage hardware routing policy for an inference session.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct RoutingPolicy {
     pub tokenize: DeviceTarget,
     pub prefill: DeviceTarget,
     pub decode: DeviceTarget,
     pub sample: DeviceTarget,
     pub silicon: SiliconFamily,
+    pub moe: MoeRoutingConfig,
 }
 
 impl RoutingPolicy {
@@ -96,6 +133,29 @@ impl RoutingPolicy {
         prefill_override: Option<DeviceTarget>,
         decode_override: Option<DeviceTarget>,
         sample_override: Option<DeviceTarget>,
+    ) -> Self {
+        Self::resolve_with_moe(
+            gpu_based,
+            cpu_based,
+            npu_based,
+            tokenize_override,
+            prefill_override,
+            decode_override,
+            sample_override,
+            MoeRoutingConfig::default(),
+        )
+    }
+
+    /// Resolve policy including MoE expert streaming and memory saturation configuration.
+    pub fn resolve_with_moe(
+        gpu_based: bool,
+        cpu_based: bool,
+        npu_based: bool,
+        tokenize_override: Option<DeviceTarget>,
+        prefill_override: Option<DeviceTarget>,
+        decode_override: Option<DeviceTarget>,
+        sample_override: Option<DeviceTarget>,
+        moe: MoeRoutingConfig,
     ) -> Self {
         let silicon = Self::detect_silicon();
 
@@ -154,6 +214,7 @@ impl RoutingPolicy {
             decode,
             sample,
             silicon,
+            moe,
         }
     }
 
@@ -170,6 +231,12 @@ impl RoutingPolicy {
             eprintln!(" Sampler Stage        : {}", self.sample);
             eprintln!(" Zero-Copy Bridge     : Linux DMA-BUF + AMDGPU Prime (64-byte aligned)");
             eprintln!(" Synchronization      : DRM syncobj timeline fences");
+            eprintln!(" MoE Buffering        : {}", if self.moe.experts_buffering { "Active (Dynamic Saturated DRAM)" } else { "Disabled (Full RAM Load)" });
+            if let Some(hot) = self.moe.moe_hot_experts {
+                eprintln!(" MoE Hot Experts      : {} (manual override)", hot);
+            }
+            eprintln!(" KV Cache Format      : {}", self.moe.kv_quant_type);
+            eprintln!(" Router SRAM Pinning  : {} (Safety Ceiling: {} MB)", if self.moe.router_sram { "Enabled" } else { "Disabled" }, self.moe.router_sram_limit_mb);
             eprintln!("============================================================");
         }
     }

@@ -8,9 +8,11 @@ use std::os::fd::RawFd;
 use std::sync::Arc;
 use thiserror::Error;
 
+pub mod io_uring_slab;
 pub mod mock;
 pub mod physical;
 
+pub use io_uring_slab::{SlabReadTask, SlabStreamingEngine};
 pub use mock::MockDeviceBackend;
 pub use physical::PhysicalDeviceBackend;
 

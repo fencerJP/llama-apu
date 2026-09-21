@@ -58,65 +58,59 @@ pub fn run_diagnostics() -> Vec<CheckResult> {
     results.push(CheckResult {
         name: "AMDGPU KFD Compute Node (/dev/kfd)",
         status: has_kfd,
-        details: if has_kfd { "Present".into() } else { "Not found".into() },
+        details: if has_kfd { "Present (ROCm/HIP Compute Ready)".into() } else { "Not found".into() },
         recommendation: if has_kfd {
             None
         } else {
-            Some("Verify AMDGPU ROCm KFD kernel support is enabled.".into())
+            Some("ROCm compute requires /dev/kfd. Ensure user is in 'render' or 'kfd' group.".into())
         },
     });
 
-    // 4. Check XDNA 2 NPU Node (/dev/accel/accel0)
-    let has_npu = Path::new("/dev/accel/accel0").exists();
+    // 4. Check AMD XDNA 2 NPU Node (/dev/accel/accel0)
+    let has_accel0 = Path::new("/dev/accel/accel0").exists();
     results.push(CheckResult {
         name: "AMD XDNA 2 NPU Node (/dev/accel/accel0)",
-        status: has_npu,
-        details: if has_npu {
-            "Present (AMD XDNA 2 AIE2P Silicon)".into()
-        } else {
-            "Not found (Running in CPU or mock emulation mode)".into()
-        },
-        recommendation: if has_npu {
+        status: has_accel0,
+        details: if has_accel0 { "Present (amdxdna driver active)".into() } else { "Not found (Fallback to UAPI Mock)".into() },
+        recommendation: if has_accel0 {
             None
         } else {
-            Some("Verify the amdxdna Linux kernel driver is installed: 'lsmod | grep amdxdna'".into())
+            Some("NPU requires amdxdna driver. Check 'dmesg | grep -i amdxdna' or load amdxdna kernel module.".into())
         },
     });
 
-    // 5. Check ROCm / HIP Stack
-    let has_rocm = Path::new("/opt/rocm").exists();
-    let rocm_version = fs::read_to_string("/opt/rocm/.info/version")
-        .or_else(|_| fs::read_to_string("/opt/rocm/version.txt"))
-        .unwrap_or_else(|_| {
-            if has_rocm { "Installed".into() } else { "Missing".into() }
-        })
-        .trim()
-        .to_string();
-
+    // 5. Check ROCm / HIP runtime libraries
+    let rocm_paths = [
+        "/opt/rocm/lib/libhiprtc.so",
+        "/opt/rocm/lib/libamdhip64.so",
+        "/usr/lib/x86_64-linux-gnu/libamdhip64.so",
+    ];
+    let has_rocm = rocm_paths.iter().any(|p| Path::new(p).exists());
     results.push(CheckResult {
-        name: "ROCm / HIP Runtime Stack",
+        name: "ROCm / HIP Runtime Libraries",
         status: has_rocm,
-        details: format!("Path: /opt/rocm ({})", rocm_version),
+        details: if has_rocm { "Installed".into() } else { "Not found in standard paths".into() },
         recommendation: if has_rocm {
             None
         } else {
-            Some("Install AMD ROCm 6.x or 7.x: 'sudo apt install rocm-hip-sdk'".into())
+            Some("Install ROCm runtime: 'sudo apt install rocm-hip-runtime' or consult https://rocm.docs.amd.com".into())
         },
     });
 
-    // 6. Check User Group Permissions (render & video)
-    let id_output = Command::new("id")
-        .output()
+    // 6. Check user group permissions (render, video)
+    let groups_output = Command::new("id").arg("-Gn").output().ok();
+    let groups_str = groups_output
+        .as_ref()
         .map(|o| String::from_utf8_lossy(&o.stdout).to_string())
         .unwrap_or_default();
-    let in_render = id_output.contains("render");
-    let in_video = id_output.contains("video");
+    let in_render = groups_str.contains("render");
+    let in_video = groups_str.contains("video");
     let perms_ok = in_render && in_video;
 
     results.push(CheckResult {
-        name: "User Hardware Permissions (render, video groups)",
+        name: "User Hardware Permissions",
         status: perms_ok,
-        details: format!("render: {}, video: {}", if in_render { "OK" } else { "MISSING" }, if in_video { "OK" } else { "MISSING" }),
+        details: format!("render: {}, video: {}", if in_render { "OK" } else { "Missing" }, if in_video { "OK" } else { "Missing" }),
         recommendation: if perms_ok {
             None
         } else {

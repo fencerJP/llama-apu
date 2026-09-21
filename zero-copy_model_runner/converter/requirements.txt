@@ -1,0 +1,6 @@
+# BiLLM Direct-to-Disk Streaming Quantizer Dependencies
+numpy>=1.22.0
+psutil>=5.9.0
+safetensors>=0.4.0
+huggingface_hub>=0.20.0
+# torch>=2.0.0

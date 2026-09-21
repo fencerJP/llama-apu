@@ -1,0 +1,43 @@
+name: CI (AMD Ryzen AI APU Zero-Copy Backend)
+
+on:
+  push:
+    branches: [ master, main ]
+  pull_request:
+    branches: [ master, main ]
+
+jobs:
+  rust-check:
+    name: Rust Backend Test & Lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy, rustfmt
+      - name: Rust format check
+        run: cargo fmt -- --check
+      - name: Run unit & integration tests
+        run: cargo test --verbose
+      - name: Build release binaries
+        run: cargo build --release --bins
+
+  cpp-integration:
+    name: llama.cpp APU Integration Build
+    runs-on: ubuntu-latest
+    needs: rust-check
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+      - name: Build Rust APU Backend
+        run: cargo build --release
+      - name: Install build dependencies
+        run: sudo apt-get update && sudo apt-get install -y cmake build-essential libdrm-dev
+      - name: Configure CMake with APU backend
+        run: |
+          git clone --depth 1 https://github.com/fencerJP/llama-apu.git llamacpp
+          cd llamacpp
+          cmake -B build -DLLAMA_APU_BACKEND=ON -DAPU_BACKEND_DIR=$GITHUB_WORKSPACE
+          cmake --build build --config Release -j$(nproc)
