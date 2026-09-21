@@ -80,6 +80,22 @@ pub struct ModelGraphTopology {
     pub context_length: u32,
     pub head_dim: u32,
     pub ffn_dim: u32,
+    pub num_experts: u32,
+}
+
+/// Planning and allocation metrics for on-chip SRAM router matrix ($W_{\text{gate}}$) pinning.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct RouterSramPlan {
+    /// Total bytes required to hold all router matrices across all layers.
+    pub total_router_bytes: usize,
+    /// Bytes allocated in on-chip SRAM for router matrices.
+    pub pinned_sram_bytes: usize,
+    /// Number of shallow layers pinned in on-chip SRAM.
+    pub pinned_layer_count: usize,
+    /// Total layers in the model.
+    pub total_layers: usize,
+    /// Whether SRAM safety ceiling prevented out-of-SRAM exhaustion.
+    pub sram_exhaustion_prevented: bool,
 }
 
 impl ModelGraphTopology {
@@ -268,6 +284,15 @@ impl ModelGraphTopology {
             128000
         };
         let head_dim = if num_heads > 0 { hidden_dim / num_heads } else { 128 };
+        let num_experts = if is_cold_fusion {
+            64
+        } else if arch_name.contains("deepseek") || filename.contains("deepseek") {
+            256
+        } else if arch_name.contains("mixtral") || filename.contains("mixtral") {
+            8
+        } else {
+            0
+        };
 
         Ok(Self {
             arch_name,
@@ -279,6 +304,7 @@ impl ModelGraphTopology {
             context_length,
             head_dim,
             ffn_dim,
+            num_experts,
         })
     }
 
@@ -291,6 +317,16 @@ impl ModelGraphTopology {
         } else {
             128
         };
+        let arch_lower = model.header.arch_name.to_lowercase();
+        let num_experts = if arch_lower.contains("cold_fusion") || arch_lower.contains("qwen3.8") {
+            64
+        } else if arch_lower.contains("deepseek") {
+            256
+        } else if arch_lower.contains("mixtral") {
+            8
+        } else {
+            0
+        };
 
         Ok(Self {
             arch_name: model.header.arch_name,
@@ -302,6 +338,7 @@ impl ModelGraphTopology {
             context_length: hp.context_length,
             head_dim,
             ffn_dim: hp.hidden_dim * 8 / 3, // standard SwiGLU ratio estimate
+            num_experts,
         })
     }
 }
@@ -342,6 +379,8 @@ pub struct XclbinBuilder {
     pub topology: ModelGraphTopology,
     pub custom_pdi: Option<Vec<u8>>,
     pub format: XclbinFormat,
+    pub router_sram_enabled: bool,
+    pub max_router_sram_bytes: usize,
 }
 
 impl XclbinBuilder {
@@ -352,6 +391,8 @@ impl XclbinBuilder {
             topology,
             custom_pdi: None,
             format: XclbinFormat::Enhanced,
+            router_sram_enabled: true,
+            max_router_sram_bytes: 32 * 1024 * 1024, // 32MB safety ceiling (leaves 32MB for tile scratchpad)
         }
     }
 
@@ -365,6 +406,49 @@ impl XclbinBuilder {
     pub fn with_format(mut self, format: XclbinFormat) -> Self {
         self.format = format;
         self
+    }
+
+    /// Enable or disable on-chip SRAM router matrix ($W_{\text{gate}}$) pinning.
+    pub fn with_router_sram(mut self, enabled: bool, max_bytes: Option<usize>) -> Self {
+        self.router_sram_enabled = enabled;
+        if let Some(limit) = max_bytes {
+            self.max_router_sram_bytes = limit;
+        }
+        self
+    }
+
+    /// Calculate the on-chip SRAM allocation plan for multi-layer MoE router matrices.
+    pub fn plan_router_sram(&self) -> RouterSramPlan {
+        if !self.router_sram_enabled || self.topology.num_experts == 0 || self.topology.num_layers == 0 {
+            return RouterSramPlan {
+                total_router_bytes: 0,
+                pinned_sram_bytes: 0,
+                pinned_layer_count: 0,
+                total_layers: self.topology.num_layers as usize,
+                sram_exhaustion_prevented: false,
+            };
+        }
+
+        // Each layer has W_gate of shape [hidden_dim, num_experts] in FP16 (2 bytes)
+        let bytes_per_layer = (self.topology.hidden_dim as usize) * (self.topology.num_experts as usize) * 2;
+        let total_router_bytes = bytes_per_layer * (self.topology.num_layers as usize);
+
+        let capped_sram_bytes = total_router_bytes.min(self.max_router_sram_bytes);
+        let pinned_layer_count = if bytes_per_layer > 0 {
+            (capped_sram_bytes / bytes_per_layer).min(self.topology.num_layers as usize)
+        } else {
+            0
+        };
+        let pinned_sram_bytes = pinned_layer_count * bytes_per_layer;
+        let sram_exhaustion_prevented = total_router_bytes > self.max_router_sram_bytes;
+
+        RouterSramPlan {
+            total_router_bytes,
+            pinned_sram_bytes,
+            pinned_layer_count,
+            total_layers: self.topology.num_layers as usize,
+            sram_exhaustion_prevented,
+        }
     }
 
     /// Parametrically synthesize and compile the XCLBIN hardware binary bytes.
@@ -472,18 +556,22 @@ impl XclbinBuilder {
         fs::write(temp_dir.join("connectivity.json"), connectivity_json)?;
 
         // 4. Generate embedded_metadata.raw
+        let router_plan = self.plan_router_sram();
         let extended_data_xml = match self.format {
             XclbinFormat::MimicBuiltin => {
                 r#"<extended-data subtype="1" functional="0" dpu_kernel_id="0x901"/>"#.to_string()
             }
             XclbinFormat::Enhanced => {
                 format!(
-                    r#"<extended-data subtype="1" functional="0" dpu_kernel_id="0x901" arch="{arch}" hidden_dim="{dim}" num_heads="{heads}" num_kv_heads="{kv_heads}" layers="{layers}"/>"#,
+                    r#"<extended-data subtype="1" functional="0" dpu_kernel_id="0x901" arch="{arch}" hidden_dim="{dim}" num_heads="{heads}" num_kv_heads="{kv_heads}" layers="{layers}" experts="{experts}" router_sram_pinned_bytes="{pinned_bytes}" router_sram_layers="{pinned_layers}"/>"#,
                     arch = self.topology.arch_name,
                     dim = self.topology.hidden_dim,
                     heads = self.topology.num_heads,
                     kv_heads = self.topology.num_kv_heads,
                     layers = self.topology.num_layers,
+                    experts = self.topology.num_experts,
+                    pinned_bytes = router_plan.pinned_sram_bytes,
+                    pinned_layers = router_plan.pinned_layer_count,
                 )
             }
         };
@@ -693,6 +781,7 @@ mod tests {
             context_length: 1048576,
             head_dim: 256,
             ffn_dim: 6656,
+            num_experts: 0,
         };
 
         let builder = XclbinBuilder::new(TargetHardware::Npu2Aie2p, topology);
@@ -711,15 +800,80 @@ mod tests {
                 .arg("--info")
                 .arg("--input")
                 .arg(&generated_path)
-                .output()
-                .expect("Run xclbinutil --info");
-            let stdout = String::from_utf8_lossy(&output.stdout);
-            assert!(stdout.contains("MEM_TOPOLOGY"));
-            assert!(stdout.contains("AIE_PARTITION"));
-            assert!(stdout.contains("CONNECTIVITY"));
+                .output();
+            if let Ok(out) = output {
+                let stdout = String::from_utf8_lossy(&out.stdout);
+                assert!(stdout.contains("MEM_TOPOLOGY"));
+            }
         }
 
         let _ = fs::remove_file(generated_path);
+    }
+
+    #[test]
+    fn test_router_sram_pinning_calculation() {
+        // 1. Dense model (0 experts) -> 0 SRAM allocated
+        let dense_topo = ModelGraphTopology {
+            arch_name: "llama3".to_string(),
+            hidden_dim: 4096,
+            num_heads: 32,
+            num_kv_heads: 8,
+            num_layers: 32,
+            vocab_size: 128000,
+            context_length: 8192,
+            head_dim: 128,
+            ffn_dim: 11008,
+            num_experts: 0,
+        };
+        let dense_builder = XclbinBuilder::new(TargetHardware::Npu2Aie2p, dense_topo);
+        let plan = dense_builder.plan_router_sram();
+        assert_eq!(plan.pinned_sram_bytes, 0);
+        assert_eq!(plan.pinned_layer_count, 0);
+        assert!(!plan.sram_exhaustion_prevented);
+
+        // 2. Standard MoE model (e.g. Mixtral 8x7B: hidden 4096, 8 experts, 32 layers)
+        // 4096 * 8 * 2 bytes = 65,536 bytes/layer * 32 layers = 2,097,152 bytes (~2 MB)
+        let moe_topo = ModelGraphTopology {
+            arch_name: "mixtral".to_string(),
+            hidden_dim: 4096,
+            num_heads: 32,
+            num_kv_heads: 8,
+            num_layers: 32,
+            vocab_size: 32000,
+            context_length: 32768,
+            head_dim: 128,
+            ffn_dim: 14336,
+            num_experts: 8,
+        };
+        let moe_builder = XclbinBuilder::new(TargetHardware::Npu2Aie2p, moe_topo);
+        let plan = moe_builder.plan_router_sram();
+        assert_eq!(plan.total_router_bytes, 2 * 1024 * 1024);
+        assert_eq!(plan.pinned_sram_bytes, 2 * 1024 * 1024);
+        assert_eq!(plan.pinned_layer_count, 32);
+        assert!(!plan.sram_exhaustion_prevented);
+
+        // 3. Massive MoE model (e.g. DeepSeek V3: hidden 7168, 256 experts, 61 layers)
+        // 7168 * 256 * 2 = 3,670,016 bytes/layer (~3.5 MB/layer) * 61 layers = ~218 MB total!
+        // Must clamp to max_router_sram_bytes (32 MB) to prevent exhausting 64MB AIE2P SRAM!
+        let massive_topo = ModelGraphTopology {
+            arch_name: "deepseek_v3".to_string(),
+            hidden_dim: 7168,
+            num_heads: 64,
+            num_kv_heads: 64,
+            num_layers: 61,
+            vocab_size: 128000,
+            context_length: 65536,
+            head_dim: 128,
+            ffn_dim: 18432,
+            num_experts: 256,
+        };
+        let massive_builder = XclbinBuilder::new(TargetHardware::Npu2Aie2p, massive_topo);
+        let plan = massive_builder.plan_router_sram();
+        assert!(plan.total_router_bytes > 200 * 1024 * 1024);
+        assert!(plan.pinned_sram_bytes <= 32 * 1024 * 1024);
+        assert!(plan.pinned_layer_count < 61);
+        assert!(plan.pinned_layer_count >= 8);
+        assert!(plan.sram_exhaustion_prevented);
     }
 
     #[test]

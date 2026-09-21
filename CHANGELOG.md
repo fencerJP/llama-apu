@@ -5,6 +5,34 @@ All notable changes to the **llama-apu** project (AMD Ryzen AI APU Zero-Copy Bac
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.5.0] - 2026-09-21
+
+### Added
+- **Quantized Dynamic KV Cache (CSA2 / INT8 & INT4)**:
+  - Compressed Sparse Attention 2 (CSA2) style dynamic Key-Value cache quantization supporting both INT8 (symmetric affine quantization with per-channel/per-head scale) and INT4 (packed nibble layout).
+  - Achieves up to 50% (INT8) and 75% (INT4) KV cache DRAM footprint reduction, unlocking long context lengths (up to 128k+) and reclaiming UMA DRAM for high-throughput MoE routing slabs.
+  - Automatic architecture and quantization compatibility heuristic (`evaluate_kv_quant_compatibility`): automatically avoids INT4 on deep sub-2-bit / BiLLM models to prevent compound quantization perplexity degradation.
+  - Granular CLI control via `--kv-quant {fp16,int8,int4,auto}` in both `apu-model` and `llama-cli`/`apu-run`.
+  - C ABI interface additions (`apu_backend_enable_kv_quant`) in `include/apu_backend.h` and `src/ffi.rs`.
+- **Multi-Layer Router Matrix ($W_{gate}$) On-Chip SRAM Pinning for MoE Models**:
+  - Automatically isolates MoE router gating matrices ($W_{gate}$) and pins them directly into on-chip AIE2P tile SRAM (up to 32MB ceiling, configurable via `--router-sram-limit-mb`).
+  - Completely eliminates DDR/LPDDR5X bus traffic and memory stalls during per-token expert dispatch across 32–256 experts (tested on Cold-Fusion 27B, DeepSeek-V4, and Sarvam 105B).
+  - Safe fallback to UMA DRAM with automatic warning when router matrices exceed the physical SRAM budget.
+  - Granular control via `--router-sram {on,off}` and `--no-router-sram` flags.
+- **Zero-Copy Native Container Streaming Memory Guard**:
+  - Capped native `.q4nx` container header inspection payload allocation to 64KB, eliminating multi-gigabyte heap RAM allocations when loading or inspecting 10B–100B+ models.
+  - Enabled turnkey metadata discovery and hardware topology extraction for massive models with zero memory spikes.
+- **Unified APU Model Conversion Tool & `llama-convert` Binary**:
+  - Consolidated Python streaming quantization (`converter/convert_to_billm.py`) and Rust container conversion into a single unified CLI command: `apu-model convert` and its dedicated alias `llama-convert`.
+  - Supports converting both single `.gguf` files and Hugging Face / Safetensors checkpoint directories directly into turnkey `.q4nx` containers with embedded XDNA 2 hardware graphs.
+  - Standardized standalone **Embedded GGUF/Q4NX container** as the default output format, with prominent warnings when bare containers are explicitly requested.
+  - Sets **BiLLM** (with on-the-fly Block-RHT Walsh-Hadamard 128 orthogonal rotations and 1.5% saliency isolation) as the default quantization algorithm, with options for `q4_k_m`, `q8_0`, and `fp16`.
+  - Archived legacy standalone Python script into `old/converter/convert_to_billm.py`.
+- **Multi-Scale Model Testing & Verification Suite**:
+  - Validated end-to-end inference and zero-copy DMA handoffs across 1B, 4B, 10–20B, 20–50B MoE, and 100B+ architectures within strict system memory budgets.
+
+---
+
 ## [0.4.0] - 2026-09-20
 
 ### Added

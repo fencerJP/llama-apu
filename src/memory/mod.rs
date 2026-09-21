@@ -11,12 +11,23 @@ use crate::backend::DeviceBackend;
 use crate::uapi::*;
 
 pub mod chunked_kv;
+pub mod dma_ring;
 pub mod kv_pruning;
+pub mod kv_quant;
+pub mod moe_manifest;
 pub mod strix_halo_tuning;
+pub mod sys_mem;
 
 pub use chunked_kv::{ChunkBlock, ChunkBlockAllocator, ChunkedKvConfig, ChunkedKvError, LogicalBlockTable};
+pub use dma_ring::{DmaStreamingRing, DmaStreamingSlab};
 pub use kv_pruning::{DynamicKvPruner, KvPruningConfig, PruneResult};
+pub use kv_quant::{
+    dequantize_block_int4, dequantize_block_int8, evaluate_kv_quant_compatibility,
+    quantize_block_int4, quantize_block_int8, KvCacheQuantType, KvQuantCompatibility,
+};
+pub use moe_manifest::{ExpertSliceDescriptor, MoeManifest};
 pub use strix_halo_tuning::{StrixHaloConfig, StrixHaloMemoryOptimizer};
+pub use sys_mem::{MoeMemoryPlan, SystemMemoryInfo};
 
 #[derive(Error, Debug)]
 pub enum MemoryError {

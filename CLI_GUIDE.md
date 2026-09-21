@@ -41,6 +41,11 @@ The APU backend enables granular accelerator routing across the inference pipeli
 | `--npu-based` | Macro Preset flag | `disabled` | Run all possible pipeline stages on XDNA 2 NPU (`--tokenize npu --prefill npu --decode npu`). |
 | `--apu-xclbin <PATH>` | String (File path to `.xclbin`) | Auto-resolved | Override path to XCLBIN hardware graph microcode for AMD XDNA 2 NPU. |
 | `--apu-verbose` | Boolean flag | `false` | Enable detailed telemetry: DMA-BUF memory buffers, DRM timeline fences, and per-phase TTFT latencies. |
+| `--kv-cache-type <TYPE>` | `fp16`, `int8`, `int4`, `auto` | `auto` | Configure Key-Value cache quantization (INT8 = ~1.06 B/elem, INT4 = ~0.56 B/elem). Dynamically reclaims 4–12 GB DRAM for MoE experts. |
+| `--no-kv-quant` | Boolean flag | `false` | Disable KV cache quantization; enforce full FP16/BF16 KV storage. |
+| `--router-sram <on\|off>` | `on`, `off`, `auto` | `auto` | Pin MoE router matrices ($W_{\text{gate}}$) into 64MB AIE2P on-chip SRAM to eliminate DRAM latency during token routing. |
+| `--no-router-sram` | Boolean flag | `false` | Disable MoE router matrix on-chip SRAM pinning. |
+| `--router-sram-limit-mb <N>` | Integer ($\ge 1$) | `32` | Maximum on-chip SRAM safety ceiling in MB (leaves remaining 32MB for tile scratchpads). |
 
 ### Command Examples
 
@@ -134,39 +139,55 @@ Architecture: qwen2 (hidden_dim=2048, heads=16, kv_heads=2, layers=36, vocab=151
 Tensors: 325 tensors
 Primary Quantization: Q4_K_M (Supported: Yes)
 Embedded XCLBIN: None (Auto-resolved: Qwen2.5-3B-NPU2)
+------------------------------------------------------------
+APU Hardware Optimization Compatibility:
+  KV Cache Quant    : INT8 (~1.06 B/elem, 1.88x reduction)
+    Reason/Detail   : Long context (32768 tokens) on standard GQA: INT8 selected (unlocks ~50% KV memory for MoE experts)
+  MoE Architecture  : Dense (No routing matrices to pin)
 ```
 
-### 2. `apu-model convert`
-Converts GGUF models into turnkey `.q4nx` containers, embedding target XDNA 2 hardware microcode into the file header (bytes 256..N) with 64-byte payload cacheline alignment.
+### 2. `apu-model convert` / `llama-convert`
+Converts GGUF models, Hugging Face checkpoint directories, or Safetensors shard sets into turnkey `.q4nx` containers, embedding target XDNA 2 hardware microcode into the file header (bytes 256..N) with 64-byte payload cacheline alignment. Also available directly via the `llama-convert` alias.
 
 **Syntax:**
 ```bash
 apu-model convert --input <INPUT_PATH> --output <OUTPUT_PATH> [OPTIONS]
+llama-convert -i <INPUT_PATH> -o <OUTPUT_PATH> [OPTIONS]
 ```
 
 **Parameters & Flags:**
 | Parameter | Short | Type | Default | Description |
 | :--- | :--- | :--- | :--- | :--- |
-| `--input <PATH>` | `-i` | File path | *Required* | Path to input `.gguf` file. |
-| `--output <PATH>` | `-o` | File path | *Required* | Path to output `.q4nx` file. |
+| `--input <PATH>` | `-i` | File / Directory | *Required* | Path to input `.gguf` file or Safetensors directory. |
+| `--output <PATH>` | `-o` | File path | *Required* | Path to output `.q4nx` container file. |
+| `--format <FORMAT>` | | String | `embedded` | Target container format: `embedded` (turnkey standalone container) or `bare`. |
+| `--quant <TYPE>` | | String | `billm` | Quantization algorithm (`billm`, `q4_k_m`, `q8_0`, `fp16`, `auto`). |
 | `--xclbin <PATH>` | `-x` | File path | Auto-resolved | Path to explicit `.xclbin` hardware binary to embed. |
-| `--target <NAME>` | `-t` | String | `auto` | Silicon target identifier (`strix-point`, `gorgon-point`, `krackan-point`, `strix-halo`). |
+| `--target <NAME>` | `-t` | String | `npu2-aie2p` | Silicon target identifier (`npu2-aie2p`, `npu1-aie2`). |
+| `--no-rotation` | | Flag | `false` | Disable on-the-fly Block-RHT Walsh-Hadamard 128 rotation during BiLLM conversion. |
+| `--salient-ratio <F>` | | Float | `0.015` | Salient weight ratio isolated for scale factor computation (~1.5%). |
+| `--kv-cache-type <NAME>` | | String | `auto` | Key-Value cache quantization mode (`fp16`, `int8`, `int4`, `auto`). |
+| `--no-router-sram` | | Flag | `false` | Disable on-chip SRAM router matrix ($W_{\text{gate}}$) pinning for MoE models. |
+| `--router-sram-limit-mb <N>` | | Integer | `32` | Maximum on-chip SRAM budget ceiling for router matrices in MB. |
 | `--verbose` | `-v` | Flag | `false` | Print detailed conversion telemetry and tensor mapping. |
 
 **Supported Quantizations (1-Bit BiLLM & Q4 to Q16):**
-- **1-bit**: `BILLM`, `Q1_BILLM` (1.08 bpw with SpinQuant offline rotation and salient weight protection), `Q1_0`, `Q1_0_G128` (T-MAC SRAM lookup table execution on XDNA 2 NPU).
+- **1-bit**: `BILLM`, `Q1_BILLM` (1.08 bpw with Block-RHT Walsh-Hadamard 128 orthogonal rotation and salient weight protection), `Q1_0`, `Q1_0_G128` (T-MAC SRAM lookup table execution on XDNA 2 NPU).
 - **4-bit**: `Q4_0`, `Q4_1`, `Q4_K_M`, `Q4_K_S`, `IQ4_NL` (non-linear codebook mapping), `IQ4_XS`.
 - **5-bit & 6-bit**: `Q5_0`, `Q5_1`, `Q5_K_M`, `Q5_K_S`, `Q6_K`.
 - **8-bit**: `Q8_0` (standard baseline).
 - **16-bit**: `F16`, `BF16`, `F32`.
 
 **Unsupported Formats Policy:**
-Naive uncompensated sub-4-bit formats (`IQ1_*`, `IQ2_*`, `Q2_K`, `IQ3_*`, `Q3_K_*` without SpinQuant rotation or salient protection) are explicitly **rejected** with descriptive error messages because unaligned memory bit-strides break AIE2P tile DMAs and exhibit catastrophic perplexity collapse. Use `BiLLM` instead for extreme 1-bit compression.
+Naive uncompensated sub-4-bit formats (`IQ1_*`, `IQ2_*`, `Q2_K`, `IQ3_*`, `Q3_K_*` without orthogonal rotation or salient protection) are explicitly **rejected** with descriptive error messages because unaligned memory bit-strides break AIE2P tile DMAs and exhibit catastrophic perplexity collapse. Use `BiLLM` instead for extreme 1-bit compression.
 
 **Examples:**
 ```bash
-# Standard conversion with auto-resolved XCLBIN
-apu-model convert -i /models/qwen2.5-3b-q4_k_m.gguf -o /models/qwen2.5-3b.q4nx
+# Standard GGUF conversion with auto-resolved XCLBIN
+llama-convert -i /models/qwen2.5-3b-q4_k_m.gguf -o /models/qwen2.5-3b.q4nx
+
+# Direct-to-disk streaming BiLLM quantization from Hugging Face Safetensors
+llama-convert -i /models/Qwen2.5-7B-Instruct/ -o /models/qwen2.5-7b-billm.q4nx --quant billm
 
 # Convert non-linear IQ4_NL model with explicit XCLBIN
 apu-model convert -i /models/model-iq4_nl.gguf -o /models/model.q4nx -x /xclbins/qwen3-8b.xclbin
@@ -186,6 +207,8 @@ apu-model stamp --model <PATH> [--xclbin <PATH> | --target <NAME>]
 | `--model <PATH>` | `-m` | File path | *Required* | Path to `.q4nx` container to stamp. |
 | `--xclbin <PATH>` | `-x` | File path | None | Path to `.xclbin` file to embed into header. |
 | `--target <NAME>` | `-t` | String | None | Target APU silicon profile to resolve and embed. |
+| `--no-router-sram` | | Flag | `false` | Disable on-chip SRAM router matrix ($W_{\text{gate}}$) pinning for MoE models. |
+| `--router-sram-limit-mb <N>` | | Integer | `32` | Maximum on-chip SRAM budget ceiling for router matrices in MB. |
 
 **Examples:**
 ```bash

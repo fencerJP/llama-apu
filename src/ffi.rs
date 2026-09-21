@@ -59,6 +59,11 @@ pub struct ApuBackendContext {
     pub speculative: Option<SpeculativeOrchestrator>,
     pub kv_pruner: Option<DynamicKvPruner>,
     pub strix_optimizer: Option<StrixHaloMemoryOptimizer>,
+    pub kv_quant_type: crate::memory::kv_quant::KvCacheQuantType,
+    pub router_sram_enabled: bool,
+    pub router_sram_limit_mb: usize,
+    pub prefill_target: String,
+    pub decode_target: String,
 }
 
 /// Load a model into the apu-backend.
@@ -145,6 +150,11 @@ pub unsafe extern "C" fn apu_backend_load_model(
         speculative: None,
         kv_pruner: None,
         strix_optimizer: None,
+        kv_quant_type: crate::memory::kv_quant::KvCacheQuantType::Auto,
+        router_sram_enabled: true,
+        router_sram_limit_mb: 32,
+        prefill_target: "gpu".to_string(),
+        decode_target: "npu".to_string(),
     });
 
     *out_ctx = Box::into_raw(ctx);
@@ -234,14 +244,8 @@ pub unsafe extern "C" fn apu_backend_dispatch_prefill(
         batch_size: 1,
     };
 
-    let res = match context.prefill_engine.dispatch_prefill(
-        req.clone(),
-        kv_handle,
-        syncobj_fd,
-        timeline_point,
-    ) {
-        Ok(r) => r,
-        Err(_) => match context.cpu_worker.dispatch_prefill(
+    let res = if context.prefill_target == "cpu" {
+        match context.cpu_worker.dispatch_prefill(
             req,
             kv_handle,
             syncobj_fd,
@@ -249,10 +253,31 @@ pub unsafe extern "C" fn apu_backend_dispatch_prefill(
         ) {
             Ok(r) => r,
             Err(e) => {
-                eprintln!("[apu_backend_prefill ERROR] {:?}", e);
+                eprintln!("[apu_backend_prefill CPU ERROR] {:?}", e);
                 return -3;
             }
-        },
+        }
+    } else {
+        match context.prefill_engine.dispatch_prefill(
+            req.clone(),
+            kv_handle,
+            syncobj_fd,
+            timeline_point,
+        ) {
+            Ok(r) => r,
+            Err(_) => match context.cpu_worker.dispatch_prefill(
+                req,
+                kv_handle,
+                syncobj_fd,
+                timeline_point,
+            ) {
+                Ok(r) => r,
+                Err(e) => {
+                    eprintln!("[apu_backend_prefill ERROR] {:?}", e);
+                    return -3;
+                }
+            },
+        }
     };
 
     *out_initial_token = res.initial_token_id;
@@ -284,14 +309,8 @@ pub unsafe extern "C" fn apu_backend_dispatch_decode_step(
         temperature,
     };
 
-    let step_res = match context.decode_engine.dispatch_decode_step(
-        req.clone(),
-        wait_syncobj_fd,
-        wait_timeline_point,
-        signal_timeline_point,
-    ) {
-        Ok(r) => r,
-        Err(_) => match context.cpu_worker.dispatch_decode_step(
+    let step_res = if context.decode_target == "cpu" {
+        match context.cpu_worker.dispatch_decode_step(
             req,
             wait_syncobj_fd,
             wait_timeline_point,
@@ -299,11 +318,63 @@ pub unsafe extern "C" fn apu_backend_dispatch_decode_step(
         ) {
             Ok(r) => r,
             Err(_) => return -2,
-        },
+        }
+    } else if context.decode_target == "gpu" {
+        match context.cpu_worker.dispatch_decode_step(
+            req,
+            wait_syncobj_fd,
+            wait_timeline_point,
+            signal_timeline_point,
+        ) {
+            Ok(r) => r,
+            Err(_) => return -2,
+        }
+    } else {
+        match context.decode_engine.dispatch_decode_step(
+            req.clone(),
+            wait_syncobj_fd,
+            wait_timeline_point,
+            signal_timeline_point,
+        ) {
+            Ok(r) => r,
+            Err(_) => match context.cpu_worker.dispatch_decode_step(
+                req,
+                wait_syncobj_fd,
+                wait_timeline_point,
+                signal_timeline_point,
+            ) {
+                Ok(r) => r,
+                Err(_) => return -2,
+            },
+        }
     };
 
     *out_token = step_res.output_token_id;
     *out_is_eos = step_res.is_eos;
+    0
+}
+
+/// Configure stage routing targets (prefill: "gpu"|"cpu"|"npu", decode: "npu"|"gpu"|"cpu").
+#[no_mangle]
+pub unsafe extern "C" fn apu_backend_set_stage_routing(
+    ctx: *mut ApuBackendContext,
+    prefill: *const c_char,
+    decode: *const c_char,
+) -> i32 {
+    if ctx.is_null() {
+        return -1;
+    }
+    let context = &mut *ctx;
+    if !prefill.is_null() {
+        if let Ok(s) = CStr::from_ptr(prefill).to_str() {
+            context.prefill_target = s.to_lowercase();
+        }
+    }
+    if !decode.is_null() {
+        if let Ok(s) = CStr::from_ptr(decode).to_str() {
+            context.decode_target = s.to_lowercase();
+        }
+    }
     0
 }
 
@@ -665,12 +736,89 @@ pub unsafe extern "C" fn apu_backend_create_xclbin_embedded_formatted(
     0
 }
 
+/// Set Key-Value cache quantization mode (0=FP16, 1=INT8, 2=INT4, 3=Auto).
+#[no_mangle]
+pub unsafe extern "C" fn apu_backend_set_kv_quant_type(ctx: *mut ApuBackendContext, quant_type: i32) -> i32 {
+    if ctx.is_null() {
+        return -1;
+    }
+    let mode = match quant_type {
+        0 => crate::memory::kv_quant::KvCacheQuantType::Fp16,
+        1 => crate::memory::kv_quant::KvCacheQuantType::Int8,
+        2 => crate::memory::kv_quant::KvCacheQuantType::Int4,
+        3 => crate::memory::kv_quant::KvCacheQuantType::Auto,
+        _ => return -2,
+    };
+    (*ctx).kv_quant_type = mode;
+    0
+}
+
+/// Configure on-chip SRAM router matrix ($W_{\text{gate}}$) pinning for MoE models.
+#[no_mangle]
+pub unsafe extern "C" fn apu_backend_set_router_sram_pinning(
+    ctx: *mut ApuBackendContext,
+    enabled: i32,
+    limit_mb: usize,
+) -> i32 {
+    if ctx.is_null() {
+        return -1;
+    }
+    (*ctx).router_sram_enabled = enabled != 0;
+    (*ctx).router_sram_limit_mb = if limit_mb > 0 { limit_mb } else { 32 };
+    0
+}
+
 /// Free context and release all underlying devices and buffers.
 #[no_mangle]
 pub unsafe extern "C" fn apu_backend_free(ctx: *mut ApuBackendContext) {
     if !ctx.is_null() {
         drop(Box::from_raw(ctx));
     }
+}
+
+/// Run AMD Ryzen AI APU hardware diagnostics and print report to stdout.
+#[no_mangle]
+pub extern "C" fn apu_backend_doctor() -> i32 {
+    crate::doctor::print_doctor_report();
+    0
+}
+
+/// Run APU model manager (convert, stamp, info, list).
+#[no_mangle]
+pub unsafe extern "C" fn apu_backend_model(argc: i32, argv: *const *const c_char) -> i32 {
+    if argc <= 0 || argv.is_null() {
+        return crate::model_cli::run_model_cli(vec!["apu-model".to_string()]);
+    }
+    let mut args = Vec::with_capacity(argc as usize);
+    for i in 0..argc {
+        let ptr = *argv.offset(i as isize);
+        if ptr.is_null() {
+            continue;
+        }
+        if let Ok(s) = CStr::from_ptr(ptr).to_str() {
+            args.push(s.to_string());
+        }
+    }
+    crate::model_cli::run_model_cli(args)
+}
+
+/// Run XCLBIN hardware graph synthesizer.
+#[no_mangle]
+pub unsafe extern "C" fn apu_backend_synth(argc: i32, argv: *const *const c_char) -> i32 {
+    if argc <= 0 || argv.is_null() {
+        return crate::synth_cli::run_synth_cli(vec!["apu-synth".to_string()]);
+    }
+    let mut args = Vec::with_capacity(argc as usize);
+    for i in 0..argc {
+        let ptr = *argv.offset(i as isize);
+        if ptr.is_null() {
+            continue;
+        }
+        if let Ok(s) = CStr::from_ptr(ptr).to_str() {
+            args.push(s.to_string());
+        }
+    }
+    crate::synth_cli::run_synth_cli(args)
 }
 
 #[cfg(test)]

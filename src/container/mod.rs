@@ -17,7 +17,7 @@ use thiserror::Error;
 pub use converter::load_or_convert_model;
 pub use reader::{f16_to_f32, GgufModelReader, ModelTokenizer, TensorDType, TensorDescriptor, TensorView};
 pub use resolver::{discover_xclbin_profiles, resolve_xclbin_profile, XclbinProfile};
-pub use xclbin_builder::{ModelGraphTopology, TargetHardware, XclbinBuilder, XclbinFormat};
+pub use xclbin_builder::{ModelGraphTopology, RouterSramPlan, TargetHardware, XclbinBuilder, XclbinFormat};
 
 /// Magic bytes for the `.q4nx` container: 'Q', '4', 'N', 'X' (0x584E3451 in little-endian).
 pub const Q4NX_MAGIC: [u8; 4] = [b'Q', b'4', b'N', b'X'];
@@ -135,9 +135,10 @@ impl Q4nxModel {
             xclbin_data = xclbin_buf;
         }
 
-        // Read payload data
+        // Read sample of payload data for inspection (up to 64KB or payload_size)
         file.seek(SeekFrom::Start(payload_offset))?;
-        let mut payload_data = vec![0u8; payload_size as usize];
+        let sample_len = (payload_size as usize).min(65536);
+        let mut payload_data = vec![0u8; sample_len];
         file.read_exact(&mut payload_data)?;
 
         Ok(Self {

@@ -6,7 +6,10 @@ use thiserror::Error;
 
 use crate::memory::DmaBufHandle;
 
+pub mod analytical_prior;
 pub mod cpu_worker;
+pub mod imatrix_store;
+pub mod pilot;
 pub mod rocm_prefill;
 pub mod sampler;
 pub mod speculative;
@@ -14,7 +17,10 @@ pub mod transformer;
 pub mod triforce;
 pub mod xrt_decode;
 
+pub use analytical_prior::AnalyticalPriorCalculator;
 pub use cpu_worker::CpuWorkerEngine;
+pub use imatrix_store::{ImatrixProvenance, ImatrixStore, LLAMA_APU_PROVENANCE_TAG};
+pub use pilot::{LayerExpertTracker, PilotConfig, PilotEngine};
 pub use rocm_prefill::{ApuPrefillEngine, DeterministicReferenceOracle, RocmPrefillEngine};
 pub use sampler::{argmax_scalar, FastRng, Sampler, SamplerConfig};
 #[cfg(target_arch = "x86_64")]

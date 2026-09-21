@@ -1,0 +1,15 @@
+# AMD Ryzen AI APU Zero-Copy Model Runner Python Dependencies
+# Core requirement for BiLLM quantization and mathematical transforms
+numpy>=1.22.0
+
+# System memory telemetry and monitoring
+psutil>=5.9.0
+
+# Safetensors fast streaming loader
+safetensors>=0.4.0
+
+# Optional Hugging Face CLI for downloading model shards
+huggingface_hub>=0.20.0
+
+# Optional PyTorch acceleration (uncomment if GPU/CPU torch tensor acceleration is desired)
+# torch>=2.0.0

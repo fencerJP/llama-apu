@@ -11,7 +11,7 @@ Welcome to the **AMD Ryzen AI APU Zero-Copy Backend for llama.cpp**. This guide 
 - **RAM**: Minimum 16 GB unified LPDDR5X/DDR5 system memory (32 GB+ recommended for models $\ge$ 7B).
 
 ### Software & Drivers
-- **Operating System**: Linux (Ubuntu 24.04 LTS, Fedora 40+, Arch Linux, or openSUSE Tumbleweed).
+- **Operating System**: Linux (Ubuntu 24.04 LTS, Debian 12+, Fedora 40+, Arch Linux, or openSUSE Tumbleweed).
 - **Linux Kernel**: 6.10 or newer (with AMDXDNA NPU driver `amdxdna.ko` enabled).
 - **ROCm / HIP**: ROCm 6.2+ or 7.0+ installed (for RDNA 3.5 iGPU acceleration).
 - **Device Nodes & Permissions**:
@@ -30,37 +30,52 @@ newgrp render
 
 ## 2. Installation & Build
 
-The architecture couples the **upstream C++ `llama.cpp` frontend** with the **Rust `apu-backend` acceleration library**.
+### Option A: Turnkey Automated Installer (Recommended)
+The unified installer automatically audits system dependencies (across `apt`, `dnf`, `pacman`, and `zypper`), provisions missing compilers and headers (`libdrm-dev`, `libssl-dev`, `cmake`), configures the Rust and Python environments, compiles both Rust and C++ components, registers XDNA 2 hardware profiles, and installs systemd services:
 
-### Step 1: Build the Rust Acceleration Backend & Tooling
 ```bash
 git clone https://github.com/amd/zero-copy-model-runner.git
 cd zero-copy-model-runner
 
-# Compile the native C ABI shared/static library and diagnostic utilities
-RUSTFLAGS="-C target-cpu=native" cargo build --release
+# Interactive or automated installation
+./scripts/install.sh -y
 ```
-This builds:
-- `target/release/libzero_copy_model_runner.so` (and `.a`)
-- `target/release/apu-doctor` (Hardware environment diagnostic)
-- `target/release/apu-model` (Turnkey GGUF/Q4NX converter and XCLBIN stamper)
 
-### Step 2: Build Upstream `llama.cpp` with APU Backend
+### Option B: Pre-compiled Release Bundle
+Download the pre-compiled binary release bundle:
 ```bash
-cd /path/to/llama.cpp
-cmake -B build -DLLAMA_APU_BACKEND=ON
+tar -xzf llama-apu-0.4.0-linux-x86_64.tar.gz
+cd llama-apu-0.4.0-linux-x86_64
+sudo ./install.sh
+```
+
+### Option C: Manual Build from Source
+```bash
+# 1. Build the Rust APU acceleration backend & CLI utilities
+cd zero-copy_model_runner
+RUSTFLAGS="-C target-cpu=native" cargo build --release --bins
+
+# 2. Build upstream llama.cpp frontend with APU backend enabled
+cd ../llamacpp-update/llama.cpp
+cmake -B build -DLLAMA_APU_BACKEND=ON -DAPU_BACKEND_DIR=$(pwd)/../zero-copy_model_runner
 cmake --build build --config Release -j$(nproc)
 ```
-This builds upstream `llama-cli`, `llama-server`, and the `apu-run` reference runner.
+
+This compiles:
+- `target/release/libzero_copy_model_runner.so` (and `.a`)
+- `target/release/apu-doctor` (Hardware environment diagnostic)
+- `target/release/apu-model` (Turnkey GGUF/Q4NX inspector and converter)
+- `target/release/apu-synth` (Standalone XCLBIN hardware graph synthesizer)
+- `llama`, `llama-cli`, `llama-server`, `apu-run`, `llama-bench`, `llama-quantize`
 
 ---
 
 ## 3. Verify Hardware with `apu-doctor`
 
-Before launching inference, run `apu-doctor` to ensure your AMD APU hardware nodes, driver permissions, and instruction sets are operational:
+Before launching inference, run `apu-doctor` to verify AMD APU hardware nodes, driver permissions, and instruction sets:
 
 ```bash
-./target/release/apu-doctor
+apu-doctor
 ```
 
 Expected diagnostic output:
@@ -98,22 +113,22 @@ apu-run -m /models/my-model.q4nx -p "Explain quantum computing." -n 64 --verbose
 
 ---
 
-## 5. Model Quantization & Ingestion (`apu-model`)
+## 5. Model Quantization & Ingestion
 
-The runtime utilizes `.q4nx` containers designed for the 4-bit AIE2P tile microcode inside the XCLBIN.
-
-### Converting GGUF Models (Supported Range: Q4 through Q16)
-You can ingest models quantized across the supported **Q4 through Q16** spectrum (`Q4_0`, `Q4_K_M`, `IQ4_NL`, `IQ4_XS`, `Q5_K`, `Q6_K`, `Q8_0`, `F16`, `BF16`). Sub-4-bit quantizations (`IQ1`, `IQ2`, `Q3`) are explicitly not recommended and rejected due to severe perplexity loss (see [QUANTIZATION.md](QUANTIZATION.md) for the full breakdown):
-
+### BiLLM Direct-to-Disk Streaming Quantizer
 ```bash
-# Convert an IQ4_NL GGUF model to an optimized .q4nx container
-apu-model convert --input model-iq4_nl.gguf --output model.q4nx
+# Install Python dependencies
+pip install -r requirements.txt
 
-# Pre-compile / stamp an XDNA 2 hardware execution graph
-apu-model stamp --model model.q4nx --target gorgon-point
+# Stream and quantize Safetensors into 1.08 bpw BiLLM .q4nx container with orthogonal rotation
+python3 converter/convert_to_billm.py --model-id /path/to/safetensors/ --output /models/model.q4nx
 ```
 
-*Note: During `.q4nx` creation, `IQ4_NL` non-linear codebooks are dequantized and re-packed into the AIE2P 4-bit tile-interleaved memory layout, retaining the enhanced perplexity and fine-tuning accuracy of the non-linear quantization while running at full NPU hardware speed.*
+### Synthesizing Custom XCLBIN Graphs (`apu-synth`)
+```bash
+# Synthesize custom NPU2 AIE2P execution graph directly from model topology
+apu-synth /models/model.q4nx /usr/local/share/llama-apu/xclbins/custom_model.xclbin enhanced
+```
 
 ---
 
@@ -147,3 +162,4 @@ curl http://localhost:8080/v1/chat/completions \
 | `Permission denied: /dev/kfd` or `/dev/accel/accel0` | User lacks group permissions | Run `sudo usermod -aG render,video,kfd $USER` and log back in. |
 | `UnsupportedSiliconError: XDNA 1 detected` | Machine uses older Phoenix / Hawk Point silicon | XDNA 1 is deprecated. Run with CPU AVX-512 or upgrade to XDNA 2. |
 | `Out of memory: GEM allocation failed` | Context window (`-c`) exceeds available UMA RAM | Lower `-c 2048` or switch to a smaller model size. |
+| `Missing package headers (e.g. libdrm-dev)` | Build dependencies not installed | Run `./scripts/install.sh -y` to auto-install dependencies for your distro. |

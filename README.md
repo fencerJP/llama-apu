@@ -3,17 +3,33 @@
 [![License: MIT / Apache 2.0](https://img.shields.io/badge/License-MIT_%2F_Apache_2.0-blue.svg)](LICENSE)
 [![Target Hardware](https://img.shields.io/badge/Target-AMD_Ryzen_AI_(XDNA_2_+_RDNA_3.5)-red.svg)](HARDWARE_SUPPORT.md)
 [![Upstream Fork](https://img.shields.io/badge/Upstream_Fork-ggml--org%2Fllama.cpp-brightgreen.svg)](https://github.com/ggml-org/llama.cpp)
-[![Release](https://img.shields.io/github/v/release/fencerJP/llama-apu?color=orange)](https://github.com/fencerJP/llama-apu/releases)
+[![Release](https://img.shields.io/badge/Release-v0.5.0-orange.svg)](https://github.com/fencerJP/llama-apu/releases)
+[![Build & Test](https://img.shields.io/badge/Tests-147%20passed-brightgreen.svg)](https://github.com/fencerJP/llama-apu/actions)
 
 **`llama-apu`** is a specialized, production-grade fork of [ggml-org/llama.cpp](https://github.com/ggml-org/llama.cpp) engineered exclusively for **AMD Ryzen AI APUs** (AMD Strix Point, Gorgon Point, Krackan Point, and Strix Halo). 
 
-It introduces a high-performance **heterogeneous zero-copy runtime architecture** that orchestrates compute-heavy prompt prefill on the **RDNA 3.5 iGPU**, memory-bound autoregressive decode across the **XDNA 2 NPU (32-tile AIE2P)**, and SIMD sampling on **Zen 5 AVX-512 CPU cores**, unified through kernel `dma-buf` memory handoffs and DRM timeline fences.
+It introduces a high-performance **heterogeneous zero-copy runtime architecture** that orchestrates compute-heavy prompt prefill on the **RDNA 3.5 iGPU**, memory-bound autoregressive decode across the **XDNA 2 NPU (32-tile AIE2P)**, and SIMD sampling on **Zen 5 AVX-512 CPU cores**, unified through kernel `dma-buf` memory handoffs, DRM timeline fences, dynamic KV cache quantization (INT8/INT4), and MoE router on-chip SRAM pinning.
+
+---
+
+## What's New in Release 0.5.0
+
+- **Quantized Dynamic KV Cache (CSA2 / INT8 & INT4)**:
+  - Dynamically quantizes Key and Value states during autoregressive decode with per-channel/per-head scale normalization.
+  - Slashes KV cache DRAM footprint by **50% (INT8)** and **75% (INT4)**, unlocking $128\text{k}+$ context windows on unified memory APUs.
+  - Reclaims 4–12 GB DRAM dynamically to expand MoE streaming slabs.
+  - Built-in compatibility matrix autodetects and protects sub-2-bit / BiLLM models from compound quantization degradation.
+  - Configurable via `--kv-cache-type {fp16,int8,int4,auto}` or `--no-kv-quant`.
+- **Multi-Layer Router Matrix ($W_{gate}$) On-Chip SRAM Pinning**:
+  - Automatically isolates MoE routing gating matrices and pins them directly in the 32MB–64MB on-chip AIE2P tile SRAM.
+  - Eliminates LPDDR5X DRAM bus contention during per-token expert dispatch for massive MoE architectures (Cold-Fusion 27B, DeepSeek-V4, Sarvam 105B).
+  - Configurable via `--router-sram {on,off}` and `--router-sram-limit-mb <MB>`.
+- **Zero-Copy Streaming Memory Guards**:
+  - Native `.q4nx` container header reader capped to 64KB sample payload, eliminating multi-gigabyte heap allocations when inspecting or stamping large models (10B to 100B+).
 
 ---
 
 ## Upstream llama.cpp vs. llama-apu: Key Architectural Differences
-
-While upstream [llama.cpp](https://github.com/ggml-org/llama.cpp) focuses on generic CPU and discrete GPU offloading across diverse platforms, **`llama-apu`** custom-tailors the execution pipeline specifically for AMD Unified Memory Architecture (UMA) APU silicon:
 
 | Feature / Subsystem | Upstream `llama.cpp` | `llama-apu` (This Fork) |
 | :--- | :--- | :--- |
@@ -22,8 +38,10 @@ While upstream [llama.cpp](https://github.com/ggml-org/llama.cpp) focuses on gen
 | **Synchronization** | CPU polling and host-side synchronization | **Kernel DRM timeline fences (`drm_syncobj`)**: Non-blocking asynchronous hardware execution without CPU spinloops |
 | **NPU (XDNA 2) Offload** | Unsupported or generic NPU shims | **Native XDNA 2 AIE2P tile streaming**: Optimized 32-tile dataflow execution via `/dev/accel/accel0` |
 | **Hardware Microcode** | None / manual external setup | **Bundled 37-profile XDNA 2 XCLBIN bank**: Auto-resolved and auto-discovered in system search paths |
-| **CLI & Stage Overrides** | Generic `-ngl` / `-t` flags | **Granular stage routing**: `--tokenize`, `--prefill`, `--decode`, `--gpu-based`, `--cpu-based`, `--npu-based`, `--apu-xclbin`, `--apu-verbose` |
-| **Quantization Policy** | Sub-1-bit to 8-bit generic quants | **BiLLM (1.08 bpw) + Q4–Q16 Spectrum**: Native 1-bit BiLLM with SpinQuant offline rotation and T-MAC SRAM LUT on NPU; native Q4 through Q16 (`Q4_K_M`, `IQ4_NL`, `Q5_K_M`, `Q8_0`, `BF16`, `F16`), rejecting unaligned naive sub-4-bit formats |
+| **Dynamic KV Compression** | Full-precision FP16 or static quantization | **Dynamic CSA2 INT8/INT4 KV Cache**: Reclaims 4–12GB DRAM for MoE models with zero copy handoff |
+| **MoE Routing Accelerator** | Standard DRAM reads for gating matrices | **Multi-Layer Router SRAM Pinning**: Pins $W_{gate}$ into 32MB on-chip AIE2P SRAM |
+| **CLI & Stage Overrides** | Generic `-ngl` / `-t` flags | **Granular stage routing**: `--tokenize`, `--prefill`, `--decode`, `--gpu-based`, `--cpu-based`, `--npu-based`, `--kv-cache-type`, `--router-sram` |
+| **Quantization Policy** | Sub-1-bit to 8-bit generic quants | **BiLLM (1.08 bpw) + Q4–Q16 Spectrum**: Native 1-bit BiLLM with SpinQuant offline rotation and T-MAC SRAM LUT on NPU; native Q4 through Q16 (`Q4_K_M`, `IQ4_NL`, `Q5_K_M`, `Q8_0`, `BF16`, `F16`) |
 | **Hardware Diagnostics** | External or ad-hoc scripts | **Integrated `apu-doctor` & `apu-model`**: Built-in verification for kernel nodes (`renderD128`, `accel0`), permissions, and model inspection |
 
 ---
@@ -45,23 +63,31 @@ While upstream [llama.cpp](https://github.com/ggml-org/llama.cpp) focuses on gen
 
 ### 1. Installation
 
-#### Option A: Pre-compiled Release Bundle (Recommended)
-Download the latest pre-compiled bundle from the [Releases page](https://github.com/fencerJP/llama-apu/releases):
+#### Option A: Turnkey Automated Installer (Recommended)
+Automatically audits distro packages (`apt`, `dnf`, `pacman`, `zypper`), provisions build headers (`libdrm-dev`, `libssl-dev`), configures Rust/Python environments, and builds/installs the full stack:
+```bash
+git clone https://github.com/amd/zero-copy-model-runner.git
+cd zero-copy-model-runner
+./scripts/install.sh -y
+```
+
+#### Option B: Pre-compiled Release Bundle
+Download the pre-compiled binary release bundle:
 ```bash
 tar -xzf llama-apu-0.4.0-linux-x86_64.tar.gz
 cd llama-apu-0.4.0-linux-x86_64
 sudo ./install.sh
 ```
 
-#### Option B: Build from Source
+#### Option C: Manual Build from Source
 ```bash
-# 1. Build the Rust APU backend engine
+# 1. Build the Rust APU backend engine & utilities
 cd zero-copy_model_runner
-RUSTFLAGS="-C target-cpu=native" cargo build --release
+RUSTFLAGS="-C target-cpu=native" cargo build --release --bins
 
 # 2. Build the C++ frontend with APU backend enabled
 cd ../llamacpp-update/llama.cpp
-cmake -B build -DLLAMA_APU_BACKEND=ON -DCMAKE_BUILD_TYPE=Release
+cmake -B build -DLLAMA_APU_BACKEND=ON -DAPU_BACKEND_DIR=$(pwd)/../zero-copy_model_runner -DCMAKE_BUILD_TYPE=Release
 cmake --build build --config Release -j$(nproc)
 ```
 
@@ -70,7 +96,17 @@ cmake --build build --config Release -j$(nproc)
 apu-doctor
 ```
 
-### 3. Run Inference with the Native Multiplexer
+### 3. Convert & Quantize Models (Optional / Turnkey)
+Standard `.gguf` models and Hugging Face / Safetensors directories can be converted into unified `.q4nx` containers with embedded XCLBINs using `llama-convert` (aliased as `apu-model convert`):
+```bash
+# Convert a GGUF model to turnkey embedded .q4nx
+llama-convert -i /models/qwen2.5-3b.gguf -o /models/qwen2.5-3b.q4nx
+
+# Quantize a Hugging Face / Safetensors model using BiLLM (Walsh-Hadamard 128 rotation + saliency)
+llama-convert -i /models/Qwen2.5-7B-Instruct/ -o /models/qwen2.5-7b-billm.q4nx --quant billm
+```
+
+### 4. Run Inference with the Native Multiplexer
 ```bash
 # Single-prompt generation
 llama cli -m /path/to/model.gguf -p "Explain zero-copy memory architecture." -n 128
@@ -82,7 +118,7 @@ llama cli -m /path/to/model.gguf -cnv
 llama-cli -m /path/to/model.gguf -p "What is the capital of France?" -n 64
 ```
 
-### 4. Launch OpenAI-Compatible API Server
+### 5. Launch OpenAI-Compatible API Server
 ```bash
 llama serve -m /path/to/model.gguf --host 0.0.0.0 --port 8080 -c 4096
 ```
@@ -101,6 +137,11 @@ llama serve -m /path/to/model.gguf --host 0.0.0.0 --port 8080 -c 4096
 | `--npu-based` | Preset flag | `disabled` | Macro preset: routes execution across the XDNA 2 NPU. |
 | `--apu-xclbin <PATH>` | File path (`.xclbin`) | Auto-resolved | Explicit override for XDNA 2 hardware microcode profile. |
 | `--apu-verbose` | Boolean | `false` | Enables real-time DMA-BUF buffer allocation and DRM timeline fence telemetry. |
+| `--kv-cache-type <TYPE>` | `fp16`, `int8`, `int4`, `auto` | `auto` | Dynamic CSA2 KV cache quantization (INT8 = 50% savings, INT4 = 75% savings). |
+| `--no-kv-quant` | Boolean | `false` | Disables dynamic KV cache quantization; forces FP16 KV storage. |
+| `--router-sram <on\|off>` | `on`, `off`, `auto` | `auto` | Pins MoE gating router matrices ($W_{gate}$) into 32MB AIE2P on-chip SRAM. |
+| `--no-router-sram` | Boolean | `false` | Disables MoE router matrix on-chip SRAM pinning. |
+| `--router-sram-limit-mb <MB>` | Integer ($\ge 1$) | `32` | Maximum on-chip SRAM budget ceiling for router matrices in MB. |
 
 *See [CLI_GUIDE.md](CLI_GUIDE.md) for full parameter specifications and REST API documentation.*
 
