@@ -160,3 +160,10 @@ Under **BiLLM 1.08 bpw**, all 10 models fit within the 64 GB UMA memory space of
 ### 6.1 Decode Throughput Derivation Formula
 $$\text{Projected Decode (tok/s)} = \frac{\text{Effective UMA Memory Bandwidth (110 GB/s)}}{\text{Active Parameters per Token} \times \left(\frac{1.08 \text{ bits}}{8 \text{ bits/byte}}\right) + \text{KV Cache Traffic / tok}}$$
 *(Assuming batch size = 1, KV cache quantized to Q8_0/Q4_0, and zero host-side `memcpy` via Linux DMA-BUF).*
+
+---
+
+## 7. Acknowledgments & Community Attribution
+
+Special gratitude to **Atomic-Germ / Guanaco** for foundational inspirations, technical insights, and architectural guidance across low-bit binarization pipelines, orthogonal rotation strategies, saliency isolation heuristics, and dynamic memory optimizations that directly influenced the design of our extreme-compression APU inference kernels.
+

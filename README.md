@@ -166,6 +166,12 @@ We evaluated 10 neural model configurations across 3 XCLBIN hardware binary vari
 
 ---
 
+## Acknowledgments & Community Attribution
+
+We extend our sincere thanks and deep appreciation to **Atomic-Germ / Guanaco** for foundational inspirations, technical insights, and architectural guidance across low-bit binarization pipelines, orthogonal rotation strategies, saliency isolation heuristics, and dynamic memory orchestration that significantly shaped and accelerated the development of this project.
+
+---
+
 ## Documentation Index
 
 - [CLI Reference Guide](CLI_GUIDE.md): Full command-line options, stage flags, and OpenAI API endpoint documentation.
