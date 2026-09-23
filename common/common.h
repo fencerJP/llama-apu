@@ -485,6 +485,20 @@ struct common_params {
 
     enum llama_lazy_mode lazy_mode = LLAMA_LAZY_MODE_AUTO; // on-demand reading of tensors marked by the arch
 
+    // APU routing controls (phase-2 §2.2). Values are the user's *requested* route;
+    // resolution applies capability checks and falls back visibly (GPU is the universal fallback).
+    struct {
+        std::string tokenize = "cpu"; // requested tokenizer route: cpu|gpu|npu
+        std::string prefill  = "gpu"; // requested prefill route: gpu|cpu|npu
+        std::string decode   = "npu"; // requested decode route: npu|gpu|cpu
+        bool decode_explicit = false;// --decode was passed by the user (vs default policy)
+        std::string xclbin   = "";    // --apu-xclbin <PATH> explicit .xclbin tier-1 override
+        bool verbose         = false; // --apu-verbose: memory estimates + route telemetry (fence telemetry lands with §2.3)
+        bool preset_gpu      = false; // --gpu-based
+        bool preset_cpu      = false; // --cpu-based
+        bool preset_npu      = false; // --npu-based
+    } apu;
+
     common_cpu_params cpuparams;
     common_cpu_params cpuparams_batch;
 

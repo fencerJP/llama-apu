@@ -19,6 +19,8 @@
 #include <unistd.h>
 #include <sys/stat.h>
 #include <sys/types.h>
+#include <dirent.h>
+#include <dlfcn.h>
 
 class ROFile {
 public:
@@ -418,17 +420,216 @@ static uint64_t arg_u64(int argc,char**argv,const char*name,uint64_t def){
     for(int i=0;i<argc-1;i++) if(!strcmp(argv[i],name)) return strtoull(argv[i+1],nullptr,0);
     return def;
 }
+
+// ---- Phase 2 §2.1/§2.2: capability detection, xclbin auto-discovery, route resolution ----
+// Read-only, runtime-only detection. No XRT headers/ABI linkage in this milestone (§2.4 scope).
+static bool file_exists(const std::string & p){
+    struct stat st{}; return ::stat(p.c_str(),&st)==0;
+}
+static std::string readlink_str(const std::string & p){
+    char buf[512]={0};
+    ssize_t n=::readlink(p.c_str(),buf,sizeof(buf)-1);
+    return n>0? std::string(buf,(size_t)n) : std::string();
+}
+static std::string home_dir(){
+    const char* h=::getenv("HOME");
+    return h? std::string(h): ".";
+}
+static std::string basename_no_ext(const std::string & p){
+    size_t s=p.find_last_of('/'); std::string b=(s==std::string::npos)?p:p.substr(s+1);
+    size_t d=b.find_last_of('.'); if(d!=std::string::npos) b=b.substr(0,d);
+    return b;
+}
+struct NpuCaps {
+    bool dev=false, driver=false, xrt=false;
+    std::string dev_node="/dev/accel/accel0", driver_name="", xrt_lib="";
+};
+static NpuCaps npu_caps(){
+    NpuCaps c;
+    c.dev=file_exists(c.dev_node);
+    if(c.dev){
+        std::string drv=readlink_str("/sys/class/accel/accel0/device/driver");
+        size_t s=drv.find_last_of('/');
+        c.driver_name=(s==std::string::npos)?drv:drv.substr(s+1);
+        c.driver=!c.driver_name.empty();
+    }
+    // runtime-only XRT probe: dlopen the core util lib and look for the public XRT C ABI entrypoint
+    // (no build-time header/ABI coupling; real ABI use is phase-2 §2.4)
+    const char* libs[]={"libxrt_coreutil.so.2","libxrt_coreutil.so",nullptr};
+    for(int i=0;libs[i];i++){
+        if(void* h=dlopen(libs[i],RTLD_NOW)){
+            bool ok=dlsym(h,"xrtDeviceOpen")!=nullptr;
+            ::dlclose(h);
+            if(ok){ c.xrt=true; c.xrt_lib=libs[i]; break; }
+        }
+    }
+    return c;
+}
+struct GpuCaps { bool kfd=false, dri=false; };
+static GpuCaps gpu_caps(){
+    GpuCaps g;
+    g.kfd=file_exists("/dev/kfd");            // ROCm compute kernel node
+    g.dri=file_exists("/dev/dri/renderD128"); // DRM render node
+    return g;
+}
+// Four-tier xclbin auto-discovery (phase-2 §2.1):
+//   1. explicit --apu-xclbin PATH   2. $LLAMA_APU_XCLBINS_DIR
+//   3. ~/.local/share/llama-apu/xclbins  4. /usr/local/share/llama-apu/xclbins
+// Model key = model basename without extension (NPU2 layout: <stem>/[roles].xclbin).
+struct XclbinFind {
+    int tier=0; std::string dir, tier_name; std::vector<std::string> bins;
+    bool found=false;
+};
+static std::vector<std::string> list_xclbins(const std::string & dir){
+    std::vector<std::string> out;
+    DIR* d=::opendir(dir.c_str());
+    if(!d) return out;
+    while(dirent* e=::readdir(d)){
+        std::string n=e->d_name;
+        if(n.size()>7 && n.substr(n.size()-7)==".xclbin") out.push_back(dir+"/"+n);
+    }
+    ::closedir(d);
+    std::sort(out.begin(),out.end());
+    return out;
+}
+static XclbinFind find_xclbins(const std::string & model_stem, const std::string & parent_stem, const std::string & explicit_path){
+    const char* tier_names[]={"","--apu-xclbin","LLAMA_APU_XCLBINS_DIR","user path","system path"};
+    std::string dirs[4]; int tiers=4;
+    if(!explicit_path.empty()){ dirs[0]=explicit_path; tiers=1; }
+    else {
+        const char* env=::getenv("LLAMA_APU_XCLBINS_DIR");
+        dirs[0]=env? std::string(env): std::string();
+        dirs[1]=home_dir()+"/.local/share/llama-apu/xclbins";
+        dirs[2]="/usr/local/share/llama-apu/xclbins";
+        tiers=3;
+    }
+    // model keys: file stem first (e.g. Foo-NPU2.gguf -> Foo-NPU2), then parent dir
+    // (NPU2 layout /opt/models/Qwen3.5-4B-NPU2/model.q4nx -> key Qwen3.5-4B-NPU2)
+    const std::string keys[]={model_stem,parent_stem,std::string()};
+    for(int i=0;i<tiers;i++){
+        if(dirs[i].empty()) continue;
+        std::string cand = dirs[i];
+        struct stat st{};
+        if(::stat(cand.c_str(),&st)!=0) continue;
+        if(S_ISDIR(st.st_mode)){
+            for(int k=0;!keys[k].empty();k++){
+                std::string in_root = cand+"/"+keys[k];
+                std::string use = ::stat(in_root.c_str(),&st)==0 && S_ISDIR(st.st_mode) ? in_root : cand;
+                auto bins=list_xclbins(use);
+                if(!bins.empty()) return {tiers==1?1:i+2,use,tier_names[tiers==1?1:i+2],bins,true};
+            }
+        } else if(cand.size()>7 && cand.substr(cand.size()-7)==".xclbin"){
+            return {1,cand,tier_names[1],{cand},true};
+        }
+    }
+    return {0,"","",{},false};
+}
+static uint64_t mem_available_bytes(){
+    FILE* f=::fopen("/proc/meminfo","r");
+    if(!f) return 0;
+    char k[64]; uint64_t v=0; char u[16];
+    while(::fscanf(f,"%63s %llu %15s",k,(unsigned long long*)&v,u)==3)
+        if(!strcmp(k,"MemAvailable:")){ ::fclose(f); return v*1024ull; }
+    ::fclose(f); return 0;
+}
+static int route_info(const std::string & path, const std::string & explicit_xclbin,
+                      uint64_t ctx_override, const std::string & kv_dtype){
+    const double MiB=1024.0*1024.0;
+    printf("route-info: %s\n", path.c_str());
+
+    // model memory estimate (bounded read; same scanner as mem-estimate)
+    uint64_t need_bytes=0;
+    {
+        ROFile f(path);
+        auto magic=f.read_exact(0,4);
+        if(memcmp(magic.data(),"GGUF",4)==0){
+            GgufScan g; scan_gguf(f,g,false);
+            uint64_t ctx=ctx_override?ctx_override:g.ctx;
+            if(!g.n_head_kv) g.n_head_kv=g.n_head;
+            uint64_t head_dim=g.n_key_len;
+            if(!head_dim) head_dim=(g.n_head&&g.n_embd)?g.n_embd/g.n_head:0;
+            uint64_t kv_elems=2ull*g.n_layer*g.n_head_kv*head_dim*ctx;
+            uint64_t kv_bytes;
+            if(kv_dtype=="q4_0") kv_bytes=(kv_elems/32)*18;
+            else if(kv_dtype=="q8_0") kv_bytes=(kv_elems/32)*34;
+            else kv_bytes=kv_elems*2;
+            need_bytes=g.n_bytes_weights+kv_bytes+(uint64_t)(g.n_embd*8ull*4096ull);
+        }
+    }
+    const uint64_t avail=mem_available_bytes();
+
+    // hardware capability (runtime-only, read-only)
+    NpuCaps npu=npu_caps();
+    GpuCaps gpu=gpu_caps();
+    std::string stem=basename_no_ext(path);
+    std::string parent;
+    {   size_t s=path.find_last_of('/');
+        if(s!=std::string::npos && s>0){
+            std::string d=path.substr(0,s);
+            size_t s2=d.find_last_of('/');
+            parent = (s2==std::string::npos)?d:d.substr(s2+1);
+        }
+    }
+    XclbinFind xb=find_xclbins(stem,parent,explicit_xclbin);
+
+    printf("  hardware        :\n");
+    printf("    NPU device    : %s (%s)\n", npu.dev?"present":"absent",
+           npu.dev?(npu.driver_name.empty()?"driver unknown":npu.driver_name.c_str()):"-");
+    printf("    XRT runtime   : %s%s\n", npu.xrt?"loadable":"not found",
+           npu.xrt?(" ("+npu.xrt_lib+", xrtDeviceOpen)").c_str():"");
+    printf("    GPU (ROCm)    : /dev/kfd %s, render node %s\n",
+           gpu.kfd?"present":"absent", gpu.dri?"present":"absent");
+    printf("  xclbin discovery:\n");
+    if(xb.found){
+        printf("    resolved tier : %d (%s)\n", xb.tier, xb.tier_name.c_str());
+        printf("    directory     : %s\n", xb.dir.c_str());
+        printf("    profiles      : %zu\n", xb.bins.size());
+        for(auto & b: xb.bins) printf("      - %s\n", b.c_str());
+    } else {
+        printf("    resolved tier : none — no .xclbin found for model '%s' in any tier\n", stem.c_str());
+    }
+    if(need_bytes && avail){
+        printf("  memory          : model+kv est %.2f MiB vs MemAvailable %.2f MiB -> %s\n",
+               need_bytes/MiB, avail/MiB, need_bytes<=avail?"fits":"BLOCKED (exceeds available)");
+    }
+
+    // route resolution — honest fallback with reasons (roadmap: NPU routes enabled only when validated)
+    printf("  routing (default policy: tokenize=cpu, prefill=gpu, decode=npu-when-safe, fallback=gpu):\n");
+    printf("    tokenize : cpu  (llama.cpp tokenizer is host CPU code; no device tokenizer exists)\n");
+    bool prefill_gpu_ok = gpu.kfd;
+    printf("    prefill  : %s%s\n", prefill_gpu_ok?"gpu":"cpu",
+           prefill_gpu_ok?"":"  (no /dev/kfd — ROCm GPU unavailable)");
+    bool mem_ok = (!need_bytes || !avail || need_bytes<=avail);
+    // NPU decode is NOT enabled in this milestone: no PRIME dma-buf bridge (§2.3) and no validated
+    // NPU kernel execution contract (§2.4). Reported as blocked, never faked.
+    std::vector<std::string> npu_blockers;
+    if(!npu.dev)               npu_blockers.push_back("no NPU device node "+npu.dev_node);
+    else if(!npu.driver)      npu_blockers.push_back("no driver bound at /sys/class/accel/accel0");
+    if(!npu.xrt)               npu_blockers.push_back("XRT runtime not loadable");
+    if(!xb.found)              npu_blockers.push_back("no .xclbin profile discovered (4-tier search)");
+    if(!mem_ok)                npu_blockers.push_back("memory estimate exceeds MemAvailable");
+    npu_blockers.push_back("no PRIME dma-buf bridge yet (phase-2 §2.3, not implemented)");
+    npu_blockers.push_back("NPU kernel execution not validated yet (phase-2 §2.4, not implemented)");
+    printf("    decode   : gpu   (npu requested; NPU blocked:)");
+    for(auto & b: npu_blockers) printf("\n               %s", ("- "+b).c_str());
+    printf("\n");
+    printf("    fallback : gpu%s\n", gpu.kfd?"":" (unavailable! check /dev/kfd)");
+    printf("  note            : NPU decode is staged for phase-2 §2.3/§2.4; GPU fallback is the honest route today\n");
+    return 0;
+}
 static int usage(){
     fprintf(stderr,
-        "apu-cli — Phase 1 container inspection (read-only, bounded, payload-isolated)\n"
+        "apu-cli — Phase 1/2 container inspection & APU route planning (read-only, bounded)\n"
         "  apu-cli container-info <file> [--companion <gguf>] [--full-sha256]\n"
-        "  apu-cli mem-estimate   <model.gguf> [--ctx N] [--kv-dtype f16|q8_0|q4_0]\n");
+        "  apu-cli mem-estimate   <model.gguf> [--ctx N] [--kv-dtype f16|q8_0|q4_0]\n"
+        "  apu-cli route-info    <model.gguf> [--apu-xclbin <PATH>] [--ctx N] [--kv-dtype f16|q8_0|q4_0]\n");
     return 2;
 }
 int main(int argc,char**argv){
     if(argc<3) return usage();
     try {
         std::string cmd=argv[1], path=argv[2];
+        std::string xclbin; for(int i=3;i<argc-1;i++) if(!strcmp(argv[i],"--apu-xclbin")) xclbin=argv[i+1];
         if(cmd=="container-info"){
             std::string comp; for(int i=3;i<argc-1;i++) if(!strcmp(argv[i],"--companion")) comp=argv[i+1];
             return container_info(path,comp,false);
@@ -438,6 +639,11 @@ int main(int argc,char**argv){
             for(int i=3;i<argc-1;i++) if(!strcmp(argv[i],"--kv-dtype")) kv=argv[i+1];
             uint64_t ctx=arg_u64(argc,argv,"--ctx",0);
             mem_estimate(f,ctx,kv); return 0;
+        } else if(cmd=="route-info"){
+            std::string kv="f16";
+            for(int i=3;i<argc-1;i++) if(!strcmp(argv[i],"--kv-dtype")) kv=argv[i+1];
+            uint64_t ctx=arg_u64(argc,argv,"--ctx",0);
+            return route_info(path,xclbin,ctx,kv);
         }
         return usage();
     } catch(const std::exception &e){ fprintf(stderr,"apu-cli: error: %s\n",e.what()); return 1; }

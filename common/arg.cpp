@@ -1274,6 +1274,58 @@ static utf8_argv make_utf8_argv() {
 }
 #endif
 
+// APU route resolution (phase-2 §2.2): apply presets, then resolve requested routes with honest,
+// logged fallbacks. NPU routes stay blocked until the phase-2 §2.3 dma-buf bridge and §2.4 validated
+// kernel execution land — never a silent or faked NPU path. GPU is the universal fallback.
+static void apu_route_resolve(common_params & params) {
+    auto & apu = params.apu;
+
+    // presets — an explicit -ngl value takes precedence over preset layer defaults
+    if (apu.preset_gpu) {
+        apu.prefill = "gpu"; apu.decode = "gpu";
+        // n_gpu_layers stays at default (-1 = all layers on GPU when available)
+    } else if (apu.preset_cpu) {
+        if (params.n_gpu_layers < 0) params.n_gpu_layers = 0;
+        apu.prefill = "cpu"; apu.decode = "cpu";
+    } else if (apu.preset_npu) {
+        apu.tokenize = "cpu"; apu.prefill = "gpu"; apu.decode = "npu";
+    }
+
+    // any APU route request or --apu-verbose must be visible: tools like llama-cli default to
+    // LOG_LEVEL_ERROR, so raise the threshold to INFO when the user engages APU routing at all.
+    const bool npu_requested = apu.preset_npu || apu.decode_explicit || apu.verbose;
+    if (npu_requested && params.verbosity < LOG_LEVEL_INFO) {
+        params.verbosity = LOG_LEVEL_INFO;
+        common_log_set_verbosity_thold(params.verbosity);
+    }
+
+    // resolution with visible fallback reasons
+    if (apu.tokenize != "cpu") {
+        LOG_WRN("apu: tokenize=%s requested; resolving to cpu (llama.cpp tokenizer is host CPU code)\n",
+            apu.tokenize.c_str());
+        apu.tokenize = "cpu";
+    }
+    if (apu.prefill == "npu") {
+        LOG_WRN("apu: prefill=npu requested; resolving to gpu (NPU prefill requires phase-2 §2.3/§2.4 validation)\n");
+        apu.prefill = "gpu";
+    }
+    if (apu.decode == "npu") {
+        if (apu.preset_npu || apu.decode_explicit) {
+            LOG_WRN("apu: decode=npu requested; resolving to gpu "
+                "(no PRIME dma-buf bridge §2.3, NPU kernel contract not validated §2.4; GPU is the fallback)\n");
+        }
+        // default policy (nothing requested): silent resolve — GPU is the standard llama.cpp route
+        apu.decode = "gpu";
+    }
+
+    if (apu.verbose) {
+        LOG_INF("apu: routes — tokenize=%s prefill=%s decode=%s (n_gpu_layers=%d, xclbin=%s)\n",
+            apu.tokenize.c_str(), apu.prefill.c_str(), apu.decode.c_str(),
+            (int) params.n_gpu_layers, apu.xclbin.empty() ? "auto-discovery" : apu.xclbin.c_str());
+        LOG_INF("apu: dma-buf/fence telemetry lands with phase-2 §2.3; see `llama-apu-cli route-info` for capability evidence\n");
+    }
+}
+
 bool common_params_parse(int argc, char ** argv, common_params & params, llama_example ex, void(*print_usage)(int, char **)) {
 #ifdef _WIN32
     auto utf8 = make_utf8_argv();
@@ -1304,6 +1356,7 @@ bool common_params_parse(int argc, char ** argv, common_params & params, llama_e
             exit(0);
         }
         params.lr.init();
+        apu_route_resolve(ctx_arg.params);
     } catch (const std::invalid_argument & ex) {
         fprintf(stderr, "%s\n", ex.what());
         ctx_arg.params = params_org;
@@ -2715,6 +2768,81 @@ common_params_context common_params_parser_init(common_params & params, llama_ex
             else { throw std::invalid_argument("invalid value"); }
         }
     ).set_env("LLAMA_ARG_LAZY_MODE"));
+    //
+    // APU routing controls (phase-2 §2.2) — requested routes; resolution falls back visibly to GPU.
+    //
+    add_opt(common_arg(
+        {"--tokenize"}, "ROUTE",
+        "requested tokenizer route: cpu|gpu|npu (default: cpu)\n"
+        "note: llama.cpp tokenization is host CPU code; gpu/npu requests resolve to cpu with a logged reason\n"
+        "see `llama-apu-cli route-info <model>` for the resolved route and capability evidence",
+        [](common_params & params, const std::string & value) {
+            if (value != "cpu" && value != "gpu" && value != "npu") { throw std::invalid_argument("invalid value"); }
+            params.apu.tokenize = value;
+        }
+    ).set_env("LLAMA_ARG_TOKENIZE"));
+    add_opt(common_arg(
+        {"--prefill"}, "ROUTE",
+        "requested prefill route: gpu|cpu|npu (default: gpu)\n"
+        "npu requests resolve with a logged fallback until phase-2 §2.3/§2.4 are validated",
+        [](common_params & params, const std::string & value) {
+            if (value != "gpu" && value != "cpu" && value != "npu") { throw std::invalid_argument("invalid value"); }
+            params.apu.prefill = value;
+        }
+    ).set_env("LLAMA_ARG_PREFILL"));
+    add_opt(common_arg(
+        {"--decode"}, "ROUTE",
+        "requested decode route: npu|gpu|cpu (default: npu when safe, else gpu)\n"
+        "npu decode requires the validated PRIME dma-buf bridge (§2.3) and NPU kernel contract (§2.4);\n"
+        "until then npu requests fall back to gpu with a logged reason",
+        [](common_params & params, const std::string & value) {
+            if (value != "npu" && value != "gpu" && value != "cpu") { throw std::invalid_argument("invalid value"); }
+            params.apu.decode = value;
+            params.apu.decode_explicit = true;
+        }
+    ).set_env("LLAMA_ARG_DECODE"));
+    add_opt(common_arg(
+        {"--gpu-based"},
+        "macro preset: force GPU (HIP/ROCm) execution — universal escape hatch (default off)\n"
+        "equivalent to routing prefill+decode to the GPU; an explicit -ngl value takes precedence",
+        [](common_params & params) {
+            params.apu.preset_gpu = true;
+        }
+    ).set_env("LLAMA_ARG_GPU_BASED"));
+    add_opt(common_arg(
+        {"--cpu-based"},
+        "macro preset: force CPU-only execution (default off)\n"
+        "equivalent to -ngl 0; an explicit -ngl value takes precedence",
+        [](common_params & params) {
+            params.apu.preset_cpu = true;
+        }
+    ).set_env("LLAMA_ARG_CPU_BASED"));
+    add_opt(common_arg(
+        {"--npu-based"},
+        "macro preset: full-APU policy — CPU tokenize, GPU prefill, NPU decode when safe (default off)\n"
+        "NPU decode activates only after the phase-2 §2.3/§2.4 hardware validation; otherwise falls back to GPU",
+        [](common_params & params) {
+            params.apu.preset_npu = true;
+        }
+    ).set_env("LLAMA_ARG_NPU_BASED"));
+    add_opt(common_arg(
+        {"--apu-xclbin"}, "PATH",
+        "tier-1 explicit .xclbin file or model xclbin directory (phase-2 §2.1)\n"
+        "overrides $LLAMA_APU_XCLBINS_DIR, ~/.local/share/llama-apu/xclbins and /usr/local/share/llama-apu/xclbins\n"
+        "note: recorded for the APU runtime; the runtime consumes it from phase-2 §2.3/§2.4 — today it is "
+        "exercised by `llama-apu-cli route-info`",
+        [](common_params & params, const std::string & value) {
+            params.apu.xclbin = value;
+        }
+    ).set_env("LLAMA_ARG_APU_XCLBIN"));
+    add_opt(common_arg(
+        {"--apu-verbose"},
+        "APU route telemetry: resolved routes, fallback reasons, memory estimates (default off)\n"
+        "dma-buf allocation and fence telemetry is added with phase-2 §2.3",
+        [](common_params & params) {
+            params.apu.verbose = true;
+        }
+    ).set_env("LLAMA_ARG_APU_VERBOSE"));
     add_opt(common_arg(
         {"--numa"}, "TYPE",
         "attempt optimizations that help on some NUMA systems\n"
