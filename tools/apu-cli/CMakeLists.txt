@@ -1,5 +1,6 @@
 set(TARGET llama-apu-cli)
-add_executable(${TARGET} apu-cli.cpp)
+add_executable(${TARGET} apu-cli.cpp ${CMAKE_CURRENT_SOURCE_DIR}/../../src/ggml-apu-bridge.cpp)
+target_include_directories(${TARGET} PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/../../src)
 if(LLAMA_TOOLS_INSTALL)
     install(TARGETS ${TARGET} RUNTIME)
 endif()

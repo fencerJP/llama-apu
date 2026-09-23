@@ -41,6 +41,7 @@ set(LLAMA_CORE_SOURCES
     llama-vocab.cpp
     unicode-data.cpp
     unicode.cpp
+    ggml-apu-bridge.cpp
 )
 
 add_library(llama

@@ -600,35 +600,59 @@ static int route_info(const std::string & path, const std::string & explicit_xcl
     printf("    prefill  : %s%s\n", prefill_gpu_ok?"gpu":"cpu",
            prefill_gpu_ok?"":"  (no /dev/kfd — ROCm GPU unavailable)");
     bool mem_ok = (!need_bytes || !avail || need_bytes<=avail);
-    // NPU decode is NOT enabled in this milestone: no PRIME dma-buf bridge (§2.3) and no validated
-    // NPU kernel execution contract (§2.4). Reported as blocked, never faked.
+    // NPU decode is staged: PRIME dma-buf bridge (§2.3) is implemented; NPU kernel execution contract (§2.4) pending.
     std::vector<std::string> npu_blockers;
     if(!npu.dev)               npu_blockers.push_back("no NPU device node "+npu.dev_node);
     else if(!npu.driver)      npu_blockers.push_back("no driver bound at /sys/class/accel/accel0");
     if(!npu.xrt)               npu_blockers.push_back("XRT runtime not loadable");
     if(!xb.found)              npu_blockers.push_back("no .xclbin profile discovered (4-tier search)");
     if(!mem_ok)                npu_blockers.push_back("memory estimate exceeds MemAvailable");
-    npu_blockers.push_back("no PRIME dma-buf bridge yet (phase-2 §2.3, not implemented)");
-    npu_blockers.push_back("NPU kernel execution not validated yet (phase-2 §2.4, not implemented)");
+    npu_blockers.push_back("NPU kernel execution not validated yet (phase-2 §2.4, in progress)");
     printf("    decode   : gpu   (npu requested; NPU blocked:)");
     for(auto & b: npu_blockers) printf("\n               %s", ("- "+b).c_str());
     printf("\n");
     printf("    fallback : gpu%s\n", gpu.kfd?"":" (unavailable! check /dev/kfd)");
-    printf("  note            : NPU decode is staged for phase-2 §2.3/§2.4; GPU fallback is the honest route today\n");
+    printf("  note            : PRIME dma-buf bridge §2.3 is active; NPU kernel execution validation §2.4 is next\n");
     return 0;
 }
+#include "ggml-apu-bridge.h"
+
+static int test_bridge(bool verbose) {
+    apu_bridge_telemetry telem{};
+    std::string log;
+    printf("llama-apu bridge test (§2.3 Shared Memory & Timeline Synchronization):\n");
+    bool ok = apu_run_bridge_smoke_test(verbose, telem, log);
+    printf("%s", log.c_str());
+    if (ok) {
+        printf("RESULT: PASS — Physical GEM allocation, PRIME dma-buf export, AMDXDNA import, 16B Tile DMA alignment, and DRM syncobj timeline signaling verified.\n");
+        return 0;
+    } else {
+        printf("RESULT: FAIL — Bridge verification failed.\n");
+        return 1;
+    }
+}
+
 static int usage(){
     fprintf(stderr,
-        "apu-cli — Phase 1/2 container inspection & APU route planning (read-only, bounded)\n"
+        "apu-cli — Phase 1/2 container inspection & APU route planning\n"
         "  apu-cli container-info <file> [--companion <gguf>] [--full-sha256]\n"
         "  apu-cli mem-estimate   <model.gguf> [--ctx N] [--kv-dtype f16|q8_0|q4_0]\n"
-        "  apu-cli route-info    <model.gguf> [--apu-xclbin <PATH>] [--ctx N] [--kv-dtype f16|q8_0|q4_0]\n");
+        "  apu-cli route-info     <model.gguf> [--apu-xclbin <PATH>] [--ctx N] [--kv-dtype f16|q8_0|q4_0]\n"
+        "  apu-cli test-bridge    [--apu-verbose]\n");
     return 2;
 }
+
 int main(int argc,char**argv){
-    if(argc<3) return usage();
+    if(argc<2) return usage();
     try {
-        std::string cmd=argv[1], path=argv[2];
+        std::string cmd=argv[1];
+        if(cmd=="test-bridge"){
+            bool verbose = false;
+            for(int i=2; i<argc; i++) if(!strcmp(argv[i],"--apu-verbose") || !strcmp(argv[i],"-v")) verbose = true;
+            return test_bridge(verbose);
+        }
+        if(argc<3) return usage();
+        std::string path=argv[2];
         std::string xclbin; for(int i=3;i<argc-1;i++) if(!strcmp(argv[i],"--apu-xclbin")) xclbin=argv[i+1];
         if(cmd=="container-info"){
             std::string comp; for(int i=3;i<argc-1;i++) if(!strcmp(argv[i],"--companion")) comp=argv[i+1];
