@@ -1,0 +1,6 @@
+set(TARGET llama-apu-cli)
+add_executable(${TARGET} apu-cli.cpp)
+if(LLAMA_TOOLS_INSTALL)
+    install(TARGETS ${TARGET} RUNTIME)
+endif()
+target_compile_features(${TARGET} PRIVATE cxx_std_17)
