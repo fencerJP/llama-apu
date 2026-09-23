@@ -759,15 +759,46 @@ static int test_kv_quant(bool verbose) {
     return 0;
 }
 
+static int test_sync(bool verbose) {
+    printf("llama-apu cross-APU sync test (§4.1-§4.2 Memory & Sync Refinement):\n");
+    apu_phase4_audit_result audit{};
+    std::string out_log;
+    bool pass = apu_run_phase4_refinement_audit(verbose, audit, out_log);
+    if (verbose) {
+        printf("%s", out_log.c_str());
+    } else {
+        printf("  [1/5] Zero-copy tracking (0 host memcpy) & physical GEM alias: %s\n",
+               (audit.zero_copy_passed && audit.physical_alias_passed) ? "PASS" : "FAIL");
+        printf("  [2/5] Strict 16B Tile DMA beat & 64B cache line sub-buffer alignment: %s\n",
+               audit.tile_dma_alignment_passed ? "PASS" : "FAIL");
+        printf("  [3/5] Explicit async dma-buf sync file export/import: %s\n",
+               audit.async_sync_file_passed ? "PASS" : "FAIL");
+        printf("  [4/5] DRM syncobj timeline latency (avg %.2f us, p99 %.2f us): %s\n",
+               audit.sync_profile.avg_latency_us, audit.sync_profile.p99_latency_us,
+               audit.timeline_latency_passed ? "PASS" : "FAIL");
+        printf("  [5/5] Multi-threaded concurrent timeline fence stress: %s\n",
+               audit.concurrent_stress_passed ? "PASS" : "FAIL");
+        printf("        Unified LPDDR5X DRAM streaming throughput: %.2f GB/s\n",
+               audit.lpddr5x_bandwidth_gbps);
+    }
+    if (pass) {
+        printf("RESULT: PASS — Cross-APU memory and sync refinement (Phase 4) validated.\n");
+        return 0;
+    }
+    printf("RESULT: FAIL — Phase 4 validation failed.\n");
+    return 1;
+}
+
 static int usage(){
     fprintf(stderr,
-        "apu-cli — Phase 1/2/3 container inspection, APU route planning & KV quant\n"
+        "apu-cli — Phase 1/2/3/4 container inspection, APU routing, KV quant & sync\n"
         "  apu-cli container-info <file> [--companion <gguf>] [--full-sha256]\n"
         "  apu-cli mem-estimate   <model.gguf> [--ctx N] [--kv-dtype f16|q8_0|q4_0]\n"
         "  apu-cli route-info     <model.gguf> [--apu-xclbin <PATH>] [--ctx N] [--kv-dtype f16|q8_0|q4_0]\n"
         "  apu-cli test-bridge    [--apu-verbose]\n"
         "  apu-cli test-npu       [<xclbin>] [--apu-verbose]\n"
-        "  apu-cli test-kv-quant  [--apu-verbose]\n");
+        "  apu-cli test-kv-quant  [--apu-verbose]\n"
+        "  apu-cli test-sync      [--apu-verbose]\n");
     return 2;
 }
 
@@ -794,6 +825,11 @@ int main(int argc,char**argv){
             bool verbose = false;
             for(int i=2; i<argc; i++) if(!strcmp(argv[i],"--apu-verbose") || !strcmp(argv[i],"-v")) verbose = true;
             return test_kv_quant(verbose);
+        }
+        if(cmd=="test-sync"){
+            bool verbose = false;
+            for(int i=2; i<argc; i++) if(!strcmp(argv[i],"--apu-verbose") || !strcmp(argv[i],"-v")) verbose = true;
+            return test_sync(verbose);
         }
         if(argc<3) return usage();
         std::string path=argv[2];

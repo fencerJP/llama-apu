@@ -5,6 +5,8 @@
 #include <string>
 #include <vector>
 #include <memory>
+#include <mutex>
+#include <chrono>
 
 // Hardware alignment constants per AIE2P (XDNA 2) architecture
 constexpr size_t APU_TILE_DMA_ALIGNMENT_BYTES = 16;  // 128-bit Tile DMA transfer beat
@@ -44,6 +46,42 @@ inline bool apu_is_tile_dma_aligned(uint64_t addr, size_t offset = 0) {
 inline bool apu_is_host_cache_aligned(const void * ptr, size_t offset = 0) {
     return ((reinterpret_cast<uintptr_t>(ptr) + offset) % APU_HOST_CACHE_ALIGNMENT_BYTES) == 0;
 }
+
+// Phase 4 §4.1: Sub-buffer Tile DMA chunk alignment & host cache alignment check
+inline bool apu_verify_subbuffer_alignment(uintptr_t base_addr, size_t offset, size_t size) {
+    if ((base_addr + offset) % APU_TILE_DMA_ALIGNMENT_BYTES != 0) return false;
+    if (offset % APU_TILE_DMA_ALIGNMENT_BYTES != 0) return false;
+    if ((size % APU_TILE_DMA_ALIGNMENT_BYTES) != 0) return false;
+    return true;
+}
+
+// Phase 4 §4.1: Zero-copy audit & tracking facility
+struct apu_zero_copy_stats {
+    uint64_t total_handoffs = 0;
+    uint64_t zero_copy_handoffs = 0;
+    uint64_t host_memcpy_bytes = 0;
+    uint64_t host_memcpy_count = 0;
+    uint64_t physical_alias_checks = 0;
+    uint64_t physical_alias_matches = 0;
+};
+
+class apu_zero_copy_tracker {
+public:
+    static apu_zero_copy_tracker & get();
+
+    void record_handoff(bool is_zero_copy, size_t bytes);
+    void record_host_memcpy(size_t bytes);
+    void record_alias_check(bool matches);
+    void reset();
+
+    apu_zero_copy_stats get_stats() const;
+    bool is_zero_copy_compliant() const;
+
+private:
+    apu_zero_copy_tracker() = default;
+    mutable std::mutex mutex_;
+    apu_zero_copy_stats stats_{};
+};
 
 // RAII wrapper for AMDGPU GEM buffer object allocated on /dev/dri/renderD*
 class apu_gem_buffer {
@@ -162,3 +200,32 @@ bool apu_run_bridge_smoke_test(bool verbose, apu_bridge_telemetry & telemetry, s
 
 // NPU execution validation (§2.4): XDNA/XRT ABI binding, XCLBIN loading, and deterministic known-pattern test
 bool apu_run_npu_validation_test(const std::string & xclbin_path, bool verbose, std::string & out_log);
+
+// Phase 4 §4.2: Explicit timeline latency profiling and multi-threaded stress
+struct apu_sync_profile_result {
+    uint32_t iterations = 0;
+    double avg_latency_us = 0.0;
+    double min_latency_us = 0.0;
+    double max_latency_us = 0.0;
+    double p99_latency_us = 0.0;
+    bool timeout_handled = false;
+    bool ordering_preserved = false;
+    bool concurrent_stress_passed = false;
+};
+
+bool apu_profile_timeline_sync(int drm_fd, uint32_t iterations, apu_sync_profile_result & out, bool verbose, std::string & out_log);
+
+// Phase 4: Full cross-APU memory and synchronization refinement audit (§4.1, §4.2)
+struct apu_phase4_audit_result {
+    bool zero_copy_passed = false;
+    bool physical_alias_passed = false;
+    bool tile_dma_alignment_passed = false;
+    bool async_sync_file_passed = false;
+    bool timeline_latency_passed = false;
+    bool concurrent_stress_passed = false;
+    double lpddr5x_bandwidth_gbps = 0.0;
+    apu_sync_profile_result sync_profile;
+    std::string report;
+};
+
+bool apu_run_phase4_refinement_audit(bool verbose, apu_phase4_audit_result & result, std::string & out_log);
