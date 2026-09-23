@@ -8,6 +8,7 @@
 #include "base64.hpp"
 
 #include "server-common.h"
+#include "ggml-apu-bridge.h"
 
 #include <random>
 #include <sstream>
@@ -100,6 +101,10 @@ json server_slot_stats::to_json() const {
         base["draft_n"]          = n_draft_tokens;
         base["draft_n_accepted"] = n_draft_accepted;
     }
+
+    const auto zc = apu_zero_copy_tracker::get().get_stats();
+    base["zero_copy_handoff"] = (zc.host_memcpy_count == 0 && zc.total_handoffs > 0);
+    base["host_memcpy_count"] = zc.host_memcpy_count;
 
     return base;
 }

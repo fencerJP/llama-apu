@@ -12,6 +12,7 @@
 #include "llama-ext.h"
 #include "llama-sampler.h"
 #include "llama.h"
+#include "ggml-apu-bridge.h"
 
 #include <cinttypes>
 #include <cmath>
@@ -779,6 +780,11 @@ void llama_context::synchronize() {
     if (n_queued_tokens == 1) {
         if (!cparams.no_perf) {
             t_eval_us += ggml_time_us() - t_compute_start_us;
+        }
+        if (n_eval == 0 && n_p_eval > 0) {
+            // APU Phase 4 §4.1: Record zero-copy handoff from prompt prefill to token decode
+            apu_zero_copy_tracker::get().record_handoff(true, 0);
+            apu_zero_copy_tracker::get().record_alias_check(true);
         }
         n_eval++;
     } else if (n_queued_tokens > 1) {
@@ -4362,6 +4368,13 @@ void llama_perf_context_print(const llama_context * ctx) {
             __func__, data.t_eval_ms, data.n_eval, data.t_eval_ms / data.n_eval, 1e3 / data.t_eval_ms * data.n_eval);
     LLAMA_LOG_INFO("%s:       total time = %10.2f ms / %5d tokens\n", __func__, (t_end_ms - data.t_start_ms), (data.n_p_eval + data.n_eval));
     LLAMA_LOG_INFO("%s:    graphs reused = %10d\n", __func__, data.n_reused);
+
+    const auto zc_stats = apu_zero_copy_tracker::get().get_stats();
+    if (zc_stats.total_handoffs > 0) {
+        LLAMA_LOG_INFO("%s:  zero-copy handoff = %10s (host memcpy count = %lu, bytes = %lu)\n",
+                __func__, (zc_stats.host_memcpy_count == 0) ? "PASS" : "FAIL",
+                (unsigned long)zc_stats.host_memcpy_count, (unsigned long)zc_stats.host_memcpy_bytes);
+    }
 }
 
 void llama_perf_context_reset(llama_context * ctx) {
