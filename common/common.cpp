@@ -9,6 +9,7 @@
 #include "sampling.h"
 #include "speculative.h"
 #include "unicode.h"
+#include "ggml-apu-kv.h"
 
 #include <algorithm>
 #include <cinttypes>
@@ -1393,6 +1394,20 @@ common_init_result::common_init_result(common_params & params, bool model_only) 
     if (params.sampling.backend_sampling) {
         cparams.samplers   = pimpl->samplers_seq_config.data();
         cparams.n_samplers = pimpl->samplers_seq_config.size();
+    }
+
+    // Phase 3 APU Dynamic KV Cache evaluation
+    if (params.no_kv_quant) {
+        cparams.type_k = GGML_TYPE_F16;
+        cparams.type_v = GGML_TYPE_F16;
+        LOG_INF("%s: APU dynamic KV quantization disabled (--no-kv-quant), using FP16 baseline\n", __func__);
+    } else {
+        apu_kv_mode_t req_mode = apu_kv_mode_from_string(params.kv_cache_type);
+        apu_kv_mode_t resolved_mode = req_mode;
+        std::string reason;
+        apu_evaluate_kv_quant_compatibility(model, req_mode, resolved_mode, reason);
+        LOG_INF("%s: APU dynamic KV evaluation: %s\n", __func__, reason.c_str());
+        apu_backend_enable_kv_quant(&cparams, resolved_mode);
     }
 
     llama_context * lctx = llama_init_from_model(model, cparams);

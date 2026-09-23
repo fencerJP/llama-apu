@@ -42,6 +42,7 @@ set(LLAMA_CORE_SOURCES
     unicode-data.cpp
     unicode.cpp
     ggml-apu-bridge.cpp
+    ggml-apu-kv.cpp
 )
 
 add_library(llama
