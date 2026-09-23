@@ -7,6 +7,7 @@
 #include "console.h"
 
 #include "json.h"
+#include "ggml-apu-bridge.h"
 
 #include <algorithm>
 #include <cctype>
@@ -648,10 +649,13 @@ int cli_context::run() {
         }
 
         if (params.show_timings) {
+            const auto zc = apu_zero_copy_tracker::get().get_stats();
             ui::show_info(string_format(
-                "\n[ Prompt: %.1f t/s | Generation: %.1f t/s ]",
+                "\n[ Prompt: %.1f t/s | Generation: %.1f t/s | Zero-copy handoff: %s (host memcpy: %lu) ]",
                 timings.prompt_per_second,
-                timings.predicted_per_second
+                timings.predicted_per_second,
+                (zc.host_memcpy_count == 0 && zc.total_handoffs > 0) ? "PASS" : "OK",
+                (unsigned long)zc.host_memcpy_count
             ));
         }
 
