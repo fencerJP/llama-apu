@@ -159,3 +159,6 @@ private:
 
 // Physical hardware bridge smoke test runner
 bool apu_run_bridge_smoke_test(bool verbose, apu_bridge_telemetry & telemetry, std::string & out_log);
+
+// NPU execution validation (§2.4): XDNA/XRT ABI binding, XCLBIN loading, and deterministic known-pattern test
+bool apu_run_npu_validation_test(const std::string & xclbin_path, bool verbose, std::string & out_log);

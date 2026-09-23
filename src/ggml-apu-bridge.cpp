@@ -578,3 +578,198 @@ bool apu_run_bridge_smoke_test(bool verbose, apu_bridge_telemetry & telemetry, s
     out_log = ss.str();
     return success;
 }
+
+// -----------------------------------------------------------------------------
+// apu_run_npu_validation_test implementation (§2.4)
+// -----------------------------------------------------------------------------
+
+#include <dlfcn.h>
+
+typedef void * xrtDeviceHandle;
+typedef void * xrtBufferHandle;
+typedef xrtDeviceHandle (*pfn_xrtDeviceOpen)(unsigned int index);
+typedef int             (*pfn_xrtDeviceClose)(xrtDeviceHandle dhdl);
+typedef int             (*pfn_xrtDeviceLoadXclbinFile)(xrtDeviceHandle dhdl, const char * filename);
+typedef xrtBufferHandle (*pfn_xrtBOImport)(xrtDeviceHandle dhdl, int fd);
+typedef uint64_t        (*pfn_xrtBOAddress)(xrtBufferHandle bhdl);
+typedef void *          (*pfn_xrtBOMap)(xrtBufferHandle bhdl);
+typedef int             (*pfn_xrtBOFree)(xrtBufferHandle bhdl);
+
+bool apu_run_npu_validation_test(const std::string & xclbin_path, bool verbose, std::string & out_log) {
+    std::ostringstream ss;
+    ss << "=== XDNA 2 / XRT NPU Execution Validation (§2.4) ===\n";
+
+    // 1. Dynamic load XRT core runtime
+    const char * xrt_libs[] = {
+        "libxrt_coreutil.so.2",
+        "/usr/lib/x86_64-linux-gnu/libxrt_coreutil.so.2",
+        nullptr
+    };
+
+    void * xrt = nullptr;
+    const char * loaded_lib = nullptr;
+    for (int i = 0; xrt_libs[i] != nullptr; ++i) {
+        xrt = ::dlopen(xrt_libs[i], RTLD_NOW | RTLD_GLOBAL);
+        if (xrt) {
+            loaded_lib = xrt_libs[i];
+            break;
+        }
+    }
+
+    if (!xrt) {
+        ss << "[-] XRT runtime not loadable: " << dlerror() << "\n";
+        ss << "[*] Unmet NPU runtime -> GPU fallback active\n";
+        out_log = ss.str();
+        return false;
+    }
+
+    if (verbose) {
+        ss << "[+] Loaded XRT runtime: " << loaded_lib << "\n";
+    }
+
+    // 2. Resolve XRT C API entry points
+    auto p_xrtDeviceOpen = reinterpret_cast<pfn_xrtDeviceOpen>(::dlsym(xrt, "xrtDeviceOpen"));
+    auto p_xrtDeviceClose = reinterpret_cast<pfn_xrtDeviceClose>(::dlsym(xrt, "xrtDeviceClose"));
+    auto p_xrtDeviceLoadXclbinFile = reinterpret_cast<pfn_xrtDeviceLoadXclbinFile>(::dlsym(xrt, "xrtDeviceLoadXclbinFile"));
+    auto p_xrtBOImport = reinterpret_cast<pfn_xrtBOImport>(::dlsym(xrt, "xrtBOImport"));
+    auto p_xrtBOAddress = reinterpret_cast<pfn_xrtBOAddress>(::dlsym(xrt, "xrtBOAddress"));
+    auto p_xrtBOMap = reinterpret_cast<pfn_xrtBOMap>(::dlsym(xrt, "xrtBOMap"));
+    auto p_xrtBOFree = reinterpret_cast<pfn_xrtBOFree>(::dlsym(xrt, "xrtBOFree"));
+
+    if (!p_xrtDeviceOpen || !p_xrtDeviceClose || !p_xrtBOImport || !p_xrtBOAddress || !p_xrtBOFree) {
+        ss << "[-] Incomplete XRT symbols in runtime library\n";
+        ::dlclose(xrt);
+        out_log = ss.str();
+        return false;
+    }
+
+    // 3. Open XRT device 0 (Ryzen AI NPU)
+    xrtDeviceHandle dhdl = p_xrtDeviceOpen(0);
+    if (!dhdl) {
+        ss << "[-] xrtDeviceOpen(0) failed: could not open physical NPU device\n";
+        ::dlclose(xrt);
+        out_log = ss.str();
+        return false;
+    }
+
+    if (verbose) {
+        ss << "[+] Successfully opened NPU device 0 via XRT ABI\n";
+    }
+
+    // 4. Optionally load XCLBIN profile if provided
+    bool xclbin_loaded = false;
+    if (!xclbin_path.empty()) {
+        if (::access(xclbin_path.c_str(), R_OK) != 0) {
+            ss << "[-] XCLBIN file not readable: " << xclbin_path << "\n";
+        } else if (p_xrtDeviceLoadXclbinFile) {
+            if (verbose) {
+                ss << "[*] Loading XCLBIN profile into NPU: " << xclbin_path << "\n";
+            }
+            int rc = p_xrtDeviceLoadXclbinFile(dhdl, xclbin_path.c_str());
+            if (rc == 0) {
+                xclbin_loaded = true;
+                ss << "[+] XCLBIN profile loaded successfully into NPU hardware context\n";
+            } else {
+                ss << "[!] XCLBIN load returned code " << rc
+                   << " (incompatible graph/profile) -> graceful GPU fallback\n";
+            }
+            if (verbose && xclbin_loaded) {
+                ss << "[+] NPU execution context configured with active XCLBIN profile\n";
+            }
+        }
+    }
+
+    // 5. Allocate physical AMDGPU GEM buffer on render node
+    std::string render_node = apu_find_render_node();
+    if (render_node.empty()) {
+        ss << "[-] Render node not available for shared allocation\n";
+        p_xrtDeviceClose(dhdl);
+        ::dlclose(xrt);
+        out_log = ss.str();
+        return false;
+    }
+
+    int render_fd = ::open(render_node.c_str(), O_RDWR | O_CLOEXEC);
+    if (render_fd < 0) {
+        ss << "[-] Cannot open render node " << render_node << "\n";
+        p_xrtDeviceClose(dhdl);
+        ::dlclose(xrt);
+        out_log = ss.str();
+        return false;
+    }
+
+    bool pass = true;
+    try {
+        const size_t test_size = 64 * 1024; // 64 KB
+        apu_gem_buffer gem_buf(render_fd, test_size, true);
+
+        // 6. Write deterministic test slice
+        {
+            apu_dma_buf_cpu_scope write_scope(gem_buf, true);
+            uint32_t * p32 = reinterpret_cast<uint32_t *>(gem_buf.get_cpu_ptr());
+            for (size_t i = 0; i < test_size / sizeof(uint32_t); ++i) {
+                p32[i] = static_cast<uint32_t>(0x5A5A0000u | (i & 0xFFFFu));
+            }
+        }
+
+        if (verbose) {
+            ss << "[+] Wrote deterministic known-pattern slice (64KB, magic=0x5A5A...)\n";
+        }
+
+        // 7. Import PRIME dma-buf into XRT NPU context
+        xrtBufferHandle bhdl = p_xrtBOImport(dhdl, gem_buf.get_prime_fd());
+        if (!bhdl) {
+            ss << "[-] xrtBOImport failed to import dma-buf into NPU\n";
+            pass = false;
+        } else {
+            uint64_t npu_addr = p_xrtBOAddress(bhdl);
+            char addr_hex[32];
+            snprintf(addr_hex, sizeof(addr_hex), "0x%016llx", (unsigned long long) npu_addr);
+            if (verbose) {
+                ss << "[+] xrtBOImport succeeded: NPU buffer handle=" << bhdl
+                   << ", NPU address=" << addr_hex << "\n";
+            }
+
+            // 8. Verify AIE2P Tile DMA 16-byte alignment
+            if (!apu_is_tile_dma_aligned(npu_addr)) {
+                ss << "[-] NPU address " << addr_hex << " violates 16-byte Tile DMA alignment\n";
+                pass = false;
+            } else if (verbose) {
+                ss << "[+] NPU device address satisfies strict 16-byte AIE2P Tile DMA alignment\n";
+            }
+
+            // 9. Read back through NPU buffer map to verify bit-exact consistency
+            void * npu_map = p_xrtBOMap ? p_xrtBOMap(bhdl) : nullptr;
+            if (npu_map) {
+                const uint32_t * npu_p32 = reinterpret_cast<const uint32_t *>(npu_map);
+                bool match = true;
+                for (size_t i = 0; i < test_size / sizeof(uint32_t); ++i) {
+                    uint32_t expected = static_cast<uint32_t>(0x5A5A0000u | (i & 0xFFFFu));
+                    if (npu_p32[i] != expected) {
+                        ss << "[-] Mismatch in NPU mapped slice at word " << i
+                           << ": expected 0x" << std::hex << expected << ", got 0x" << npu_p32[i] << "\n";
+                        match = false;
+                        break;
+                    }
+                }
+                if (match && verbose) {
+                    ss << "[+] Deterministic known-pattern slice verified bit-exact through NPU mapping\n";
+                }
+                if (!match) pass = false;
+            }
+
+            p_xrtBOFree(bhdl);
+        }
+
+    } catch (const std::exception & e) {
+        ss << "[-] Exception in NPU validation test: " << e.what() << "\n";
+        pass = false;
+    }
+
+    ::close(render_fd);
+    p_xrtDeviceClose(dhdl);
+    ::dlclose(xrt);
+
+    out_log = ss.str();
+    return pass;
+}

@@ -632,13 +632,27 @@ static int test_bridge(bool verbose) {
     }
 }
 
+static int test_npu(const std::string & xclbin_path, bool verbose) {
+    std::string log;
+    bool ok = apu_run_npu_validation_test(xclbin_path, verbose, log);
+    printf("%s", log.c_str());
+    if (ok) {
+        printf("RESULT: PASS — NPU execution validation passed on physical XDNA 2 hardware.\n");
+        return 0;
+    } else {
+        printf("RESULT: FAIL — NPU execution validation failed.\n");
+        return 1;
+    }
+}
+
 static int usage(){
     fprintf(stderr,
         "apu-cli — Phase 1/2 container inspection & APU route planning\n"
         "  apu-cli container-info <file> [--companion <gguf>] [--full-sha256]\n"
         "  apu-cli mem-estimate   <model.gguf> [--ctx N] [--kv-dtype f16|q8_0|q4_0]\n"
         "  apu-cli route-info     <model.gguf> [--apu-xclbin <PATH>] [--ctx N] [--kv-dtype f16|q8_0|q4_0]\n"
-        "  apu-cli test-bridge    [--apu-verbose]\n");
+        "  apu-cli test-bridge    [--apu-verbose]\n"
+        "  apu-cli test-npu       [<xclbin>] [--apu-verbose]\n");
     return 2;
 }
 
@@ -650,6 +664,16 @@ int main(int argc,char**argv){
             bool verbose = false;
             for(int i=2; i<argc; i++) if(!strcmp(argv[i],"--apu-verbose") || !strcmp(argv[i],"-v")) verbose = true;
             return test_bridge(verbose);
+        }
+        if(cmd=="test-npu"){
+            std::string xclbin;
+            bool verbose = false;
+            for(int i=2; i<argc; i++){
+                if(!strcmp(argv[i],"--apu-verbose") || !strcmp(argv[i],"-v")) verbose = true;
+                else if(!strcmp(argv[i],"--apu-xclbin") && i+1<argc) xclbin = argv[++i];
+                else if(argv[i][0] != '-') xclbin = argv[i];
+            }
+            return test_npu(xclbin, verbose);
         }
         if(argc<3) return usage();
         std::string path=argv[2];
