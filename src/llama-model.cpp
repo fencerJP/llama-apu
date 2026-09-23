@@ -344,6 +344,8 @@ static llama_model * llama_model_mapping(llm_arch arch, const llama_model_params
             return new llama_model_step35(params);
         case LLM_ARCH_SPARK2_5:
             return new llama_model_spark2_5(params);
+        case LLM_ARCH_K2_HORIZON:
+            return new llama_model_k2_horizon(params);
         default:
             throw std::runtime_error(std::string("unsupported model architecture: '") + llm_arch_name(arch) + "'");
     }
@@ -1453,12 +1455,17 @@ bool llama_model_base::load_tensors(llama_model_loader & ml) {
     }
 
     // resolve AUTO on systems without mmap support (e.g. iGPUs): fall back to OFF; see #28160
+    // AMD APU iGPUs (unified memory, e.g. gfx1150/gfx1151) are typed GGML_BACKEND_DEVICE_TYPE_IGPU and
+    // report mmap_support=false, so lazy tensor loading — which would page-fault per row through the
+    // unified memory bus — is disabled by default here (phase-2 §2.1, issue #28326 page-fault stalls).
     if (ml.lazy.mode == LLAMA_LAZY_MODE_AUTO) {
         for (const auto & dev : devices) {
             ggml_backend_dev_props props;
             ggml_backend_dev_get_props(dev.dev, &props);
             if (!props.caps.mmap_support) {
                 ml.lazy.mode = LLAMA_LAZY_MODE_OFF;
+                LLAMA_LOG_INFO("%s: lazy tensor loading disabled (device '%s' has no mmap support: iGPU/unified memory)\n",
+                    __func__, props.name);
                 break;
             }
         }
@@ -3045,6 +3052,7 @@ llama_rope_type llama_model_rope_type(const llama_model * model) {
         case LLM_ARCH_STEP35:
         case LLM_ARCH_SPARK2_5:
         case LLM_ARCH_TALKIE:
+        case LLM_ARCH_K2_HORIZON:
         case LLM_ARCH_MELLUM:
         case LLM_ARCH_MAPLE:
         case LLM_ARCH_HRM_TEXT:

@@ -231,6 +231,8 @@ class ModelBase:
 
         prefix = "model" if not self.is_mistral_format else "consolidated"
         part_names: list[str] = ModelBase.get_model_part_names(self.dir_model, prefix, ".safetensors")
+        if not part_names and not self.is_mistral_format:
+            part_names = ModelBase.get_model_part_names(self.dir_model, "pytorch_model", ".safetensors")
         is_safetensors: bool = len(part_names) > 0
         if not is_safetensors:
             part_names = ModelBase.get_model_part_names(self.dir_model, "pytorch_model", ".bin")
@@ -1663,6 +1665,12 @@ class TextModel(ModelBase):
         if chkhsh == "9e454714343b69b99b71795c1d27a68c2a1d15dab111f4d353109f966af29da7":
             # ref: https://huggingface.co/LiquidAI/LFM2.5-8B-A1B
             res = "lfm2"
+        if chkhsh == "1f9825a388f700a6b591722f17d470cbbcf10973ece35d2fd14239a14110ae1a":
+            # ref: https://huggingface.co/IFM/K2-Horizon-0.9B
+            res = "k2-horizon"
+        if chkhsh == "a9af07a84191f55098b248ae6f3dfe9e32d3190bebe8eafd91c1ddec9bc3449f":
+            # ref: https://huggingface.co/IFM/K2-Horizon-36B
+            res = "k2-horizon"
         if chkhsh == "846deafc5b0fa786186fa4ae6c7b49903cf2f1d1895bdb80b9120d60be135252":
             # ref: https://huggingface.co/danish-foundation-models/DFM-Mimir
             res = "gemma4"
