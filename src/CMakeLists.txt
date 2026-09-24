@@ -46,6 +46,7 @@ set(LLAMA_CORE_SOURCES
     ggml-apu-moe.cpp
     ggml-apu-spec.cpp
     ggml-apu-lowquant.cpp
+    ggml-apu-xclbin.cpp
 )
 
 add_library(llama
