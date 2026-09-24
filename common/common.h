@@ -497,6 +497,9 @@ struct common_params {
         bool preset_gpu      = false; // --gpu-based
         bool preset_cpu      = false; // --cpu-based
         bool preset_npu      = false; // --npu-based
+        std::string router_sram          = "auto"; // --router-sram {on,off,auto}
+        int32_t     router_sram_limit_mb = 32;     // --router-sram-limit-mb <MB> (default: 32MB)
+        bool        no_router_sram       = false;  // --no-router-sram
     } apu;
 
     common_cpu_params cpuparams;
