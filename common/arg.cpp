@@ -11,6 +11,7 @@
 #include "sampling.h"
 #include "speculative.h"
 #include "preset.h"
+#include "ggml-apu-moe.h"
 
 // fix problem with std::min and std::max
 #if defined(_WIN32)
@@ -1324,6 +1325,16 @@ static void apu_route_resolve(common_params & params) {
             (int) params.n_gpu_layers, apu.xclbin.empty() ? "auto-discovery" : apu.xclbin.c_str());
         LOG_INF("apu: dma-buf/fence telemetry lands with phase-2 §2.3; see `llama-apu-cli route-info` for capability evidence\n");
     }
+
+    // APU Phase 5 §5.2: Configure MoE router SRAM pinning
+    apu_moe_router_mode moe_mode = APU_MOE_ROUTER_AUTO;
+    if (apu.no_router_sram || apu.router_sram == "off") {
+        moe_mode = APU_MOE_ROUTER_OFF;
+    } else if (apu.router_sram == "on") {
+        moe_mode = APU_MOE_ROUTER_ON;
+    }
+    apu_moe_router_manager::get().set_mode(moe_mode);
+    apu_moe_router_manager::get().set_sram_limit_mb(apu.router_sram_limit_mb);
 }
 
 bool common_params_parse(int argc, char ** argv, common_params & params, llama_example ex, void(*print_usage)(int, char **)) {
@@ -2867,6 +2878,36 @@ common_params_context common_params_parser_init(common_params & params, llama_ex
             params.apu.verbose = true;
         }
     ).set_env("LLAMA_ARG_APU_VERBOSE"));
+    add_opt(common_arg(
+        {"--router-sram"}, "MODE",
+        "APU MoE router SRAM pinning mode: auto|on|off (default: auto)\n"
+        "pins router gating matrices (W_gate) into on-chip AIE2P tile SRAM when within budget",
+        [](common_params & params, const std::string & value) {
+            if (value != "auto" && value != "on" && value != "off") {
+                throw std::invalid_argument("invalid --router-sram value (expected: auto, on, or off)");
+            }
+            params.apu.router_sram = value;
+            if (value == "off") {
+                params.apu.no_router_sram = true;
+            }
+        }
+    ).set_env("LLAMA_ARG_ROUTER_SRAM"));
+    add_opt(common_arg(
+        {"--router-sram-limit-mb"}, "MB",
+        "APU MoE router on-chip SRAM capacity limit in megabytes (default: 32)\n"
+        "when total router footprint exceeds this limit in auto mode, safely falls back to DRAM",
+        [](common_params & params, const std::string & value) {
+            params.apu.router_sram_limit_mb = std::stoi(value);
+        }
+    ).set_env("LLAMA_ARG_ROUTER_SRAM_LIMIT_MB"));
+    add_opt(common_arg(
+        {"--no-router-sram"},
+        "disable APU MoE router SRAM pinning (forces all router matrices into UMA DRAM)",
+        [](common_params & params) {
+            params.apu.no_router_sram = true;
+            params.apu.router_sram = "off";
+        }
+    ).set_env("LLAMA_ARG_NO_ROUTER_SRAM"));
     add_opt(common_arg(
         {"--numa"}, "TYPE",
         "attempt optimizations that help on some NUMA systems\n"

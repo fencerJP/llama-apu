@@ -24,6 +24,7 @@
 
 #include "ggml.h"
 #include "ggml-cpp.h"
+#include "ggml-apu-moe.h"
 
 #include <algorithm>
 #include <cassert>
@@ -1885,6 +1886,10 @@ bool llama_model_base::load_tensors(llama_model_loader & ml) {
             pimpl->mappings.emplace_back(std::move(mapping));
         }
     }
+
+    // APU Phase 5 §5.1-§5.3: MoE router matrix isolation and AIE2P SRAM pinning
+    apu_moe_router_manager::get().evaluate_model(*this);
+    apu_moe_router_manager::get().pin_router_matrices(*this);
 
     return true;
 }

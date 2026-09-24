@@ -616,6 +616,7 @@ static int route_info(const std::string & path, const std::string & explicit_xcl
     return 0;
 }
 #include "ggml-apu-bridge.h"
+#include "ggml-apu-moe.h"
 
 static int test_bridge(bool verbose) {
     apu_bridge_telemetry telem{};
@@ -789,16 +790,35 @@ static int test_sync(bool verbose) {
     return 1;
 }
 
+static int test_moe_router(const std::string & model_path, apu_moe_router_mode mode, int32_t limit_mb, bool verbose) {
+    printf("llama-apu MoE router test (§5.1-§5.3 Router Isolation & SRAM Pinning):\n");
+    std::string path = model_path;
+    if (path.empty()) {
+        path = "/opt/models/occamy-1.0/occamy-ai_occamy-1.0-IQ4_NL.gguf";
+    }
+    apu_moe_router_info info{};
+    std::string log;
+    bool ok = apu_audit_moe_router(path, mode, limit_mb, verbose, info, log);
+    printf("%s", log.c_str());
+    if (!ok) {
+        printf("RESULT: FAIL — MoE router audit failed.\n");
+        return 1;
+    }
+    printf("RESULT: PASS — MoE router isolation & SRAM pinning (§5.1-§5.3) validated.\n");
+    return 0;
+}
+
 static int usage(){
     fprintf(stderr,
-        "apu-cli — Phase 1/2/3/4 container inspection, APU routing, KV quant & sync\n"
+        "apu-cli — Phase 1/2/3/4/5 container inspection, APU routing, KV quant, sync & MoE\n"
         "  apu-cli container-info <file> [--companion <gguf>] [--full-sha256]\n"
         "  apu-cli mem-estimate   <model.gguf> [--ctx N] [--kv-dtype f16|q8_0|q4_0]\n"
         "  apu-cli route-info     <model.gguf> [--apu-xclbin <PATH>] [--ctx N] [--kv-dtype f16|q8_0|q4_0]\n"
         "  apu-cli test-bridge    [--apu-verbose]\n"
         "  apu-cli test-npu       [<xclbin>] [--apu-verbose]\n"
         "  apu-cli test-kv-quant  [--apu-verbose]\n"
-        "  apu-cli test-sync      [--apu-verbose]\n");
+        "  apu-cli test-sync      [--apu-verbose]\n"
+        "  apu-cli test-moe-router [<model.gguf>] [--router-sram on|off|auto] [--router-sram-limit-mb N] [--apu-verbose]\n");
     return 2;
 }
 
@@ -830,6 +850,25 @@ int main(int argc,char**argv){
             bool verbose = false;
             for(int i=2; i<argc; i++) if(!strcmp(argv[i],"--apu-verbose") || !strcmp(argv[i],"-v")) verbose = true;
             return test_sync(verbose);
+        }
+        if(cmd=="test-moe-router"){
+            std::string path;
+            apu_moe_router_mode mode = APU_MOE_ROUTER_AUTO;
+            int32_t limit_mb = 32;
+            bool verbose = false;
+            for(int i=2; i<argc; i++){
+                if(!strcmp(argv[i],"--apu-verbose") || !strcmp(argv[i],"-v")) verbose = true;
+                else if(!strcmp(argv[i],"--router-sram") && i+1<argc) {
+                    std::string m = argv[++i];
+                    if (m == "on") mode = APU_MOE_ROUTER_ON;
+                    else if (m == "off") mode = APU_MOE_ROUTER_OFF;
+                    else mode = APU_MOE_ROUTER_AUTO;
+                }
+                else if(!strcmp(argv[i],"--router-sram-limit-mb") && i+1<argc) limit_mb = std::atoi(argv[++i]);
+                else if(!strcmp(argv[i],"--no-router-sram")) mode = APU_MOE_ROUTER_OFF;
+                else if(argv[i][0] != '-') path = argv[i];
+            }
+            return test_moe_router(path, mode, limit_mb, verbose);
         }
         if(argc<3) return usage();
         std::string path=argv[2];
