@@ -390,3 +390,7 @@ target_link_libraries(test-apu-sync PRIVATE llama)
 llama_build_and_test(test-apu-moe.cpp)
 target_include_directories(test-apu-moe PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/../src)
 target_link_libraries(test-apu-moe PRIVATE llama)
+
+llama_build_and_test(test-apu-spec.cpp)
+target_include_directories(test-apu-spec PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/../src)
+target_link_libraries(test-apu-spec PRIVATE llama)
