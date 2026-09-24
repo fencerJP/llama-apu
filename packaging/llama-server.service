@@ -1,0 +1,22 @@
+[Unit]
+Description=llama-apu Heterogeneous APU Inference Service
+After=network.target
+
+[Service]
+Type=simple
+User=fencer
+Environment=LLAMA_ARG_PORT=8080
+Environment=LLAMA_ARG_HOST=0.0.0.0
+Environment=LLAMA_ARG_MODEL=/opt/models/default.gguf
+Environment=LLAMA_ARG_CTX_SIZE=4096
+Environment=LLAMA_ARG_DECODE=npu
+Environment=LLAMA_ARG_PREFILL=gpu
+Environment=LLAMA_ARG_TOKENIZE=cpu
+Environment=LLAMA_ARG_ROUTER_SRAM=auto
+ExecStart=/usr/local/bin/llama-server
+Restart=always
+RestartSec=3
+LimitMEMLOCK=infinity
+
+[Install]
+WantedBy=multi-user.target

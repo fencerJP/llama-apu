@@ -945,9 +945,138 @@ static int test_lowquant(bool verbose) {
 #include "ggml-apu-xclbin.h"
 #include "ggml-apu-convert.h"
 
+static int apu_doctor(bool verbose) {
+    printf("===================================================================\n");
+    printf("               llama-apu: Hardware & System Diagnostic Doctor      \n");
+    printf("===================================================================\n\n");
+
+    int issues = 0;
+    int warnings = 0;
+
+    // 1. AMD XDNA NPU Driver & Node
+    printf("[*] Checking AMD XDNA NPU Accelerator...\n");
+    const char * accel_node = "/dev/accel/accel0";
+    if (access(accel_node, F_OK) == 0) {
+        if (access(accel_node, R_OK | W_OK) == 0) {
+            printf("    [PASS] Device node %s is accessible (read/write)\n", accel_node);
+        } else {
+            printf("    [WARN] Device node %s exists but lacks read/write permissions for current user\n", accel_node);
+            warnings++;
+        }
+        struct stat st{};
+        if (stat("/sys/module/amdxdna", &st) == 0) {
+            printf("    [PASS] Kernel driver 'amdxdna' is loaded\n");
+        } else {
+            printf("    [INFO] Kernel driver module sysfs not at /sys/module/amdxdna\n");
+        }
+    } else {
+        printf("    [WARN] Device node %s not found (NPU disabled in BIOS or amdxdna module not loaded)\n", accel_node);
+        warnings++;
+    }
+
+    // 2. AMDGPU DRM Render Node
+    printf("\n[*] Checking AMD GPU DRM Render Node (GEM / PRIME dma-buf)...\n");
+    const char * render_node = "/dev/dri/renderD128";
+    if (access(render_node, F_OK) == 0) {
+        if (access(render_node, R_OK | W_OK) == 0) {
+            printf("    [PASS] Device node %s is accessible (read/write)\n", render_node);
+        } else {
+            printf("    [WARN] Device node %s exists but lacks read/write permissions\n", render_node);
+            warnings++;
+        }
+    } else {
+        printf("    [FAIL] Device node %s not found! GPU acceleration unavailable.\n", render_node);
+        issues++;
+    }
+
+    // 3. AMD KFD Compute Node
+    printf("\n[*] Checking AMD KFD Compute Interface (ROCm / HIP)...\n");
+    const char * kfd_node = "/dev/kfd";
+    if (access(kfd_node, F_OK) == 0) {
+        if (access(kfd_node, R_OK | W_OK) == 0) {
+            printf("    [PASS] Device node %s is accessible (read/write)\n", kfd_node);
+        } else {
+            printf("    [WARN] Device node %s exists but lacks read/write permissions\n", kfd_node);
+            warnings++;
+        }
+    } else {
+        printf("    [WARN] Device node %s not found\n", kfd_node);
+        warnings++;
+    }
+
+    // 4. AMD XRT Runtime Library
+    printf("\n[*] Checking AMD XRT Runtime Environment...\n");
+    void * xrt_lib = dlopen("libxrt_coreutil.so.2", RTLD_NOW | RTLD_LOCAL);
+    if (!xrt_lib) xrt_lib = dlopen("/opt/xilinx/xrt/lib/libxrt_coreutil.so.2", RTLD_NOW | RTLD_LOCAL);
+    if (!xrt_lib) xrt_lib = dlopen("/usr/lib/libxrt_coreutil.so.2", RTLD_NOW | RTLD_LOCAL);
+    if (xrt_lib) {
+        printf("    [PASS] AMD XRT core library 'libxrt_coreutil.so.2' dynamically loaded\n");
+        typedef unsigned int (*xrt_probe_fn)();
+        xrt_probe_fn probe = (xrt_probe_fn)dlsym(xrt_lib, "xrtDeviceProbe");
+        if (probe) {
+            unsigned int c = probe();
+            printf("    [PASS] XRT physical devices detected: %u\n", c);
+        }
+        dlclose(xrt_lib);
+    } else {
+        printf("    [INFO] AMD XRT library 'libxrt_coreutil.so.2' not found in system search paths (GPU fallback active)\n");
+    }
+
+    // 5. System Memory & UMA Allocation
+    printf("\n[*] Checking Memory Subsystem & UMA Headroom...\n");
+    FILE * f_mem = fopen("/proc/meminfo", "r");
+    if (f_mem) {
+        char line[256];
+        double total_gb = 0, avail_gb = 0;
+        while (fgets(line, sizeof(line), f_mem)) {
+            if (sscanf(line, "MemTotal: %lf", &total_gb) == 1) total_gb /= (1024 * 1024);
+            else if (sscanf(line, "MemAvailable: %lf", &avail_gb) == 1) avail_gb /= (1024 * 1024);
+        }
+        fclose(f_mem);
+        printf("    [PASS] System RAM: %.1f GB Total, %.1f GB Available\n", total_gb, avail_gb);
+        if (total_gb >= 32.0) {
+            printf("    [PASS] UMA memory pool exceeds standard APU capacity threshold\n");
+        }
+    }
+
+    // 6. XCLBIN Profile Search Paths
+    printf("\n[*] Inspecting Hardware Graph Profile (XCLBIN) Tier Registries...\n");
+    const char * h = getenv("HOME");
+    std::string home_dir = h ? h : "/home/fencer";
+    std::string tier3_path = home_dir + "/.local/share/llama-apu/xclbins";
+    struct stat st_t3{};
+    if (stat(tier3_path.c_str(), &st_t3) == 0 && S_ISDIR(st_t3.st_mode)) {
+        size_t profile_count = 0;
+        DIR * d = opendir(tier3_path.c_str());
+        if (d) {
+            struct dirent * de;
+            while ((de = readdir(d))) {
+                if (de->d_name[0] != '.') profile_count++;
+            }
+            closedir(d);
+        }
+        printf("    [PASS] Tier 3 User Registry: %s (%zu profiles active)\n", tier3_path.c_str(), profile_count);
+    } else {
+        printf("    [INFO] Tier 3 User Registry not created yet (%s)\n", tier3_path.c_str());
+    }
+
+    // Summary
+    printf("\n===================================================================\n");
+    if (issues == 0 && warnings == 0) {
+        printf("  DOCTOR VERDICT: ALL SYSTEMS HEALTHY (Physical APU ready)\n");
+    } else if (issues == 0) {
+        printf("  DOCTOR VERDICT: SYSTEM OPERATIONAL (%d warnings noted)\n", warnings);
+    } else {
+        printf("  DOCTOR VERDICT: ATTENTION REQUIRED (%d critical issues, %d warnings)\n", issues, warnings);
+    }
+    printf("===================================================================\n");
+    return issues > 0 ? 1 : 0;
+}
+
 static int usage(){
     fprintf(stderr,
-        "apu-cli — Phase 1/2/3/4/5/6/7/7.1/7.2 container inspection, APU routing, KV quant, sync, MoE, speculative decoding, low-quant, XCLBIN synthesis & pipeline\n"
+        "apu-cli — Phase 1/2/3/4/5/6/7/7.1/7.2/8 container inspection, APU routing, KV quant, sync, MoE, speculative decoding, low-quant, XCLBIN synthesis & doctor\n"
+        "  apu-cli apu-doctor     [--verbose]\n"
         "  apu-cli container-info <file> [--companion <gguf>] [--full-sha256]\n"
         "  apu-cli mem-estimate   <model.gguf> [--ctx N] [--kv-dtype f16|q8_0|q4_0]\n"
         "  apu-cli route-info     <model.gguf> [--apu-xclbin <PATH>] [--ctx N] [--kv-dtype f16|q8_0|q4_0]\n"
@@ -969,6 +1098,11 @@ int main(int argc,char**argv){
     if(argc<2) return usage();
     try {
         std::string cmd=argv[1];
+        if(cmd=="apu-doctor" || cmd=="doctor"){
+            bool verbose = false;
+            for(int i=2; i<argc; i++) if(!strcmp(argv[i],"--apu-verbose") || !strcmp(argv[i],"-v")) verbose = true;
+            return apu_doctor(verbose);
+        }
         if(cmd=="test-bridge"){
             bool verbose = false;
             for(int i=2; i<argc; i++) if(!strcmp(argv[i],"--apu-verbose") || !strcmp(argv[i],"-v")) verbose = true;

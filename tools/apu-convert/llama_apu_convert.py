@@ -218,14 +218,18 @@ def synthesize_and_package_q4nx(
 
     struct.pack_into("<QQQQQQ", header, 64, xclbin_off, xclbin_size, table_off, entries, payload_off, payload_size)
 
-    with open(output_q4nx_path, "wb") as f:
+    tmp_q4nx = output_q4nx_path.with_suffix(f".tmp.{os.getpid()}")
+    with open(tmp_q4nx, "wb") as f:
         f.write(header)
         f.write(xclbin_bytes)
         pad = payload_off - (256 + xclbin_size)
         if pad > 0:
             f.write(b"\x00" * pad)
+        f.flush()
+        os.fsync(f.fileno())
+    os.replace(tmp_q4nx, output_q4nx_path)
 
-    print(f"[+] Packaged linked companion sidecar: {output_q4nx_path} ({os.path.getsize(output_q4nx_path)} bytes)")
+    print(f"[+] Packaged linked companion sidecar (atomic): {output_q4nx_path} ({os.path.getsize(output_q4nx_path)} bytes)")
 
     # 3. Register into Tier 3 ($HOME/.local/share/llama-apu/xclbins/<key>/)
     user_xclbin_base = Path.home() / ".local" / "share" / "llama-apu" / "xclbins"
