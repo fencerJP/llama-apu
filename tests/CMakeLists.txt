@@ -398,3 +398,8 @@ target_link_libraries(test-apu-spec PRIVATE llama)
 llama_build_and_test(test-apu-lowquant.cpp)
 target_include_directories(test-apu-lowquant PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/../src)
 target_link_libraries(test-apu-lowquant PRIVATE llama)
+
+llama_build_and_test(test-apu-xclbin.cpp)
+target_include_directories(test-apu-xclbin PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/../src)
+target_link_libraries(test-apu-xclbin PRIVATE llama)
+

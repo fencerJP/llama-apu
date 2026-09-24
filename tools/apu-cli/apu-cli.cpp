@@ -942,19 +942,23 @@ static int test_lowquant(bool verbose) {
     return 0;
 }
 
+#include "ggml-apu-xclbin.h"
+
 static int usage(){
     fprintf(stderr,
-        "apu-cli — Phase 1/2/3/4/5/6/7 container inspection, APU routing, KV quant, sync, MoE, speculative decoding & low-quant\n"
+        "apu-cli — Phase 1/2/3/4/5/6/7/7.1 container inspection, APU routing, KV quant, sync, MoE, speculative decoding, low-quant & XCLBIN synthesis\n"
         "  apu-cli container-info <file> [--companion <gguf>] [--full-sha256]\n"
         "  apu-cli mem-estimate   <model.gguf> [--ctx N] [--kv-dtype f16|q8_0|q4_0]\n"
         "  apu-cli route-info     <model.gguf> [--apu-xclbin <PATH>] [--ctx N] [--kv-dtype f16|q8_0|q4_0]\n"
+        "  apu-cli synthesize-xclbin <model.gguf> [-o <out.xclbin>] [--target npu1|npu2] [--no-router-sram] [--router-sram-limit-mb N]\n"
         "  apu-cli test-bridge    [--apu-verbose]\n"
         "  apu-cli test-npu       [<xclbin>] [--apu-verbose]\n"
         "  apu-cli test-kv-quant  [--apu-verbose]\n"
         "  apu-cli test-sync      [--apu-verbose]\n"
         "  apu-cli test-moe-router [<model.gguf>] [--router-sram on|off|auto] [--router-sram-limit-mb N] [--apu-verbose]\n"
         "  apu-cli test-speculative [--apu-verbose]\n"
-        "  apu-cli test-lowquant  [--apu-verbose]\n");
+        "  apu-cli test-lowquant  [--apu-verbose]\n"
+        "  apu-cli test-xclbin-synth [--apu-verbose]\n");
     return 2;
 }
 
@@ -1015,6 +1019,64 @@ int main(int argc,char**argv){
             bool verbose = false;
             for(int i=2; i<argc; i++) if(!strcmp(argv[i],"--apu-verbose") || !strcmp(argv[i],"-v")) verbose = true;
             return test_lowquant(verbose);
+        }
+        if(cmd=="test-xclbin-synth"){
+            bool verbose = false;
+            for(int i=2; i<argc; i++) if(!strcmp(argv[i],"--apu-verbose") || !strcmp(argv[i],"-v")) verbose = true;
+            return test_apu_xclbin_synth(verbose) ? 0 : 1;
+        }
+        if(cmd=="synthesize-xclbin"){
+            if(argc<3) return usage();
+            std::string model_path = argv[2];
+            std::string stem = model_path;
+            {
+                size_t s = stem.find_last_of('/');
+                if (s != std::string::npos) stem = stem.substr(s + 1);
+                size_t d = stem.find_last_of('.');
+                if (d != std::string::npos) stem = stem.substr(0, d);
+            }
+            std::string parent;
+            {
+                size_t s = model_path.find_last_of('/');
+                if (s != std::string::npos && s > 0) {
+                    std::string d = model_path.substr(0, s);
+                    size_t s2 = d.find_last_of('/');
+                    parent = (s2 == std::string::npos) ? d : d.substr(s2 + 1);
+                }
+            }
+            apu_xclbin_topology topo;
+            if(!apu_extract_topology(model_path, topo)){
+                fprintf(stderr, "apu-cli: failed to extract topology from %s\n", model_path.c_str());
+                return 1;
+            }
+            apu_xclbin_synth_options opts;
+            opts.model_stem = stem;
+            opts.parent_stem = parent;
+            for(int i=3; i<argc; i++){
+                if(!strcmp(argv[i],"-o") && i+1<argc) opts.output_path = argv[++i];
+                else if(!strcmp(argv[i],"--target") && i+1<argc){
+                    std::string t = argv[++i];
+                    opts.target = (t.find("npu1") != std::string::npos || t.find("aie2") != std::string::npos) ? APU_XCLBIN_TARGET_NPU1_AIE2 : APU_XCLBIN_TARGET_NPU2_AIE2P;
+                }
+                else if(!strcmp(argv[i],"--no-router-sram")) opts.router_sram_enabled = false;
+                else if(!strcmp(argv[i],"--router-sram-limit-mb") && i+1<argc) opts.router_sram_limit_mb = std::atoi(argv[++i]);
+                else if(!strcmp(argv[i],"--pdi") && i+1<argc) opts.custom_pdi_path = argv[++i];
+                else if(!strcmp(argv[i],"--no-register")) opts.register_user_profile = false;
+            }
+            apu_xclbin_synth_status st;
+            if(!apu_synthesize_xclbin(topo, opts, st)){
+                fprintf(stderr, "apu-cli: failed to synthesize XCLBIN: %s\n", st.error.c_str());
+                return 1;
+            }
+            printf("synthesize-xclbin: SUCCESS\n");
+            printf("  model arch      : %s\n", topo.arch_name.c_str());
+            printf("  hidden / layers : %u / %u\n", topo.hidden_dim, topo.num_layers);
+            printf("  heads / kv_heads: %u / %u\n", topo.num_heads, topo.num_kv_heads);
+            printf("  experts         : %u\n", topo.num_experts);
+            printf("  pinned router   : %zu bytes across %u layers\n", st.pinned_sram_bytes, st.pinned_layers);
+            printf("  output xclbin   : %s (%zu bytes)\n", st.output_path.c_str(), st.file_size);
+            printf("  xclbinutil used : %s\n", st.xclbinutil_invoked ? "yes" : "fallback generator");
+            return 0;
         }
         if(argc<3) return usage();
         std::string path=argv[2];
