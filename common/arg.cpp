@@ -12,6 +12,7 @@
 #include "speculative.h"
 #include "preset.h"
 #include "ggml-apu-moe.h"
+#include "ggml-apu-spec.h"
 
 // fix problem with std::min and std::max
 #if defined(_WIN32)
@@ -1335,6 +1336,16 @@ static void apu_route_resolve(common_params & params) {
     }
     apu_moe_router_manager::get().set_mode(moe_mode);
     apu_moe_router_manager::get().set_sram_limit_mb(apu.router_sram_limit_mb);
+
+    // APU Phase 6: Configure speculative decoding coordinator
+    apu_spec_mode spec_mode = APU_SPEC_AUTO;
+    if (apu.spec_draft_apu == "off") {
+        spec_mode = APU_SPEC_OFF;
+    } else if (apu.spec_draft_apu == "on") {
+        spec_mode = APU_SPEC_ON;
+    }
+    apu_spec_coordinator::get().set_mode(spec_mode);
+    apu_spec_coordinator::get().set_timeline_sync(apu.spec_timeline_sync);
 }
 
 bool common_params_parse(int argc, char ** argv, common_params & params, llama_example ex, void(*print_usage)(int, char **)) {
@@ -2908,6 +2919,31 @@ common_params_context common_params_parser_init(common_params & params, llama_ex
             params.apu.router_sram = "off";
         }
     ).set_env("LLAMA_ARG_NO_ROUTER_SRAM"));
+    add_opt(common_arg(
+        {"--spec-draft-apu"}, "MODE",
+        "APU speculative decoding mode: auto|on|off (default: auto)\n"
+        "coordinates draft token candidate generation and target verification passes",
+        [](common_params & params, const std::string & value) {
+            if (value != "auto" && value != "on" && value != "off") {
+                throw std::invalid_argument("invalid --spec-draft-apu value (expected: auto, on, or off)");
+            }
+            params.apu.spec_draft_apu = value;
+        }
+    ).set_spec().set_examples({LLAMA_EXAMPLE_SPECULATIVE, LLAMA_EXAMPLE_SERVER, LLAMA_EXAMPLE_CLI}).set_env("LLAMA_ARG_SPEC_DRAFT_APU"));
+    add_opt(common_arg(
+        {"--spec-timeline-sync"}, "BOOL",
+        "APU DRM timeline synchronization between draft and target passes: on|off (default: on)\n"
+        "uses /dev/dri/renderD128 drm_syncobj monotonic timeline points for zero-CPU stall handoff",
+        [](common_params & params, const std::string & value) {
+            if (value == "on" || value == "1" || value == "true") {
+                params.apu.spec_timeline_sync = true;
+            } else if (value == "off" || value == "0" || value == "false") {
+                params.apu.spec_timeline_sync = false;
+            } else {
+                throw std::invalid_argument("invalid --spec-timeline-sync value (expected: on or off)");
+            }
+        }
+    ).set_spec().set_examples({LLAMA_EXAMPLE_SPECULATIVE, LLAMA_EXAMPLE_SERVER, LLAMA_EXAMPLE_CLI}).set_env("LLAMA_ARG_SPEC_TIMELINE_SYNC"));
     add_opt(common_arg(
         {"--numa"}, "TYPE",
         "attempt optimizations that help on some NUMA systems\n"

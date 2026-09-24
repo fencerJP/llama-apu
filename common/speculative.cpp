@@ -11,6 +11,7 @@
 #include "sampling.h"
 
 #include "../src/llama-ext.h" // staging API: llama_set_embeddings_nextn / llama_get_embeddings_nextn_ith (used by MTP)
+#include "ggml-apu-spec.h"
 
 #include <algorithm>
 #include <cassert>
@@ -2189,6 +2190,9 @@ struct common_speculative {
     // which implementaion was used for a given seq_id
     std::vector<common_speculative_impl *> impl_last;
 
+    // length of last candidate draft per seq_id for APU verification tracking
+    std::vector<uint32_t> last_draft_len;
+
     std::vector<double> synth_probs;
 };
 
@@ -2727,10 +2731,11 @@ common_speculative * common_speculative_init(common_params_speculative & params,
     }
 
     common_speculative_ptr result(new common_speculative {
-        /* .dparams     = */ common_speculative_draft_params_vec(n_seq),
-        /* .impls       = */ std::move(impls),
-        /* .impl_last   = */ std::vector<common_speculative_impl *>(n_seq, nullptr),
-        /* .synth_probs = */ {},
+        /* .dparams        = */ common_speculative_draft_params_vec(n_seq),
+        /* .impls          = */ std::move(impls),
+        /* .impl_last      = */ std::vector<common_speculative_impl *>(n_seq, nullptr),
+        /* .last_draft_len = */ std::vector<uint32_t>(n_seq, 0),
+        /* .synth_probs    = */ {},
     });
 
     const int32_t n_max_configured = common_speculative_n_max(&params);
@@ -2863,9 +2868,18 @@ void common_speculative_draft(common_speculative * spec) {
 
                     // remember which implementation was used
                     spec->impl_last[seq_id] = impl.get();
+                    if (seq_id < (llama_seq_id) spec->last_draft_len.size()) {
+                        spec->last_draft_len[seq_id] = result.size();
+                    }
 
                     impl->n_gen_drafts++;
                     impl->n_gen_tokens += result.size();
+
+                    // APU Phase 6: Coordinate speculative drafting with DRM timeline synchronization
+                    if (apu_spec_coordinator::get().is_active()) {
+                        apu_spec_coordinator::get().record_draft_batch(result.size());
+                        apu_spec_coordinator::get().synchronize_draft_to_target();
+                    }
                 }
             }
 
@@ -2922,6 +2936,18 @@ void common_speculative_accept(common_speculative * spec, llama_seq_id seq_id, u
         if (impl_other.get() != impl) {
             impl_other->accept(seq_id, n_accepted, true);
         }
+    }
+
+    // APU Phase 6: Record target acceptance and calculate rollback metrics
+    uint32_t n_draft = n_accepted;
+    if (seq_id < (llama_seq_id) spec->last_draft_len.size()) {
+        if (spec->last_draft_len[seq_id] > 0) {
+            n_draft = spec->last_draft_len[seq_id];
+        }
+        spec->last_draft_len[seq_id] = 0;
+    }
+    if (apu_spec_coordinator::get().is_active()) {
+        apu_spec_coordinator::get().record_acceptance(n_accepted, n_draft);
     }
 }
 
@@ -2993,5 +3019,9 @@ void common_speculative_print_stats(const common_speculative * spec) {
                 impl->n_acc_tokens,
                 str_stats.c_str(),
                 str_perf.c_str());
+    }
+
+    if (apu_spec_coordinator::get().is_active() && apu_spec_coordinator::get().get_stats().draft_batches > 0) {
+        apu_spec_coordinator::get().print_summary();
     }
 }

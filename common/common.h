@@ -500,6 +500,8 @@ struct common_params {
         std::string router_sram          = "auto"; // --router-sram {on,off,auto}
         int32_t     router_sram_limit_mb = 32;     // --router-sram-limit-mb <MB> (default: 32MB)
         bool        no_router_sram       = false;  // --no-router-sram
+        std::string spec_draft_apu       = "auto"; // --spec-draft-apu {auto,on,off}
+        bool        spec_timeline_sync   = true;   // --spec-timeline-sync {on,off}
     } apu;
 
     common_cpu_params cpuparams;
