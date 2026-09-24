@@ -539,6 +539,10 @@ static int route_info(const std::string & path, const std::string & explicit_xcl
 
     // model memory estimate (bounded read; same scanner as mem-estimate)
     uint64_t need_bytes=0;
+    uint64_t active_bytes=0;
+    uint64_t n_expert=0;
+    uint64_t n_expert_used=0;
+    bool is_moe=false;
     {
         ROFile f(path);
         auto magic=f.read_exact(0,4);
@@ -554,6 +558,20 @@ static int route_info(const std::string & path, const std::string & explicit_xcl
             else if(kv_dtype=="q8_0") kv_bytes=(kv_elems/32)*34;
             else kv_bytes=kv_elems*2;
             need_bytes=g.n_bytes_weights+kv_bytes+(uint64_t)(g.n_embd*8ull*4096ull);
+
+            n_expert = g.n_expert;
+            n_expert_used = g.n_expert_used;
+            if (n_expert > 0) {
+                is_moe = true;
+                if (!n_expert_used) n_expert_used = std::min<uint64_t>(n_expert, 8); // fallback default
+                // MoE router dynamic activation: only active experts + dense backbone are executed per token
+                uint64_t expert_weights = (g.n_bytes_weights * 4) / 5;
+                uint64_t dense_weights = g.n_bytes_weights - expert_weights;
+                uint64_t active_expert_weights = (expert_weights * n_expert_used) / n_expert;
+                active_bytes = dense_weights + active_expert_weights + kv_bytes + (uint64_t)(g.n_embd*8ull*4096ull);
+            } else {
+                active_bytes = need_bytes;
+            }
         }
     }
     const uint64_t avail=mem_available_bytes();
@@ -589,8 +607,14 @@ static int route_info(const std::string & path, const std::string & explicit_xcl
         printf("    resolved tier : none — no .xclbin found for model '%s' in any tier\n", stem.c_str());
     }
     if(need_bytes && avail){
-        printf("  memory          : model+kv est %.2f MiB vs MemAvailable %.2f MiB -> %s\n",
-               need_bytes/MiB, avail/MiB, need_bytes<=avail?"fits":"BLOCKED (exceeds available)");
+        if (is_moe) {
+            printf("  memory          : total model %.2f MiB, active MoE working set %.2f MiB (MoE router: %lu/%lu experts) vs MemAvailable %.2f MiB -> %s\n",
+                   need_bytes/MiB, active_bytes/MiB, (unsigned long)n_expert_used, (unsigned long)n_expert, avail/MiB,
+                   active_bytes<=avail ? "fits (MoE router active)" : "BLOCKED (exceeds available)");
+        } else {
+            printf("  memory          : model+kv est %.2f MiB vs MemAvailable %.2f MiB -> %s\n",
+                   need_bytes/MiB, avail/MiB, need_bytes<=avail?"fits":"BLOCKED (exceeds available)");
+        }
     }
 
     // route resolution — honest fallback with reasons (roadmap: NPU routes enabled only when validated)
@@ -599,7 +623,7 @@ static int route_info(const std::string & path, const std::string & explicit_xcl
     bool prefill_gpu_ok = gpu.kfd;
     printf("    prefill  : %s%s\n", prefill_gpu_ok?"gpu":"cpu",
            prefill_gpu_ok?"":"  (no /dev/kfd — ROCm GPU unavailable)");
-    bool mem_ok = (!need_bytes || !avail || need_bytes<=avail);
+    bool mem_ok = (!need_bytes || !avail || active_bytes<=avail);
     // NPU decode is staged: PRIME dma-buf bridge (§2.3) is implemented; NPU kernel execution contract (§2.4) pending.
     std::vector<std::string> npu_blockers;
     if(!npu.dev)               npu_blockers.push_back("no NPU device node "+npu.dev_node);

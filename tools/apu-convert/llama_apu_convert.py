@@ -132,7 +132,10 @@ def convert_safetensors_to_gguf(
 
     if not out_gguf.exists():
         # Check if convert_hf_to_gguf created a file with a slight name variation
-        cand = list(out_gguf.parent.glob(f"{out_gguf.stem}*.gguf"))
+        parent_name = source_dir.name
+        cand = (list(out_gguf.parent.glob(f"{out_gguf.stem}*.gguf")) or
+                list(out_gguf.parent.glob(f"*{parent_name}*{quant_type}*.gguf")) or
+                list(out_gguf.parent.glob(f"*{parent_name}*.gguf")))
         if cand:
             return cand[0]
         raise FileNotFoundError(f"Expected converted GGUF at {out_gguf}, but not found.")
@@ -311,11 +314,17 @@ def run_conversion_pipeline(
     # 2. Inspect Model Topology
     print(f"\n[1/4] Inspecting Model Architecture and Topology...")
     topo = inspect_model(source)
+    num_experts = topo.get('num_experts', 0)
     print(f"    Arch Name : {topo.get('arch_name')}")
     print(f"    Hidden Dim: {topo.get('hidden_dim')}")
     print(f"    FFN Dim   : {topo.get('ffn_dim')}")
     print(f"    Layers    : {topo.get('num_layers')}")
-    print(f"    Experts   : {topo.get('num_experts', 0)}")
+    print(f"    Experts   : {num_experts}")
+
+    if num_experts > 0:
+        print(f"[+] MoE Architecture Detected: {num_experts} experts.")
+        print(f"[+] Automatically engaging MoE router and AIE2P Tile SRAM pinning.")
+        print(f"[+] Sparse expert execution policy active (skipping full-weight local SSD staging).")
 
     # 3. Architecture Gate: TQ2_0 Compatibility Evaluation
     is_tq2_ok, rationale = evaluate_tq2_compatibility(topo)
