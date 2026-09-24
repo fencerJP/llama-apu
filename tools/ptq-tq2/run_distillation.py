@@ -122,18 +122,34 @@ def run_distillation_on_layer(
 def main():
     parser = argparse.ArgumentParser(description="llama-apu AdamW Scale Distillation Runner")
     parser.add_argument("--corpus", default=str(DATABANK_DISTILL_DIR / "distill_corpus.jsonl"), help="Path to curated distill corpus")
+    parser.add_argument("--stage", type=int, default=3, choices=[1, 2, 3, 4], help="Distillation Stage: 1=Frobenius (0 steps), 2=Light (10 steps, 128 samples), 3=Full (30 steps, 512 samples), 4=Extra (50+ steps, 1000+ samples)")
     parser.add_argument("--dim", type=int, default=2048, help="Hidden dimension for test layers")
     parser.add_argument("--layers", type=int, default=4, help="Number of simulated transformer layers to distill")
-    parser.add_argument("--steps", type=int, default=15, help="AdamW distillation steps per layer")
+    parser.add_argument("--steps", type=int, default=0, help="Override AdamW distillation steps per layer (0 = use stage default)")
+    parser.add_argument("--samples", type=int, default=0, help="Override number of calibration samples (0 = use stage default)")
     args = parser.parse_args()
+
+    # Stage presets
+    stage_configs = {
+        1: {"name": "Stage 1 (Closed-Form Frobenius Initial)", "steps": 0, "samples": 0, "lr": 1e-2},
+        2: {"name": "Stage 2 (Light Distillation)", "steps": 10, "samples": 128, "lr": 1e-2},
+        3: {"name": "Stage 3 (Full Distillation)", "steps": 30, "samples": 512, "lr": 1e-2},
+        4: {"name": "Stage 4 (Extra Distillation: 50+ steps, 1000+ samples)", "steps": 50, "samples": 1000, "lr": 8e-3},
+    }
+    cfg = stage_configs[args.stage]
+    steps = args.steps if args.steps > 0 else cfg["steps"]
+    max_samples = args.samples if args.samples > 0 else cfg["samples"]
+    lr = cfg["lr"]
 
     print("===================================================================")
     print("  llama-apu: AdamW Scale Distillation with Curated Dataset         ")
     print("===================================================================")
-    print(f"  Corpus Path : {args.corpus}")
-    print(f"  Hidden Dim  : {args.dim}")
-    print(f"  Layers      : {args.layers}")
-    print(f"  Steps/Layer : {args.steps}")
+    print(f"  Configuration: {cfg['name']}")
+    print(f"  Corpus Path  : {args.corpus}")
+    print(f"  Hidden Dim   : {args.dim}")
+    print(f"  Layers       : {args.layers}")
+    print(f"  Steps/Layer  : {steps}")
+    print(f"  Max Samples  : {max_samples}")
 
     # Check Memory Governor
     gov = check_memory_governor(working_set_bytes=2 * 1024 * 1024 * 1024)
@@ -141,7 +157,7 @@ def main():
 
     # Load calibration samples
     corpus_p = Path(args.corpus)
-    texts = load_calibration_texts(corpus_p, max_samples=128)
+    texts = load_calibration_texts(corpus_p, max_samples=max_samples if max_samples > 0 else 64)
     if not texts:
         print(f"[!] Note: Corpus file {corpus_p} not found or empty. Using default calibration prompts.")
         texts = [
@@ -154,7 +170,7 @@ def main():
     print(f"[+] Loaded {len(texts)} calibration sequences for activation calibration.")
 
     # Generate calibration activations
-    X_calib = generate_calibration_activations(texts, dim=args.dim, n_tokens=32)
+    X_calib = generate_calibration_activations(texts, dim=args.dim, n_tokens=min(128, max(32, len(texts))))
     print(f"[+] Formed calibration activation matrix X_calib: {X_calib.shape}")
 
     # Run distillation on representative projection matrices:
@@ -171,7 +187,7 @@ def main():
         out_dim = args.dim if "attn" in l_type else args.dim * 2
         W = (rng.randn(out_dim, args.dim) * (1.0 / np.sqrt(args.dim))).astype(np.float32)
 
-        res = run_distillation_on_layer(layer_name, W, X_calib, steps=args.steps, lr=1e-2, block_size=256)
+        res = run_distillation_on_layer(layer_name, W, X_calib, steps=steps, lr=lr, block_size=256)
         results.append(res)
         print(f"[+] [{l_idx+1}/{args.layers}] {layer_name} ({out_dim}x{args.dim}): "
               f"MSE {res['mse_init']:.6f} -> {res['mse_refined']:.6f} "
