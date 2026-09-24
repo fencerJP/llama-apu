@@ -47,6 +47,7 @@ set(LLAMA_CORE_SOURCES
     ggml-apu-spec.cpp
     ggml-apu-lowquant.cpp
     ggml-apu-xclbin.cpp
+    ggml-apu-convert.cpp
 )
 
 add_library(llama

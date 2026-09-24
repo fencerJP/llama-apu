@@ -943,14 +943,16 @@ static int test_lowquant(bool verbose) {
 }
 
 #include "ggml-apu-xclbin.h"
+#include "ggml-apu-convert.h"
 
 static int usage(){
     fprintf(stderr,
-        "apu-cli — Phase 1/2/3/4/5/6/7/7.1 container inspection, APU routing, KV quant, sync, MoE, speculative decoding, low-quant & XCLBIN synthesis\n"
+        "apu-cli — Phase 1/2/3/4/5/6/7/7.1/7.2 container inspection, APU routing, KV quant, sync, MoE, speculative decoding, low-quant, XCLBIN synthesis & pipeline\n"
         "  apu-cli container-info <file> [--companion <gguf>] [--full-sha256]\n"
         "  apu-cli mem-estimate   <model.gguf> [--ctx N] [--kv-dtype f16|q8_0|q4_0]\n"
         "  apu-cli route-info     <model.gguf> [--apu-xclbin <PATH>] [--ctx N] [--kv-dtype f16|q8_0|q4_0]\n"
         "  apu-cli synthesize-xclbin <model.gguf> [-o <out.xclbin>] [--target npu1|npu2] [--no-router-sram] [--router-sram-limit-mb N]\n"
+        "  apu-cli convert-model  <input_path> <output_dir> [--quant TQ2_0] [--fallback-quant Q4_K_M] [--no-sidecar] [--no-xclbin]\n"
         "  apu-cli test-bridge    [--apu-verbose]\n"
         "  apu-cli test-npu       [<xclbin>] [--apu-verbose]\n"
         "  apu-cli test-kv-quant  [--apu-verbose]\n"
@@ -958,7 +960,8 @@ static int usage(){
         "  apu-cli test-moe-router [<model.gguf>] [--router-sram on|off|auto] [--router-sram-limit-mb N] [--apu-verbose]\n"
         "  apu-cli test-speculative [--apu-verbose]\n"
         "  apu-cli test-lowquant  [--apu-verbose]\n"
-        "  apu-cli test-xclbin-synth [--apu-verbose]\n");
+        "  apu-cli test-xclbin-synth [--apu-verbose]\n"
+        "  apu-cli test-convert   [--apu-verbose]\n");
     return 2;
 }
 
@@ -1024,6 +1027,35 @@ int main(int argc,char**argv){
             bool verbose = false;
             for(int i=2; i<argc; i++) if(!strcmp(argv[i],"--apu-verbose") || !strcmp(argv[i],"-v")) verbose = true;
             return test_apu_xclbin_synth(verbose) ? 0 : 1;
+        }
+        if(cmd=="test-convert"){
+            bool verbose = false;
+            for(int i=2; i<argc; i++) if(!strcmp(argv[i],"--apu-verbose") || !strcmp(argv[i],"-v")) verbose = true;
+            return test_apu_convert(verbose) ? 0 : 1;
+        }
+        if(cmd=="convert-model"){
+            if(argc<4) return usage();
+            apu_convert_options opts;
+            opts.source_path = argv[2];
+            opts.output_dir = argv[3];
+            for(int i=4; i<argc; i++){
+                if(!strcmp(argv[i],"--quant") && i+1<argc) opts.target_quant = argv[++i];
+                else if(!strcmp(argv[i],"--fallback-quant") && i+1<argc) opts.fallback_quant = argv[++i];
+                else if(!strcmp(argv[i],"--no-sidecar")) opts.skip_sidecar = true;
+                else if(!strcmp(argv[i],"--no-xclbin")) opts.skip_xclbin = true;
+            }
+            apu_convert_result res;
+            if(!apu_run_conversion_pipeline(opts, res)){
+                fprintf(stderr, "apu-cli: conversion failed: %s\n", res.error.c_str());
+                return 1;
+            }
+            printf("convert-model: SUCCESS\n");
+            printf("  gguf model   : %s (%zu bytes)\n", res.gguf_path.c_str(), res.gguf_size_bytes);
+            if(!res.q4nx_path.empty()){
+                printf("  q4nx sidecar : %s (%zu bytes)\n", res.q4nx_path.c_str(), res.q4nx_size_bytes);
+            }
+            printf("  quantization : %s\n", res.selected_quant.c_str());
+            return 0;
         }
         if(cmd=="synthesize-xclbin"){
             if(argc<3) return usage();

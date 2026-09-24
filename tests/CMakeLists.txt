@@ -403,3 +403,6 @@ llama_build_and_test(test-apu-xclbin.cpp)
 target_include_directories(test-apu-xclbin PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/../src)
 target_link_libraries(test-apu-xclbin PRIVATE llama)
 
+llama_build_and_test(test-apu-convert.cpp)
+target_include_directories(test-apu-convert PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/../src)
+target_link_libraries(test-apu-convert PRIVATE llama)
