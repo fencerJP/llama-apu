@@ -29,6 +29,7 @@ PTQ_DIR = SYS_TOOLS / "ptq-tq2"
 sys.path.append(str(PTQ_DIR))
 
 import gguf
+from ptqtp_engine import determine_execution_strategy, check_memory_governor
 
 CORPUS_PATH = Path.home() / "databank" / "distill" / "distill_corpus.jsonl"
 DEFAULT_OUT_DIR = Path("/mnt/Media/Downloads/model_testing/distill_test")
@@ -254,11 +255,15 @@ def distill_gguf_model(
     stage: int,
     texts: List[str],
     src_model_dir: Optional[Path] = None,
-    max_layers_to_distill: int = 16
+    max_layers_to_distill: int = 0,
+    distill_mode: str = "auto",
+    is_moe: bool = False
 ) -> Dict[str, Any]:
     """
     Distills a GGUF model for a specific stage by updating TQ2_0 scales.
-    Clones src_gguf -> dst_gguf and performs in-place binary scale updates.
+    Clones src_gguf -> dst_gguf and performs binary scale updates.
+    Automatically decides between 'in_memory' (all at once) and 'stream_in_place' (out-of-core)
+    based on model size, architecture, and system memory.
     """
     cfg = STAGE_CONFIGS[stage]
     steps = cfg["steps"]
@@ -273,48 +278,54 @@ def distill_gguf_model(
     tq2_tensors = [t for t in reader.tensors if t.tensor_type == 35]
     print(f"    Found {len(tq2_tensors)} TQ2_0 tensors in model.")
 
-    # Target representative projection layers to optimize
     target_types = ["attn", "ffn", "mlp", "ssm", "proj", "dense", "hc_"]
+    candidate_tensors = [t for t in tq2_tensors if any(k in t.name for k in target_types)]
+    if max_layers_to_distill > 0:
+        candidate_tensors = candidate_tensors[:max_layers_to_distill]
+    total_target_layers = len(candidate_tensors)
+    print(f"    Targeting {total_target_layers} TQ2_0 tensors for distillation.")
+
+    model_size = os.path.getsize(src_gguf)
+    strat = determine_execution_strategy(
+        model_size_bytes=model_size,
+        is_moe=is_moe,
+        override_distill=distill_mode
+    )
+    chosen_distill_mode = strat["distill_mode"]
+    print(f"    [Strategy Engine] Selected Mode: {chosen_distill_mode.upper()}")
+    print(f"      Rationale: {strat['distill_rationale']}")
+
     distilled_count = 0
     layer_stats = []
 
-    with open(dst_gguf, "r+b") as f:
-        for t in tq2_tensors:
-            if not any(k in t.name for k in target_types):
-                continue
-            if distilled_count >= max_layers_to_distill:
-                break
+    if chosen_distill_mode == "in_memory":
+        print(f"    [Execution Mode] IN-MEMORY ALL-AT-ONCE: Preloading {total_target_layers} candidate tensors into memory...")
+        tensor_buffers = {}
+        with open(dst_gguf, "rb") as f:
+            for t in candidate_tensors:
+                f.seek(t.data_offset)
+                tensor_buffers[t.name] = bytearray(f.read(t.data.size))
 
-            offset = t.data_offset
-            size = t.data.size
-            n_blocks = size // 66
+        for t in candidate_tensors:
+            n_blocks = t.data.size // 66
             if n_blocks == 0:
                 continue
 
-            # Read raw bytes
-            f.seek(offset)
-            raw_data = bytearray(f.read(size))
-
-            # Dequantize blocks to trits and scales
+            raw_data = tensor_buffers[t.name]
             trits, alpha_init = dequantize_tq2_blocks(bytes(raw_data), n_blocks=n_blocks)
 
-            # Reconstruct or load teacher reference weights
             W_teacher = None
             if src_model_dir:
                 W_teacher = find_teacher_weight(src_model_dir, t.name, expected_size=n_blocks * 256)
 
             if W_teacher is None:
-                # High-fidelity proxy teacher: quant baseline + high-frequency perturbation
                 rng_pseudo = np.random.RandomState(42 + distilled_count)
                 W_base = (trits * alpha_init[:, None]).flatten()
                 noise = rng_pseudo.randn(*W_base.shape).astype(np.float32) * (np.std(W_base) * 0.15)
                 W_teacher = W_base + noise
 
-            # Reshape based on tensor dims
             dim = int(t.shape[0]) if len(t.shape) > 0 else 2048
             W_mat = W_teacher.reshape(-1, dim) if W_teacher.size % dim == 0 else W_teacher.reshape(-1, 256)
-
-            # Generate calibration activations
             X_calib = generate_calib_activations(texts, dim=W_mat.shape[1], n_tokens=min(64, len(texts)))
 
             t0 = time.time()
@@ -331,10 +342,7 @@ def distill_gguf_model(
             red_pct = (mse_init - mse_final) / max(mse_init, 1e-8) * 100.0
 
             if steps > 0:
-                # Update scales in binary buffer
-                raw_data = pack_refined_scales_into_tq2(raw_data, alpha_refined, n_blocks)
-                f.seek(offset)
-                f.write(raw_data)
+                tensor_buffers[t.name] = pack_refined_scales_into_tq2(raw_data, alpha_refined, n_blocks)
 
             distilled_count += 1
             layer_stats.append({
@@ -345,8 +353,74 @@ def distill_gguf_model(
                 "reduction_pct": red_pct,
                 "time_ms": dt_ms
             })
-            print(f"    [{distilled_count}/{min(max_layers_to_distill, len(tq2_tensors))}] {t.name}: "
+            print(f"    [{distilled_count}/{total_target_layers}] {t.name}: "
                   f"MSE {mse_init:.6f} -> {mse_final:.6f} (-{red_pct:.2f}%) in {dt_ms:.1f}ms")
+
+        if steps > 0:
+            print("    [+] Flushing all updated scales atomically to GGUF...")
+            with open(dst_gguf, "r+b") as f:
+                for t in candidate_tensors:
+                    f.seek(t.data_offset)
+                    f.write(tensor_buffers[t.name])
+
+    else:
+        print(f"    [Execution Mode] STREAM IN-PLACE: Out-of-core layer-by-layer seek/write (bounded memory)...")
+        with open(dst_gguf, "r+b") as f:
+            for t in candidate_tensors:
+                offset = t.data_offset
+                size = t.data.size
+                n_blocks = size // 66
+                if n_blocks == 0:
+                    continue
+
+                f.seek(offset)
+                raw_data = bytearray(f.read(size))
+                trits, alpha_init = dequantize_tq2_blocks(bytes(raw_data), n_blocks=n_blocks)
+
+                W_teacher = None
+                if src_model_dir:
+                    W_teacher = find_teacher_weight(src_model_dir, t.name, expected_size=n_blocks * 256)
+
+                if W_teacher is None:
+                    rng_pseudo = np.random.RandomState(42 + distilled_count)
+                    W_base = (trits * alpha_init[:, None]).flatten()
+                    noise = rng_pseudo.randn(*W_base.shape).astype(np.float32) * (np.std(W_base) * 0.15)
+                    W_teacher = W_base + noise
+
+                dim = int(t.shape[0]) if len(t.shape) > 0 else 2048
+                W_mat = W_teacher.reshape(-1, dim) if W_teacher.size % dim == 0 else W_teacher.reshape(-1, 256)
+                X_calib = generate_calib_activations(texts, dim=W_mat.shape[1], n_tokens=min(64, len(texts)))
+
+                t0 = time.time()
+                alpha_refined, mse_init, mse_final = optimize_layer_scales(
+                    W_teacher=W_mat,
+                    trits=trits,
+                    alpha_init=alpha_init,
+                    X_calib=X_calib,
+                    steps=steps,
+                    lr=lr,
+                    block_size=256
+                )
+                dt_ms = (time.time() - t0) * 1000.0
+                red_pct = (mse_init - mse_final) / max(mse_init, 1e-8) * 100.0
+
+                if steps > 0:
+                    raw_data = pack_refined_scales_into_tq2(raw_data, alpha_refined, n_blocks)
+                    f.seek(offset)
+                    f.write(raw_data)
+
+                distilled_count += 1
+                layer_stats.append({
+                    "tensor": t.name,
+                    "n_blocks": n_blocks,
+                    "mse_init": mse_init,
+                    "mse_final": mse_final,
+                    "reduction_pct": red_pct,
+                    "time_ms": dt_ms
+                })
+                print(f"    [{distilled_count}/{total_target_layers}] {t.name}: "
+                      f"MSE {mse_init:.6f} -> {mse_final:.6f} (-{red_pct:.2f}%) in {dt_ms:.1f}ms")
+                del raw_data, trits, alpha_init, W_teacher
 
     avg_reduction = np.mean([s["reduction_pct"] for s in layer_stats]) if layer_stats else 0.0
     print(f"    [+] {stage_name} Complete: {distilled_count} layers distilled, Avg MSE Reduction: {avg_reduction:.2f}%")
@@ -356,6 +430,7 @@ def distill_gguf_model(
         "stage_name": stage_name,
         "layers_distilled": distilled_count,
         "avg_reduction_pct": avg_reduction,
+        "distill_mode": chosen_distill_mode,
         "layer_stats": layer_stats
     }
 
@@ -387,10 +462,13 @@ def process_model_distillation(
     model_name: str,
     out_base_dir: Path,
     corpus_texts: List[str],
-    is_large_moe: bool = False
+    is_large_moe: bool = False,
+    distill_mode: str = "auto",
+    max_layers_to_distill: int = 0
 ) -> Dict[str, Any]:
     """
     Executes Stages 1–4 distillation for a single model:
+    - Automatically decides whether to distill in-memory all at once or stream in-place.
     - For non-MoE / standard models: stages to SSD scratch, runs distillation, syncs to out_base_dir, wipes scratch.
     - For large MoE models: runs directly in-place from NAS, skipping SSD staging.
     """
@@ -407,11 +485,21 @@ def process_model_distillation(
     if not candidates:
         raise FileNotFoundError(f"No TQ2_0 GGUF found for {model_name} in {src_dir}")
     src_tq2_gguf = candidates[0]
-    print(f"[+] Found Base TQ2_0 GGUF: {src_tq2_gguf.name} ({src_tq2_gguf.stat().st_size / (1024**3):.2f} GiB)")
+    model_size_bytes = src_tq2_gguf.stat().st_size
+    print(f"[+] Found Base TQ2_0 GGUF: {src_tq2_gguf.name} ({model_size_bytes / (1024**3):.2f} GiB)")
+
+    # Evaluate execution strategy
+    strat = determine_execution_strategy(
+        model_size_bytes=model_size_bytes,
+        is_moe=is_large_moe,
+        override_distill=distill_mode
+    )
+    print(f"[+] Distillation Strategy : {strat['distill_mode'].upper()} ({strat['distill_rationale']})")
+    print(f"[+] Staging Policy        : {strat['staging_policy'].upper()} ({strat['staging_rationale']})")
 
     # Staging strategy
-    if is_large_moe:
-        print("[+] MoE Router Policy: Skipping full local SSD staging for large MoE model.")
+    if is_large_moe or strat["staging_policy"] == "direct_nas_inplace":
+        print("[+] MoE / Large Model Policy: Skipping full local SSD staging.")
         print("[+] Performing direct in-place out-of-core streaming distillation on NAS.")
         working_gguf = src_tq2_gguf
     else:
@@ -426,7 +514,7 @@ def process_model_distillation(
         print(f"    Staged in {time.time() - t_cp:.2f}s")
         working_gguf = local_staged_gguf
 
-    model_metrics = {"model": model_name, "stages": {}}
+    model_metrics = {"model": model_name, "strategy": strat, "stages": {}}
 
     # Execute Stages 1 through 4
     for stage_num in [1, 2, 3, 4]:
@@ -434,7 +522,7 @@ def process_model_distillation(
         stage_suffix = stage_cfg["name"]
         stage_gguf_name = f"{model_name}-TQ2_0-{stage_suffix}.gguf"
 
-        if is_large_moe:
+        if is_large_moe or strat["staging_policy"] == "direct_nas_inplace":
             target_stage_gguf = model_dst_dir / stage_gguf_name
         else:
             target_stage_gguf = local_model_scratch / stage_gguf_name
@@ -445,14 +533,16 @@ def process_model_distillation(
             stage=stage_num,
             texts=corpus_texts,
             src_model_dir=src_dir,
-            max_layers_to_distill=12 if not is_large_moe else 6
+            max_layers_to_distill=max_layers_to_distill,
+            distill_mode=strat["distill_mode"],
+            is_moe=is_large_moe
         )
         model_metrics["stages"][stage_num] = res
 
         # Link companion sidecars (.q4nx and .xclbin)
         link_sidecars_for_stage(src_dir, target_stage_gguf)
 
-        if not is_large_moe:
+        if not (is_large_moe or strat["staging_policy"] == "direct_nas_inplace"):
             # Sync generated stage GGUF and sidecars to NAS
             nas_stage_gguf = model_dst_dir / stage_gguf_name
             print(f"    [+] Syncing {stage_gguf_name} to NAS ({nas_stage_gguf})...")
@@ -460,7 +550,7 @@ def process_model_distillation(
             link_sidecars_for_stage(src_dir, nas_stage_gguf)
 
     # Clean local scratch if used
-    if not is_large_moe:
+    if not (is_large_moe or strat["staging_policy"] == "direct_nas_inplace"):
         print(f"[+] Pruning local SSD scratch directory: {local_model_scratch}...")
         shutil.rmtree(local_model_scratch, ignore_errors=True)
         print("    Local SSD scratch pruned.")
@@ -477,6 +567,9 @@ def main():
     parser = argparse.ArgumentParser(description="llama-apu Distillation Pipeline")
     parser.add_argument("--outdir", default=str(DEFAULT_OUT_DIR), help="Destination directory on NAS")
     parser.add_argument("--models", nargs="*", default=[], help="Specific models to distill (default: all)")
+    parser.add_argument("--distill-mode", choices=["auto", "in_memory", "stream_in_place"], default="auto", help="Distillation execution mode (default: auto)")
+    parser.add_argument("--max-layers", type=int, default=0, help="Max layers to distill (0 = all layers in model)")
+    parser.add_argument("--quick-benchmark", action="store_true", help="Quick verification slice (12 layers for dense, 6 for MoE)")
     args = parser.parse_args()
 
     out_base_dir = Path(args.outdir)
@@ -488,6 +581,8 @@ def main():
     print(f"  Target Destination : {out_base_dir}")
     print(f"  Curated Corpus     : {CORPUS_PATH}")
     print(f"  Local SSD Scratch  : {LOCAL_SCRATCH_DIR}")
+    print(f"  Execution Mode     : {args.distill_mode.upper()}")
+    print(f"  Layer Mode         : {'Quick Benchmark Slice' if args.quick_benchmark else ('All Layers' if args.max_layers == 0 else f'{args.max_layers} Layers')}")
 
     # Load calibration texts
     corpus_texts = load_calibration_corpus(CORPUS_PATH, max_samples=1000)
@@ -510,11 +605,14 @@ def main():
     for item in suite:
         model_name = item["name"]
         is_large_moe = item["is_large_moe"]
+        effective_max_layers = (12 if not is_large_moe else 6) if args.quick_benchmark else args.max_layers
         res = process_model_distillation(
             model_name=model_name,
             out_base_dir=out_base_dir,
             corpus_texts=corpus_texts,
-            is_large_moe=is_large_moe
+            is_large_moe=is_large_moe,
+            distill_mode=args.distill_mode,
+            max_layers_to_distill=effective_max_layers
         )
         all_results[model_name] = res
 

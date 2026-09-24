@@ -6,6 +6,7 @@ import math
 import sys
 import os
 import argparse
+from typing import Any, Dict, Optional, Tuple
 import numpy as np
 
 # System memory ceiling constant: 50 GB
@@ -45,6 +46,81 @@ def check_memory_governor(working_set_bytes: int = 0):
         "working_set": working_set_bytes,
         "within_ceiling": within_ceiling,
         "hierarchy": hierarchy
+    }
+
+def determine_execution_strategy(
+    model_size_bytes: int = 0,
+    num_experts: int = 0,
+    is_moe: bool = False,
+    override_convert: str = "auto",
+    override_distill: str = "auto"
+) -> Dict[str, Any]:
+    """
+    Automatically decides:
+    1. Conversion mode: 'online' (in-memory streaming) vs 'offline' (out-of-core chunked disk conversion).
+    2. Distillation mode: 'in_memory' (all at once) vs 'stream_in_place' (tensor-by-tensor disk streaming).
+    3. Staging policy: 'local_ssd' vs 'direct_nas_inplace'.
+    Based on model size, architecture type (MoE vs Dense), and system resources under the 50 GB APU ceiling.
+    """
+    mem_info = check_memory_governor(working_set_bytes=model_size_bytes)
+    mem_avail = mem_info["available_ram"]
+    mem_total = mem_info["total_ram"]
+    effective_ceiling = min(mem_avail, APU_MAX_SYSTEM_MEMORY_CEILING_BYTES)
+
+    is_moe_model = is_moe or (num_experts > 0)
+    model_size_gb = model_size_bytes / (1024 ** 3) if model_size_bytes > 0 else 0.0
+
+    # 1. Conversion Strategy (online vs offline)
+    if override_convert in ("online", "offline"):
+        convert_mode = override_convert
+        convert_rationale = f"User override: {override_convert}"
+    else:
+        # Online conversion requires the unquantized weights + conversion buffer (2.5x) to fit in RAM
+        if not is_moe_model and (model_size_bytes * 2.5 <= effective_ceiling) and (model_size_gb <= 12.0):
+            convert_mode = "online"
+            convert_rationale = f"Model ({model_size_gb:.1f} GB) fits safely in APU RAM; executing fast in-memory streaming conversion"
+        else:
+            convert_mode = "offline"
+            reason = "MoE architecture with sparse experts" if is_moe_model else f"Model footprint ({model_size_gb:.1f} GB) exceeds safe online memory threshold"
+            convert_rationale = f"{reason}; executing out-of-core chunked disk conversion to maintain APU memory ceiling"
+
+    # 2. Distillation Strategy (in_memory vs stream_in_place)
+    if override_distill in ("in_memory", "stream_in_place"):
+        distill_mode = override_distill
+        distill_rationale = f"User override: {override_distill}"
+    else:
+        # In-memory distillation loads all candidate tensors + teacher weights + optimizer states into RAM
+        # Safe threshold: total working set <= 40% of effective ceiling and model <= 4.0 GB
+        distill_working_set_est = model_size_bytes * 2.0
+        if not is_moe_model and (distill_working_set_est <= effective_ceiling * 0.4) and (model_size_gb <= 4.0):
+            distill_mode = "in_memory"
+            distill_rationale = f"Compact dense model ({model_size_gb:.1f} GB); executing vectorized in-memory all-at-once distillation"
+        else:
+            distill_mode = "stream_in_place"
+            reason = "MoE sparse routing active" if is_moe_model else f"Working set ({distill_working_set_est/(1024**3):.1f} GB) exceeds in-memory ceiling"
+            distill_rationale = f"{reason}; streaming tensor-by-tensor in-place on disk with bounded memory (< 2 GB working set)"
+
+    # 3. Staging Strategy (local_ssd vs direct_nas_inplace)
+    if is_moe_model or model_size_gb > 30.0:
+        staging_policy = "direct_nas_inplace"
+        staging_rationale = "Skipping local SSD staging to prevent NVMe exhaustion; streaming directly in-place on NAS"
+    else:
+        staging_policy = "local_ssd"
+        staging_rationale = "Staging to NVMe SSD scratch for maximum I/O throughput, pruned after completion"
+
+    return {
+        "model_size_gb": model_size_gb,
+        "is_moe": is_moe_model,
+        "num_experts": num_experts,
+        "convert_mode": convert_mode,
+        "convert_rationale": convert_rationale,
+        "distill_mode": distill_mode,
+        "distill_rationale": distill_rationale,
+        "staging_policy": staging_policy,
+        "staging_rationale": staging_rationale,
+        "available_ram_gb": mem_avail / (1024 ** 3),
+        "total_ram_gb": mem_total / (1024 ** 3),
+        "ceiling_gb": APU_MAX_SYSTEM_MEMORY_CEILING_BYTES / (1024 ** 3),
     }
 
 def fast_walsh_hadamard_transform(x: np.ndarray) -> np.ndarray:

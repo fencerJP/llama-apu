@@ -17,6 +17,9 @@ REPO_ROOT = Path(__file__).resolve().parent.parent.parent
 SYS_TOOLS = REPO_ROOT / "tools"
 XCLBIN_SYNTH_DIR = SYS_TOOLS / "xclbin-synth"
 PTQ_DIR = SYS_TOOLS / "ptq-tq2"
+sys.path.append(str(PTQ_DIR))
+
+from ptqtp_engine import determine_execution_strategy, check_memory_governor
 
 APU_MAX_MEMORY_CEILING_GB = 50.0
 
@@ -293,7 +296,12 @@ def run_conversion_pipeline(
     target_quant: str = "TQ2_0",
     fallback_quant: str = "Q4_K_M",
     skip_sidecar: bool = False,
-    skip_xclbin: bool = False
+    skip_xclbin: bool = False,
+    convert_mode: str = "auto",
+    distill_mode: str = "auto",
+    enable_distill: bool = False,
+    distill_stage: int = 3,
+    max_distill_layers: int = 0
 ) -> Dict[str, Any]:
     """Unified entry point for Phase 7.2 End-to-End Pipeline."""
     source = Path(source_path).resolve()
@@ -312,7 +320,7 @@ def run_conversion_pipeline(
     print(f"[+] Memory Governor : {avail_gb:.1f} GB available / {tot_gb:.1f} GB total (Ceiling: {APU_MAX_MEMORY_CEILING_GB} GB)")
 
     # 2. Inspect Model Topology
-    print(f"\n[1/4] Inspecting Model Architecture and Topology...")
+    print(f"\n[1/5] Inspecting Model Architecture and Topology...")
     topo = inspect_model(source)
     num_experts = topo.get('num_experts', 0)
     print(f"    Arch Name : {topo.get('arch_name')}")
@@ -320,6 +328,32 @@ def run_conversion_pipeline(
     print(f"    FFN Dim   : {topo.get('ffn_dim')}")
     print(f"    Layers    : {topo.get('num_layers')}")
     print(f"    Experts   : {num_experts}")
+
+    # Calculate static source size
+    source_size_bytes = 0
+    if source.is_dir():
+        for p in source.glob("**/*"):
+            if p.is_file():
+                source_size_bytes += p.stat().st_size
+    elif source.exists():
+        source_size_bytes = source.stat().st_size
+
+    # Evaluate automated execution strategy
+    strat = determine_execution_strategy(
+        model_size_bytes=source_size_bytes,
+        num_experts=num_experts,
+        is_moe=(num_experts > 0),
+        override_convert=convert_mode,
+        override_distill=distill_mode
+    )
+
+    print(f"\n[+] Automated Workflow Execution Strategy:")
+    print(f"    Conversion Mode     : {strat['convert_mode'].upper()}")
+    print(f"      Rationale         : {strat['convert_rationale']}")
+    print(f"    Distillation Mode   : {strat['distill_mode'].upper()}")
+    print(f"      Rationale         : {strat['distill_rationale']}")
+    print(f"    Staging Policy      : {strat['staging_policy'].upper()}")
+    print(f"      Rationale         : {strat['staging_rationale']}")
 
     if num_experts > 0:
         print(f"[+] MoE Architecture Detected: {num_experts} experts.")
@@ -336,8 +370,8 @@ def run_conversion_pipeline(
     else:
         print(f"[+] Target Quantization Validated: {selected_quant} ({rationale})")
 
-    # 4. Out-of-Core Quantization / Conversion
-    print(f"\n[2/4] Executing Out-of-Core Quantization -> {selected_quant}...")
+    # 4. Conversion (Online vs Offline)
+    print(f"\n[2/5] Executing Quantization -> {selected_quant} (Mode: {strat['convert_mode'].upper()})...")
     model_name = source.name if source.is_dir() else source.stem
     target_gguf_name = f"{model_name}-{selected_quant}.gguf"
     out_gguf_path = out_dir / target_gguf_name
@@ -353,17 +387,36 @@ def run_conversion_pipeline(
 
     print(f"[+] Converted GGUF generated: {final_gguf} ({os.path.getsize(final_gguf)/(1024*1024*1024):.2f} GiB)")
 
-    # 5. Companion .q4nx Sidecar & Custom XCLBIN Synthesis
+    # 5. Post-Quantization Scale Distillation (Optional / Integrated)
+    distill_metrics = None
+    if enable_distill:
+        print(f"\n[3/5] Executing Post-Quantization Scale Distillation (Stage {distill_stage}, Mode: {strat['distill_mode'].upper()})...")
+        from distill_pipeline import distill_gguf_model, load_calibration_corpus, CORPUS_PATH
+        corpus_texts = load_calibration_corpus(CORPUS_PATH, max_samples=1000)
+        distill_metrics = distill_gguf_model(
+            src_gguf=final_gguf,
+            dst_gguf=final_gguf,
+            stage=distill_stage,
+            texts=corpus_texts,
+            src_model_dir=source if source.is_dir() else None,
+            max_layers_to_distill=max_distill_layers,
+            distill_mode=strat['distill_mode'],
+            is_moe=(num_experts > 0)
+        )
+
+    # 6. Companion .q4nx Sidecar & Custom XCLBIN Synthesis
     q4nx_path = None
     xclbin_path = None
     if not skip_sidecar:
-        print(f"\n[3/4] Synthesizing Model-Matched XCLBIN & Companion .q4nx Sidecar...")
+        step_num = "4/5" if enable_distill else "3/4"
+        print(f"\n[{step_num}] Synthesizing Model-Matched XCLBIN & Companion .q4nx Sidecar...")
         target_q4nx_name = f"{final_gguf.stem}.q4nx"
         out_q4nx_path = out_dir / target_q4nx_name
         q4nx_path, xclbin_path = synthesize_and_package_q4nx(source, final_gguf, out_q4nx_path, topo)
 
-    # 6. Validation and Integrity Checks
-    print(f"\n[4/4] Multi-tier Integrity Validation...")
+    # 7. Validation and Integrity Checks
+    step_num = "5/5" if enable_distill else "4/4"
+    print(f"\n[{step_num}] Multi-tier Integrity Validation...")
     valid = validate_pipeline_outputs(final_gguf, q4nx_path)
 
     print("\n===================================================================")
@@ -371,6 +424,7 @@ def run_conversion_pipeline(
     print(f"  GGUF Model    : {final_gguf}")
     print(f"  Q4NX Sidecar  : {q4nx_path}")
     print(f"  XCLBIN Profile: {xclbin_path}")
+    print(f"  Distillation  : {'Executed (Stage ' + str(distill_stage) + ')' if enable_distill else 'Skipped'}")
     print(f"  Status        : {'SUCCESS' if valid else 'WARNING'}")
     print("===================================================================")
 
@@ -379,6 +433,8 @@ def run_conversion_pipeline(
         "q4nx": str(q4nx_path) if q4nx_path else None,
         "xclbin": str(xclbin_path) if xclbin_path else None,
         "quant": selected_quant,
+        "strategy": strat,
+        "distill_metrics": distill_metrics,
         "status": "SUCCESS" if valid else "WARNING"
     }
 
@@ -390,6 +446,12 @@ def main():
     parser.add_argument("--fallback-quant", default="Q4_K_M", help="Fallback quantization type (default: Q4_K_M)")
     parser.add_argument("--no-sidecar", action="store_true", help="Skip companion .q4nx sidecar generation")
     parser.add_argument("--no-xclbin", action="store_true", help="Skip custom XCLBIN synthesis")
+    parser.add_argument("--convert-mode", choices=["auto", "online", "offline"], default="auto", help="Conversion mode: auto (resource-guided), online (in-memory streaming), offline (disk chunking)")
+    parser.add_argument("--distill-mode", choices=["auto", "in_memory", "stream_in_place"], default="auto", help="Distillation mode: auto (resource-guided), in_memory (all at once), stream_in_place (disk streaming)")
+    parser.add_argument("--distill", action="store_true", help="Execute post-quantization scale distillation")
+    parser.add_argument("--distill-stage", type=int, default=3, choices=[1, 2, 3, 4], help="Distillation stage: 1=Frobenius, 2=Light, 3=Full, 4=Extra")
+    parser.add_argument("--all-layers", action="store_true", help="Distill all layers in model (thorough multi-hour production mode for large models)")
+    parser.add_argument("--max-layers", type=int, default=0, help="Max layers to distill (0 = all layers)")
     args = parser.parse_args()
 
     run_conversion_pipeline(
@@ -398,7 +460,12 @@ def main():
         target_quant=args.quant,
         fallback_quant=args.fallback_quant,
         skip_sidecar=args.no_sidecar,
-        skip_xclbin=args.no_xclbin
+        skip_xclbin=args.no_xclbin,
+        convert_mode=args.convert_mode,
+        distill_mode=args.distill_mode,
+        enable_distill=args.distill,
+        distill_stage=args.distill_stage,
+        max_distill_layers=args.max_layers
     )
 
 if __name__ == "__main__":
