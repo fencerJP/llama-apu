@@ -64,11 +64,27 @@ QUESTIONS = [
     }
 ]
 
-def find_shard_directory() -> Path:
+def check_shards_ready() -> tuple[Path | None, list[Path], str]:
     for c in CANDIDATE_DIRS:
-        if c.exists() and any(c.glob("*.gguf")):
-            return c
-    return None
+        if not c.exists():
+            continue
+        
+        # Check for active download artifacts
+        in_progress = list(c.glob("*.part")) + list(c.glob("*.crdownload")) + list(c.glob("*.tmp")) + list(c.glob("*.aria2"))
+        if in_progress:
+            names = [f.name for f in in_progress]
+            return c, [], f"Active download in progress ({len(in_progress)} incomplete files: {names})"
+
+        shards = sorted(list(c.glob("*.gguf")))
+        if len(shards) == 3:
+            sizes = [s.stat().st_size for s in shards]
+            if any(sz < 100 * 1024 * 1024 for sz in sizes):
+                return c, shards, "Found 3 shards but at least one file is <100MB"
+            return c, shards, "READY"
+        elif len(shards) > 0:
+            return c, shards, f"Found only {len(shards)} of 3 expected shards: {[s.name for s in shards]}"
+
+    return None, [], "Target directory not found yet or contains no .gguf files"
 
 def clean_output(raw_text: str) -> str:
     lines = raw_text.splitlines()
@@ -166,16 +182,17 @@ def main():
     print("===================================================================")
     print("  Sanity Check: Qwen 3.8 Flash Next UD-IQ4_XS Sharded Evaluation  ")
     print("===================================================================")
-    shard_dir = find_shard_directory()
-    if not shard_dir:
-        print("[!] UD-IQ4_XS shard directory not found or download still in progress.")
-        print("    Checked candidate directories:")
+    shard_dir, shards, status = check_shards_ready()
+    if status != "READY":
+        print(f"[!] UD-IQ4_XS shards are NOT ready: {status}")
+        print("    Candidate directories inspected:")
         for c in CANDIDATE_DIRS:
-            print(f"    - {c}")
-        return 1
+            print(f"    - {c} (exists: {c.exists()})")
+        return 2
 
-    shards = list(shard_dir.glob("*.gguf"))
-    print(f"[+] Found shard directory: {shard_dir} ({len(shards)} shards)")
+    print(f"[+] All 3 shards verified and ready in: {shard_dir}")
+    for s in shards:
+        print(f"    - {s.name} ({s.stat().st_size / (1024**3):.2f} GiB)")
     
     first_shard, staged = None, []
     try:
