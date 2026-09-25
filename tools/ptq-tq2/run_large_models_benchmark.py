@@ -167,6 +167,12 @@ def prune_scratch_file(target_path: Path):
         q4nx.unlink()
 
 def main():
+    import argparse
+    parser = argparse.ArgumentParser(description="Run large models distillation benchmark")
+    parser.add_argument("--force", action="store_true", help="Force rerun of all targets including already passed ones")
+    parser.add_argument("--model", type=str, default="", help="Specific model to run (e.g. Qwen3.8-Flash-Next)")
+    args = parser.parse_args()
+
     print("===================================================================")
     print("  llama-apu: Large Models Benchmark (Full vs Extra Distillation)  ")
     print("  Models: Qwen3.8-27B, Gemma-4-31B, occamy-1.0-with-mtp, Flash-Next")
@@ -182,7 +188,9 @@ def main():
         except Exception:
             results = {}
             
-    for mname in MODELS:
+    models_to_run = [m for m in MODELS if (not args.model or args.model.lower() in m.lower())]
+
+    for mname in models_to_run:
         mdir = DISTILL_BASE / mname
         if not mdir.exists():
             print(f"[!] Directory not found: {mdir}, skipping.")
@@ -190,6 +198,15 @@ def main():
             
         for stage_key, stage_desc in STAGES:
             run_key = f"{mname}_{stage_key}"
+            
+            # Check if this target already succeeded completely
+            if run_key in results and not args.force:
+                stage_data = results[run_key]
+                questions_dict = stage_data.get("questions", {})
+                if len(questions_dict) == len(QUESTIONS) and all(q.get("result", {}).get("success", False) for q in questions_dict.values()):
+                    print(f"[*] Skipping {run_key} — all {len(QUESTIONS)} questions already passed successfully.")
+                    continue
+
             cand = list(mdir.glob(f"*{stage_key}*.gguf"))
             if not cand:
                 print(f"[!] No file matching *{stage_key}*.gguf in {mdir}, skipping.")
