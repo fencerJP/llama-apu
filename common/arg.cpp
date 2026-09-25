@@ -1360,8 +1360,11 @@ static void apu_route_resolve(common_params & params) {
                     (double)plan.headroom_bytes / (1024.0 * 1024.0 * 1024.0),
                     (double)plan.kv_cache_bytes / (1024.0 * 1024.0 * 1024.0),
                     (double)plan.usable_bytes / (1024.0 * 1024.0 * 1024.0));
-            LOG_INF("[APU MoE Chunk Loader] Scaling pinned layers to %d / %d (remaining %d layers streamed via sparse mmap)\n",
-                    plan.n_pinned_layers, plan.n_layers, plan.n_layers - plan.n_pinned_layers);
+            LOG_INF("[APU MoE Chunk Loader] Layer size: %.2f GiB | Pinning %d / %d layers (~%.2f GiB in fast memory, remaining %d layers streamed via sparse mmap)\n",
+                    (double)plan.bytes_per_layer / (1024.0 * 1024.0 * 1024.0),
+                    plan.n_pinned_layers, plan.n_layers,
+                    (double)plan.pinned_bytes / (1024.0 * 1024.0 * 1024.0),
+                    plan.n_layers - plan.n_pinned_layers);
 
             if (params.n_gpu_layers < 0) {
                 params.n_gpu_layers = plan.n_pinned_layers;

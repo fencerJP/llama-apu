@@ -91,6 +91,8 @@ struct apu_moe_memory_plan {
     int32_t     n_pinned_layers     = 0;
     int32_t     n_experts           = 0;
     int32_t     n_experts_used      = 0;
+    uint64_t    bytes_per_layer     = 0;
+    uint64_t    pinned_bytes        = 0;
 };
 
 uint64_t apu_get_mem_available_bytes();

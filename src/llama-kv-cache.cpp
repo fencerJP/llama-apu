@@ -288,20 +288,22 @@ llama_kv_cache::llama_kv_cache(
             throw std::runtime_error("failed to allocate buffer for kv cache");
         }
 
+        bool tile_dma_compatible = true;
         if (!hparams.no_alloc) {
             for (ggml_tensor * t = ggml_get_first_tensor(ctx.get()); t != nullptr; t = ggml_get_next_tensor(ctx.get(), t)) {
                 if (t->data) {
-                    if (reinterpret_cast<uintptr_t>(t->data) % 16 != 0) {
-                        LLAMA_LOG_WARN("%s: KV tensor %s base address (%p) is not 16-byte Tile DMA aligned\n", __func__, t->name, t->data);
-                    }
-                    if (t->nb[1] % 16 != 0) {
-                        LLAMA_LOG_WARN("%s: KV tensor %s chunk row stride (%zu) is not 16-byte Tile DMA aligned; using host scalar stride\n", __func__, t->name, t->nb[1]);
+                    if (reinterpret_cast<uintptr_t>(t->data) % 16 != 0 || t->nb[1] % 16 != 0) {
+                        tile_dma_compatible = false;
+                        LLAMA_LOG_DEBUG("%s: KV tensor %s (stride %zu) adapted to host scalar layout (non-16B Tile DMA)\n", __func__, t->name, t->nb[1]);
                     }
                 }
             }
         }
 
-        LLAMA_LOG_INFO("%s: %10s KV buffer size = %8.2f MiB (Tile DMA 16B verified)\n", __func__, ggml_backend_buffer_name(buf), ggml_backend_buffer_get_size(buf)/1024.0/1024.0);
+        LLAMA_LOG_INFO("%s: %10s KV buffer size = %8.2f MiB (%s)\n", __func__,
+                       ggml_backend_buffer_name(buf),
+                       ggml_backend_buffer_get_size(buf)/1024.0/1024.0,
+                       tile_dma_compatible ? "Tile DMA 16B verified" : "Adaptive host scalar layout");
 
         ggml_backend_buffer_clear(buf, 0);
         ctxs_bufs.emplace_back(std::move(ctx), buf);

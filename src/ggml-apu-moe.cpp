@@ -330,49 +330,105 @@ apu_moe_memory_plan apu_plan_moe_memory(const std::string & model_path, int32_t 
 
     std::string exp_key = plan.arch_name + ".expert_count";
     int exp_idx = gguf_find_key(ctx, exp_key.c_str());
-    if (exp_idx < 0) {
-        gguf_free(ctx);
-        return plan;
+    if (exp_idx >= 0 && gguf_get_arr_n(ctx, exp_idx) == 1) {
+        plan.n_experts = (int32_t)gguf_get_val_u32(ctx, exp_idx);
+        plan.is_moe = plan.n_experts > 0;
     }
-
-    plan.is_moe = true;
-    plan.n_experts = (int32_t)gguf_get_val_u32(ctx, exp_idx);
 
     std::string exp_used_key = plan.arch_name + ".expert_used_count";
     int exp_used_idx = gguf_find_key(ctx, exp_used_key.c_str());
-    plan.n_experts_used = (exp_used_idx >= 0) ? (int32_t)gguf_get_val_u32(ctx, exp_used_idx) : std::min<int32_t>(plan.n_experts, 8);
+    if (exp_used_idx >= 0 && gguf_get_arr_n(ctx, exp_used_idx) == 1) {
+        plan.n_experts_used = (int32_t)gguf_get_val_u32(ctx, exp_used_idx);
+    } else {
+        plan.n_experts_used = std::min<int32_t>(plan.n_experts, 8);
+    }
 
     std::string blk_key = plan.arch_name + ".block_count";
     int blk_idx = gguf_find_key(ctx, blk_key.c_str());
-    plan.n_layers = (blk_idx >= 0) ? (int32_t)gguf_get_val_u32(ctx, blk_idx) : 0;
+    if (blk_idx >= 0 && gguf_get_arr_n(ctx, blk_idx) == 1) {
+        plan.n_layers = (int32_t)gguf_get_val_u32(ctx, blk_idx);
+    }
 
     std::string embd_key = plan.arch_name + ".embedding_length";
     int embd_idx = gguf_find_key(ctx, embd_key.c_str());
-    uint64_t n_embd = (embd_idx >= 0) ? (uint64_t)gguf_get_val_u32(ctx, embd_idx) : 4096;
+    uint64_t n_embd = 4096;
+    if (embd_idx >= 0 && gguf_get_arr_n(ctx, embd_idx) == 1) {
+        n_embd = (uint64_t)gguf_get_val_u32(ctx, embd_idx);
+    }
 
+    // Adaptive KV Head detection: handle scalar or per-layer array (e.g. Gemma 4)
     std::string head_kv_key = plan.arch_name + ".attention.head_count_kv";
     int head_kv_idx = gguf_find_key(ctx, head_kv_key.c_str());
-    uint64_t n_head_kv = (head_kv_idx >= 0) ? (uint64_t)gguf_get_val_u32(ctx, head_kv_idx) : 32;
+    uint64_t n_head_kv = 32;
+    if (head_kv_idx >= 0) {
+        size_t n_arr = gguf_get_arr_n(ctx, head_kv_idx);
+        if (n_arr > 1) {
+            const uint32_t * arr = (const uint32_t *)gguf_get_arr_data(ctx, head_kv_idx);
+            uint64_t max_kv = 0;
+            for (size_t i = 0; i < n_arr; ++i) {
+                if (arr[i] > max_kv) max_kv = arr[i];
+            }
+            n_head_kv = max_kv > 0 ? max_kv : 32;
+        } else if (n_arr == 1) {
+            n_head_kv = (uint64_t)gguf_get_val_u32(ctx, head_kv_idx);
+        }
+    }
 
     std::string head_key = plan.arch_name + ".attention.head_count";
     int head_idx = gguf_find_key(ctx, head_key.c_str());
-    uint64_t n_head = (head_idx >= 0) ? (uint64_t)gguf_get_val_u32(ctx, head_idx) : 32;
+    uint64_t n_head = 32;
+    if (head_idx >= 0) {
+        size_t n_arr = gguf_get_arr_n(ctx, head_idx);
+        if (n_arr > 1) {
+            const uint32_t * arr = (const uint32_t *)gguf_get_arr_data(ctx, head_idx);
+            uint64_t max_h = 0;
+            for (size_t i = 0; i < n_arr; ++i) {
+                if (arr[i] > max_h) max_h = arr[i];
+            }
+            n_head = max_h > 0 ? max_h : 32;
+        } else if (n_arr == 1) {
+            n_head = (uint64_t)gguf_get_val_u32(ctx, head_idx);
+        }
+    }
 
-    uint64_t head_dim = (n_head > 0) ? (n_embd / n_head) : 128;
+    // Adaptive head dimension: check explicit key_length first (e.g. Qwen Flash-Next, Gemma 4)
+    std::string key_len_key = plan.arch_name + ".attention.key_length";
+    int key_len_idx = gguf_find_key(ctx, key_len_key.c_str());
+    uint64_t head_dim = 128;
+    if (key_len_idx >= 0 && gguf_get_arr_n(ctx, key_len_idx) == 1) {
+        head_dim = (uint64_t)gguf_get_val_u32(ctx, key_len_idx);
+    } else if (n_head > 0) {
+        head_dim = n_embd / n_head;
+    }
 
+    // Scan tensor sizes and measure layer 0 footprint (blk.0.* or model.layers.0.*)
+    uint64_t layer0_bytes = 0;
     int64_t n_tensors = gguf_get_n_tensors(ctx);
     for (int64_t i = 0; i < n_tensors; ++i) {
-        plan.total_model_bytes += gguf_get_tensor_size(ctx, i);
+        size_t tsize = gguf_get_tensor_size(ctx, i);
+        plan.total_model_bytes += tsize;
+        const char * tname = gguf_get_tensor_name(ctx, i);
+        if (tname && (strncmp(tname, "blk.0.", 6) == 0 || strncmp(tname, "model.layers.0.", 15) == 0)) {
+            layer0_bytes += tsize;
+        }
     }
     gguf_free(ctx);
+
+    if (layer0_bytes > 0) {
+        plan.bytes_per_layer = layer0_bytes;
+    } else if (plan.n_layers > 0) {
+        plan.bytes_per_layer = plan.total_model_bytes / plan.n_layers;
+    } else {
+        plan.bytes_per_layer = 1;
+    }
 
     plan.mem_available_bytes = apu_get_mem_available_bytes();
     if (plan.mem_available_bytes == 0) {
         plan.mem_available_bytes = 48ULL * 1024 * 1024 * 1024;
     }
 
-    // Safety headroom: max(4 GB, 15% of available RAM)
-    plan.headroom_bytes = std::max<uint64_t>(4ULL * 1024 * 1024 * 1024, (plan.mem_available_bytes * 15) / 100);
+    // Safety headroom: max(4 GB, 10% of available RAM)
+    plan.headroom_bytes = std::max<uint64_t>(4ULL * 1024 * 1024 * 1024, (plan.mem_available_bytes * 10) / 100);
 
     // KV Cache space for n_ctx tokens (2 * n_layers * n_head_kv * head_dim * n_ctx * 2 bytes for f16)
     uint64_t ctx_len = (n_ctx > 0) ? (uint64_t)n_ctx : 4096;
@@ -381,18 +437,35 @@ apu_moe_memory_plan apu_plan_moe_memory(const std::string & model_path, int32_t 
     uint64_t reserved = plan.headroom_bytes + plan.kv_cache_bytes;
     plan.usable_bytes = (plan.mem_available_bytes > reserved) ? (plan.mem_available_bytes - reserved) : 0;
 
+    // Detect GPU device memory (e.g. APU ROCm gfx1150 pool)
+    size_t gpu_free = 0, gpu_total = 0;
+    for (size_t i = 0; i < ggml_backend_dev_count(); ++i) {
+        ggml_backend_dev_t dev = ggml_backend_dev_get(i);
+        if (ggml_backend_dev_type(dev) == GGML_BACKEND_DEVICE_TYPE_GPU) {
+            ggml_backend_dev_memory(dev, &gpu_free, &gpu_total);
+            break;
+        }
+    }
+
     // Condition for activating chunk loader: model size exceeds usable memory
     if (plan.total_model_bytes > plan.usable_bytes) {
         plan.chunk_loader_active = true;
 
-        if (plan.n_layers > 0) {
-            uint64_t bytes_per_layer = plan.total_model_bytes / plan.n_layers;
-            uint64_t gpu_vram_limit = 14ULL * 1024 * 1024 * 1024; // 14 GB usable VRAM
-            uint64_t pin_budget = std::min<uint64_t>(plan.usable_bytes, gpu_vram_limit);
-            if (bytes_per_layer > 0) {
-                plan.n_pinned_layers = (int32_t)std::min<uint64_t>((uint64_t)plan.n_layers, pin_budget / bytes_per_layer);
+        if (plan.n_layers > 0 && plan.bytes_per_layer > 0) {
+            uint64_t pin_budget = plan.usable_bytes;
+            if (gpu_total > 0) {
+                // Pin as many layers as fit within GPU pool (90% budget) and usable RAM
+                uint64_t gpu_budget = (gpu_total * 90) / 100;
+                pin_budget = std::min<uint64_t>(plan.usable_bytes, gpu_budget);
             }
+            plan.n_pinned_layers = (int32_t)std::min<uint64_t>((uint64_t)plan.n_layers, pin_budget / plan.bytes_per_layer);
+            plan.pinned_bytes = (uint64_t)plan.n_pinned_layers * plan.bytes_per_layer;
         }
+    } else {
+        // Entire model fits in usable memory: pin all layers
+        plan.chunk_loader_active = false;
+        plan.n_pinned_layers = plan.n_layers;
+        plan.pinned_bytes = plan.total_model_bytes;
     }
 
     return plan;

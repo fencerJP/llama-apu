@@ -155,6 +155,26 @@ static void test_real_model_audit_moe() {
     }
 }
 
+static void test_moe_memory_planner() {
+    printf("[test_moe_memory_planner] running...\n");
+    const std::string flash_next_path = "/mnt/Media/Downloads/model_testing/distill_test/Qwen3.8-Flash-Next/Qwen3.8-Flash-Next-TQ2_0-Stage4-Extra.gguf";
+
+    auto plan = apu_plan_moe_memory(flash_next_path, 512, -1);
+    if (plan.n_layers > 0) {
+        assert(plan.is_moe);
+        assert(plan.chunk_loader_active);
+        assert(plan.n_pinned_layers > 0);
+        assert(plan.bytes_per_layer > 0);
+        printf("  [PASS] Qwen Flash-Next: %d layers, %d experts, layer size: %.2f GiB, pinned layers: %d (%.2f GiB pinned in fast memory)\n",
+               plan.n_layers, plan.n_experts,
+               (double)plan.bytes_per_layer / (1024.0 * 1024.0 * 1024.0),
+               plan.n_pinned_layers,
+               (double)plan.pinned_bytes / (1024.0 * 1024.0 * 1024.0));
+    } else {
+        printf("  [SKIP] Model not accessible at test path\n");
+    }
+}
+
 int main() {
     printf("=== test-apu-moe: Phase 5 MoE Routing and Router SRAM Pinning Tests ===\n");
     test_moe_manager_config();
@@ -162,6 +182,7 @@ int main() {
     test_subbuffer_tile_dma_alignment();
     test_real_model_audit_dense();
     test_real_model_audit_moe();
+    test_moe_memory_planner();
     printf("ALL TESTS PASSED.\n");
     return 0;
 }
