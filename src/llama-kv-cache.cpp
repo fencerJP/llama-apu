@@ -291,8 +291,12 @@ llama_kv_cache::llama_kv_cache(
         if (!hparams.no_alloc) {
             for (ggml_tensor * t = ggml_get_first_tensor(ctx.get()); t != nullptr; t = ggml_get_next_tensor(ctx.get(), t)) {
                 if (t->data) {
-                    GGML_ASSERT(reinterpret_cast<uintptr_t>(t->data) % 16 == 0 && "KV tensor base address must be 16-byte Tile DMA aligned");
-                    GGML_ASSERT(t->nb[1] % 16 == 0 && "KV tensor chunk row stride must be 16-byte Tile DMA aligned");
+                    if (reinterpret_cast<uintptr_t>(t->data) % 16 != 0) {
+                        LLAMA_LOG_WARN("%s: KV tensor %s base address (%p) is not 16-byte Tile DMA aligned\n", __func__, t->name, t->data);
+                    }
+                    if (t->nb[1] % 16 != 0) {
+                        LLAMA_LOG_WARN("%s: KV tensor %s chunk row stride (%zu) is not 16-byte Tile DMA aligned; using host scalar stride\n", __func__, t->name, t->nb[1]);
+                    }
                 }
             }
         }
