@@ -1346,6 +1346,34 @@ static void apu_route_resolve(common_params & params) {
     }
     apu_spec_coordinator::get().set_mode(spec_mode);
     apu_spec_coordinator::get().set_timeline_sync(apu.spec_timeline_sync);
+
+    // APU Sparse MoE Chunk Loader: activate by default for large MoE models
+    // Scales number of pinned layers/experts by available memory with headroom and KV cache space
+    if (!params.model.path.empty()) {
+        auto plan = apu_plan_moe_memory(params.model.path, params.n_ctx ? params.n_ctx : 4096, params.n_gpu_layers);
+        if (plan.chunk_loader_active) {
+            LOG_INF("[APU MoE Chunk Loader] Activated by default for %s (%.2f GiB MoE, %d layers, %d experts)\n",
+                    params.model.path.c_str(), (double)plan.total_model_bytes / (1024.0 * 1024.0 * 1024.0),
+                    plan.n_layers, plan.n_experts);
+            LOG_INF("[APU MoE Chunk Loader] Available: %.2f GiB | Headroom: %.2f GiB | KV Cache: %.2f GiB | Usable: %.2f GiB\n",
+                    (double)plan.mem_available_bytes / (1024.0 * 1024.0 * 1024.0),
+                    (double)plan.headroom_bytes / (1024.0 * 1024.0 * 1024.0),
+                    (double)plan.kv_cache_bytes / (1024.0 * 1024.0 * 1024.0),
+                    (double)plan.usable_bytes / (1024.0 * 1024.0 * 1024.0));
+            LOG_INF("[APU MoE Chunk Loader] Scaling pinned layers to %d / %d (remaining %d layers streamed via sparse mmap)\n",
+                    plan.n_pinned_layers, plan.n_layers, plan.n_layers - plan.n_pinned_layers);
+
+            if (params.n_gpu_layers < 0) {
+                params.n_gpu_layers = plan.n_pinned_layers;
+            } else if (params.n_gpu_layers > plan.n_pinned_layers) {
+                LOG_WRN("[APU MoE Chunk Loader] Clamping -ngl %d to %d pinned layers to respect memory budget\n",
+                        params.n_gpu_layers, plan.n_pinned_layers);
+                params.n_gpu_layers = plan.n_pinned_layers;
+            }
+            params.no_host = true;
+            params.fit_params = false; // already fitted via APU chunk loader
+        }
+    }
 }
 
 bool common_params_parse(int argc, char ** argv, common_params & params, llama_example ex, void(*print_usage)(int, char **)) {

@@ -1449,7 +1449,10 @@ bool llama_model_base::load_tensors(llama_model_loader & ml) {
             ggml_backend_dev_props props;
             ggml_backend_dev_get_props(dev.dev, &props);
             if (!props.caps.mmap_support) {
-                ml.use_mmap = false;
+                // For MoE models or partial layer offloads, preserve mmap for CPU host memory buffers
+                if (hparams.n_expert == 0 && n_gpu_layers < 0) {
+                    ml.use_mmap = false;
+                }
                 break;
             }
         }
@@ -1480,7 +1483,12 @@ bool llama_model_base::load_tensors(llama_model_loader & ml) {
         __func__, load_mode_name);
 
     // build a list of buffer types for the CPU and GPU devices
-    pimpl->cpu_buft_list = make_cpu_buft_list(devices, params.use_extra_bufts, params.no_host);
+    bool effective_no_host = params.no_host;
+    if (hparams.n_expert > 0 && n_gpu_layers < (int)hparams.n_layer_all) {
+        // Enforce no_host for unpinned CPU layers in MoE models to prevent allocating ROCm_Host
+        effective_no_host = true;
+    }
+    pimpl->cpu_buft_list = make_cpu_buft_list(devices, params.use_extra_bufts, effective_no_host);
     for (const auto & dev : devices) {
         buft_list_t buft_list = make_gpu_buft_list(dev.dev, split_mode, tensor_split);
         // add CPU buffer types as a fallback

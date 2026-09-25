@@ -76,3 +76,23 @@ bool apu_audit_moe_router(const std::string & model_path,
                           bool verbose,
                           apu_moe_router_info & out_info,
                           std::string & out_log);
+
+// APU Sparse MoE Chunk Loader: memory budget, headroom, and pinned layers scaling
+struct apu_moe_memory_plan {
+    bool        is_moe              = false;
+    bool        chunk_loader_active = false;
+    std::string arch_name           = "";
+    uint64_t    total_model_bytes   = 0;
+    uint64_t    mem_available_bytes = 0;
+    uint64_t    headroom_bytes      = 0;
+    uint64_t    kv_cache_bytes      = 0;
+    uint64_t    usable_bytes        = 0;
+    int32_t     n_layers            = 0;
+    int32_t     n_pinned_layers     = 0;
+    int32_t     n_experts           = 0;
+    int32_t     n_experts_used      = 0;
+};
+
+uint64_t apu_get_mem_available_bytes();
+
+apu_moe_memory_plan apu_plan_moe_memory(const std::string & model_path, int32_t n_ctx = 4096, int32_t explicit_ngl = -1);
