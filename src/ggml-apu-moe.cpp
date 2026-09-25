@@ -438,13 +438,37 @@ apu_moe_memory_plan apu_plan_moe_memory(const std::string & model_path, int32_t 
     plan.usable_bytes = (plan.mem_available_bytes > reserved) ? (plan.mem_available_bytes - reserved) : 0;
 
     // Detect GPU device memory (e.g. APU ROCm gfx1150 pool)
-    size_t gpu_free = 0, gpu_total = 0;
+    uint64_t gpu_total = 0;
     for (size_t i = 0; i < ggml_backend_dev_count(); ++i) {
         ggml_backend_dev_t dev = ggml_backend_dev_get(i);
         if (ggml_backend_dev_type(dev) == GGML_BACKEND_DEVICE_TYPE_GPU) {
-            ggml_backend_dev_memory(dev, &gpu_free, &gpu_total);
-            break;
+            size_t free_b = 0, total_b = 0;
+            ggml_backend_dev_memory(dev, &free_b, &total_b);
+            if (total_b > 0) {
+                gpu_total = total_b;
+                break;
+            }
         }
+    }
+
+    // Direct KFD topology inspection for AMD APU / ROCm if backend not yet registered
+    if (gpu_total == 0) {
+        FILE * f = ::fopen("/sys/class/kfd/kfd/topology/nodes/1/mem_banks/0/properties", "r");
+        if (f) {
+            char k[64]; uint64_t v = 0;
+            while (::fscanf(f, "%63s %llu", k, (unsigned long long *)&v) == 2) {
+                if (!strcmp(k, "size_in_bytes")) {
+                    gpu_total = v;
+                    break;
+                }
+            }
+            ::fclose(f);
+        }
+    }
+
+    // Default APU VRAM ceiling: half of physical RAM clamped to 24 GiB
+    if (gpu_total == 0) {
+        gpu_total = std::min<uint64_t>(plan.mem_available_bytes / 2, 24ULL * 1024 * 1024 * 1024);
     }
 
     // Condition for activating chunk loader: model size exceeds usable memory
@@ -452,12 +476,9 @@ apu_moe_memory_plan apu_plan_moe_memory(const std::string & model_path, int32_t 
         plan.chunk_loader_active = true;
 
         if (plan.n_layers > 0 && plan.bytes_per_layer > 0) {
-            uint64_t pin_budget = plan.usable_bytes;
-            if (gpu_total > 0) {
-                // Pin as many layers as fit within GPU pool (90% budget) and usable RAM
-                uint64_t gpu_budget = (gpu_total * 90) / 100;
-                pin_budget = std::min<uint64_t>(plan.usable_bytes, gpu_budget);
-            }
+            // Allocate up to 75% of GPU pool to safely accommodate weights, activations, and overhead
+            uint64_t gpu_budget = (gpu_total * 75) / 100;
+            uint64_t pin_budget = std::min<uint64_t>(plan.usable_bytes, gpu_budget);
             plan.n_pinned_layers = (int32_t)std::min<uint64_t>((uint64_t)plan.n_layers, pin_budget / plan.bytes_per_layer);
             plan.pinned_bytes = (uint64_t)plan.n_pinned_layers * plan.bytes_per_layer;
         }
