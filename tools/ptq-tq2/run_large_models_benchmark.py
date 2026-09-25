@@ -96,6 +96,7 @@ def run_prompt(model_path: Path, prompt: str, max_tokens: int = 64) -> dict:
         "-m", str(model_path),
         "-p", prompt,
         "-n", str(max_tokens),
+        "-c", "512",
         "--simple-io",
         "--single-turn",
         "--temp", "0.2"
@@ -103,7 +104,7 @@ def run_prompt(model_path: Path, prompt: str, max_tokens: int = 64) -> dict:
     
     t0 = time.time()
     try:
-        proc = subprocess.run(cmd, capture_output=True, text=True, timeout=180)
+        proc = subprocess.run(cmd, capture_output=True, text=True, timeout=300)
         dt = time.time() - t0
         output = proc.stdout + proc.stderr
         
@@ -124,7 +125,7 @@ def run_prompt(model_path: Path, prompt: str, max_tokens: int = 64) -> dict:
             "gen_speed_tps": gen_speed
         }
     except subprocess.TimeoutExpired:
-        return {"success": False, "response": "TIMEOUT (>180s)", "latency_sec": 180.0}
+        return {"success": False, "response": "TIMEOUT (>300s)", "latency_sec": 300.0}
     except Exception as e:
         return {"success": False, "response": f"ERROR: {str(e)}", "latency_sec": 0.0}
 
