@@ -134,8 +134,8 @@ def parse_safetensors_config(config_path: str) -> ModelTopology:
     ffn_dim = base_cfg.get("intermediate_size", hidden_dim * 4)
     context_length = base_cfg.get("max_position_embeddings", 8192)
     vocab_size = base_cfg.get("vocab_size", 128000)
-    head_dim = base_cfg.get("head_dim", hidden_dim // max(num_heads, 1))
-    num_experts = base_cfg.get("num_experts", base_cfg.get("n_routed_experts", 0))
+    head_dim = base_cfg.get("head_dim") or (hidden_dim // max(num_heads, 1))
+    num_experts = base_cfg.get("num_experts") or base_cfg.get("n_routed_experts") or 0
 
     return ModelTopology(
         arch_name=arch,

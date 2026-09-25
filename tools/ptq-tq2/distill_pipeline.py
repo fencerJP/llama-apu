@@ -596,10 +596,37 @@ def main():
         {"name": "K2-Horizon-3.7B", "is_large_moe": False},
         {"name": "Qwen3.8-27B-Cold-Fusion", "is_large_moe": False},
         {"name": "Qwen3.8-Flash-Next", "is_large_moe": True},
+        {"name": "Gemma-4-31B-it", "is_large_moe": False},
+        {"name": "occamy-1.0-with-mtp", "is_large_moe": True},
+        {"name": "occamy-1.0", "is_large_moe": True},
     ]
 
     if args.models:
-        suite = [m for m in suite if m["name"] in args.models]
+        known = {m["name"]: m for m in suite}
+        selected = []
+        for mname in args.models:
+            if mname in known:
+                selected.append(known[mname])
+            else:
+                cfg_p = NAS_MODEL_DIR / mname / "config.json"
+                is_moe = False
+                if cfg_p.exists():
+                    try:
+                        with open(cfg_p, "r") as f:
+                            cfg = json.load(f)
+                            text_cfg = cfg.get("text_config", {})
+                            num_exp = (
+                                cfg.get("num_experts")
+                                or cfg.get("num_local_experts")
+                                or text_cfg.get("num_experts")
+                                or text_cfg.get("num_local_experts")
+                            )
+                            if num_exp and int(num_exp) > 1:
+                                is_moe = True
+                    except Exception:
+                        pass
+                selected.append({"name": mname, "is_large_moe": is_moe})
+        suite = selected
 
     all_results = {}
     for item in suite:
