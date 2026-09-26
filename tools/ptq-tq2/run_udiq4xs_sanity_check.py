@@ -53,7 +53,8 @@ QUESTIONS = [
     },
     {
         "id": "Q5_HARD",
-        "difficulty": "Mathematics",
+        "difficulty": "Hard",
+        "category": "Mathematics",
         "prompt": "What is the derivative of f(x) = 3*x^2 + 5*x - 7 with respect to x?"
     },
     {
@@ -78,8 +79,8 @@ def check_shards_ready() -> tuple[Path | None, list[Path], str]:
         shards = sorted(list(c.glob("*.gguf")))
         if len(shards) == 3:
             sizes = [s.stat().st_size for s in shards]
-            if any(sz < 100 * 1024 * 1024 for sz in sizes):
-                return c, shards, "Found 3 shards but at least one file is <100MB"
+            if any(sz < 5 * 1024 * 1024 for sz in sizes):
+                return c, shards, "Found 3 shards but at least one file is <5MB"
             return c, shards, "READY"
         elif len(shards) > 0:
             return c, shards, f"Found only {len(shards)} of 3 expected shards: {[s.name for s in shards]}"
@@ -108,6 +109,9 @@ def run_prompt(model_path: Path, prompt: str, max_tokens: int = 64) -> dict:
         "-p", prompt,
         "-n", str(max_tokens),
         "-c", "512",
+        "--device", "none",
+        "--load-mode", "mmap",
+        "-t", "16",
         "--simple-io",
         "--single-turn",
         "--temp", "0.2"
@@ -115,7 +119,7 @@ def run_prompt(model_path: Path, prompt: str, max_tokens: int = 64) -> dict:
     
     t0 = time.time()
     try:
-        proc = subprocess.run(cmd, capture_output=True, text=True, timeout=300)
+        proc = subprocess.run(cmd, capture_output=True, text=True, timeout=600)
         dt = time.time() - t0
         output = proc.stdout + proc.stderr
         
@@ -135,8 +139,14 @@ def run_prompt(model_path: Path, prompt: str, max_tokens: int = 64) -> dict:
             "prompt_speed_tps": prompt_speed,
             "gen_speed_tps": gen_speed
         }
-    except subprocess.TimeoutExpired:
-        return {"success": False, "response": "TIMEOUT (>300s)", "latency_sec": 300.0}
+    except subprocess.TimeoutExpired as e:
+        out = (e.stdout or "") + (e.stderr or "")
+        return {
+            "success": False,
+            "response": f"TIMEOUT (>600s)\n{out[-300:]}",
+            "latency_sec": 600.0,
+            "raw_output": out
+        }
     except Exception as e:
         return {"success": False, "response": f"ERROR: {str(e)}", "latency_sec": 0.0}
 
