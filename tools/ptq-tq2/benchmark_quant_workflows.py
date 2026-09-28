@@ -29,7 +29,7 @@ BUILD_BIN = LLAMA_DIR / "build" / "bin"
 LLAMA_CLI = BUILD_BIN / "llama-cli"
 LLAMA_PERPLEXITY = BUILD_BIN / "llama-perplexity"
 
-DEFAULT_SCRATCH_DIR = Path("/home/fencer/.cache/llama-apu-distill-scratch/bench")
+DEFAULT_SCRATCH_DIR = Path("/mnt/Scratch/model_testing")
 DEFAULT_DATABANK_SAMPLES = Path("/home/fencer/databank/distill/calibration_samples.txt")
 
 BENCHMARK_QUESTIONS = [
