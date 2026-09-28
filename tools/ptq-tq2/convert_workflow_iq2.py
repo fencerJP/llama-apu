@@ -146,14 +146,28 @@ def convert_model_wf1(model_name: str, quant_type: str = "IQ2_S"):
             subprocess.run(["rsync", "-av", str(source_imatrix), str(imatrix_dat)])
         else:
             print(f"[*] imatrix.dat not found. Computing importance matrix on calibration data...", flush=True)
+            ngl_val = "0" if "occamy" in model_name.lower() else "99"
             ok = run_cmd([
                 LLAMA_IMATRIX,
                 "-m", bf16_gguf,
                 "-f", CALIB_SAMPLES,
                 "-o", imatrix_dat,
                 "--chunks", "64",
-                "-ngl", "99"
-            ], f"Compute imatrix for {model_name}")
+                "-ngl", ngl_val
+            ], f"Compute imatrix for {model_name} (ngl={ngl_val})")
+
+            # Fallback to -ngl 0 if GPU offload failed
+            if not ok and ngl_val != "0":
+                print(f"[!] GPU imatrix failed. Retrying in CPU mode (-ngl 0)...", flush=True)
+                ok = run_cmd([
+                    LLAMA_IMATRIX,
+                    "-m", bf16_gguf,
+                    "-f", CALIB_SAMPLES,
+                    "-o", imatrix_dat,
+                    "--chunks", "64",
+                    "-ngl", "0"
+                ], f"Compute imatrix for {model_name} (CPU mode)")
+
             if not ok or not imatrix_dat.exists():
                 print(f"[Error] Failed to compute imatrix for {model_name}", flush=True)
                 return False
