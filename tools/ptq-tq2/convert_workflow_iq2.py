@@ -36,16 +36,16 @@ TEST_MODELS = [
     "Gemma-4-31B-it"
 ]
 
-def run_cmd(cmd_list, description: str):
+def run_cmd(cmd_list, description: str, env: Optional[dict] = None):
     print(f"\n[Command] {description}")
-    print(" ".join(str(x) for x in cmd_list))
+    print(" ".join(str(x) for x in cmd_list), flush=True)
     t0 = time.time()
-    res = subprocess.run([str(x) for x in cmd_list])
+    res = subprocess.run([str(x) for x in cmd_list], env=env)
     dt = time.time() - t0
     if res.returncode != 0:
-        print(f"[Error] Command failed with exit code {res.returncode} after {dt:.1f}s")
+        print(f"[Error] Command failed with exit code {res.returncode} after {dt:.1f}s", flush=True)
         return False
-    print(f"[Success] Completed {description} in {dt:.1f}s")
+    print(f"[Success] Completed {description} in {dt:.1f}s", flush=True)
     return True
 
 SCRATCH_DIR = Path("/mnt/Scratch/model_testing")
@@ -61,18 +61,6 @@ def get_dir_size(path: Path) -> int:
             if not os.path.islink(fp):
                 total += os.path.getsize(fp)
     return total
-
-def run_cmd(cmd_list, description: str):
-    print(f"\n[Command] {description}")
-    print(" ".join(str(x) for x in cmd_list), flush=True)
-    t0 = time.time()
-    res = subprocess.run([str(x) for x in cmd_list])
-    dt = time.time() - t0
-    if res.returncode != 0:
-        print(f"[Error] Command failed with exit code {res.returncode} after {dt:.1f}s", flush=True)
-        return False
-    print(f"[Success] Completed {description} in {dt:.1f}s", flush=True)
-    return True
 
 def sync_to_scratch(source_dir: Path, target_dir: Path):
     """Syncs source model directory to NVMe scratch directory."""
@@ -146,7 +134,9 @@ def convert_model_wf1(model_name: str, quant_type: str = "IQ2_S"):
             subprocess.run(["rsync", "-av", str(source_imatrix), str(imatrix_dat)])
         else:
             print(f"[*] imatrix.dat not found. Computing importance matrix on calibration data...", flush=True)
+            cpu_env = {**os.environ, "HIP_VISIBLE_DEVICES": "", "ROCR_VISIBLE_DEVICES": ""}
             ngl_val = "0" if "occamy" in model_name.lower() else "99"
+            cmd_env = cpu_env if ngl_val == "0" else None
             ok = run_cmd([
                 LLAMA_IMATRIX,
                 "-m", bf16_gguf,
@@ -154,7 +144,7 @@ def convert_model_wf1(model_name: str, quant_type: str = "IQ2_S"):
                 "-o", imatrix_dat,
                 "--chunks", "64",
                 "-ngl", ngl_val
-            ], f"Compute imatrix for {model_name} (ngl={ngl_val})")
+            ], f"Compute imatrix for {model_name} (ngl={ngl_val})", env=cmd_env)
 
             # Fallback to -ngl 0 if GPU offload failed
             if not ok and ngl_val != "0":
@@ -166,7 +156,7 @@ def convert_model_wf1(model_name: str, quant_type: str = "IQ2_S"):
                     "-o", imatrix_dat,
                     "--chunks", "64",
                     "-ngl", "0"
-                ], f"Compute imatrix for {model_name} (CPU mode)")
+                ], f"Compute imatrix for {model_name} (CPU mode)", env=cpu_env)
 
             if not ok or not imatrix_dat.exists():
                 print(f"[Error] Failed to compute imatrix for {model_name}", flush=True)
