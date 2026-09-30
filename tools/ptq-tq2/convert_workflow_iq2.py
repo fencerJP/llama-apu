@@ -168,18 +168,26 @@ def convert_model_wf1(model_name: str, quant_type: str = "IQ2_S"):
         print(f"[*] Found existing imatrix.dat in work dir: {imatrix_dat}", flush=True)
 
     # 3. Quantize with mixed precision
-    print(f"[*] Quantizing to {quant_type} with importance matrix...", flush=True)
-    ok = run_cmd([
-        LLAMA_QUANTIZE,
-        "--imatrix", imatrix_dat,
-        bf16_gguf,
-        quant_gguf,
-        quant_type,
-        "16"
-    ], f"Quantize {model_name} to {quant_type}")
-    if not ok or not quant_gguf.exists():
-        print(f"[Error] Failed to quantize {model_name} to {quant_type}", flush=True)
-        return False
+    source_quant_gguf = source_model_dir / f"{model_name}-{quant_type}.gguf"
+    if not quant_gguf.exists():
+        if source_quant_gguf.exists():
+            print(f"[*] Copying existing {quant_type} GGUF from persistent storage to NVMe...", flush=True)
+            subprocess.run(["rsync", "-av", str(source_quant_gguf), str(quant_gguf)])
+        else:
+            print(f"[*] Quantizing to {quant_type} with importance matrix...", flush=True)
+            ok = run_cmd([
+                LLAMA_QUANTIZE,
+                "--imatrix", imatrix_dat,
+                bf16_gguf,
+                quant_gguf,
+                quant_type,
+                "16"
+            ], f"Quantize {model_name} to {quant_type}")
+            if not ok or not quant_gguf.exists():
+                print(f"[Error] Failed to quantize {model_name} to {quant_type}", flush=True)
+                return False
+    else:
+        print(f"[*] Found existing {quant_type} GGUF in work dir: {quant_gguf}", flush=True)
 
     # Sync quantized output GGUF back to persistent storage
     source_quant_gguf = source_model_dir / f"{model_name}-{quant_type}.gguf"
