@@ -89,12 +89,12 @@ def convert_model_wf1(model_name: str, quant_type: str = "IQ2_S"):
     print(f"  PROCESSING MODEL: {model_name} ({size_gb:.1f} GB) -> {quant_type}", flush=True)
     print(f"=======================================================", flush=True)
 
-    # Check 200GB threshold for NVMe staging
-    if size_gb < 200.0:
+    # Check 1500GB threshold for NVMe staging (uses /mnt/Scratch NVMe drive)
+    if size_gb < 1500.0:
         work_dir = SCRATCH_DIR / model_name
         sync_to_scratch(source_model_dir, work_dir)
     else:
-        print(f"[*] Model size ({size_gb:.1f} GB) >= 200 GB. Processing directly from {source_model_dir}...", flush=True)
+        print(f"[*] Model size ({size_gb:.1f} GB) >= 1500 GB. Processing directly from {source_model_dir}...", flush=True)
         work_dir = source_model_dir
 
     bf16_gguf = work_dir / f"{model_name}-BF16.gguf"
