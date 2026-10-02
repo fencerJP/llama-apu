@@ -15,7 +15,7 @@ import math
 import os
 import re
 import shutil
-import struct
+import subprocess
 import sys
 import time
 from pathlib import Path
@@ -214,22 +214,93 @@ def convert_to_r2q_gguf(
     print(f"[+] Successfully converted to R2Q GGUF in {total_time:.2f}s!")
     print(f"[+] Output: {dst_r2q_gguf} ({out_size_mb:.2f} MiB)")
 
+MODELS_DIR = Path("/mnt/Media/Downloads/model_testing")
+SCRATCH_DIR = Path("/mnt/Scratch/model_testing")
+TEST_MODELS = [
+    "NeoHorse-1-4B",
+    "occamy-1.0-with-mtp",
+    "Qwen3.8-27B-Cold-Fusion",
+    "Qwen3.8-Flash-Next",
+    "Gemma-4-31B-it"
+]
+
+def convert_model_r2q(model_name: str, dad_steps: int = 15, dad_lr: float = 1e-2):
+    source_model_dir = MODELS_DIR / model_name
+    if not source_model_dir.exists():
+        print(f"[Warning] Source model dir {source_model_dir} does not exist, skipping.", flush=True)
+        return False
+
+    work_dir = SCRATCH_DIR / model_name
+    work_dir.mkdir(parents=True, exist_ok=True)
+    
+    source_bf16 = source_model_dir / f"{model_name}-BF16.gguf"
+    work_bf16 = work_dir / f"{model_name}-BF16.gguf"
+    
+    source_r2q = source_model_dir / f"{model_name}-R2Q.gguf"
+    work_r2q = work_dir / f"{model_name}-R2Q.gguf"
+    
+    if source_r2q.exists() or work_r2q.exists():
+        print(f"[*] Found existing R2Q GGUF for {model_name}, ensuring synced to persistent storage...", flush=True)
+        if work_r2q.exists() and not source_r2q.exists():
+            subprocess.run(["rsync", "-av", str(work_r2q), str(source_r2q)])
+        return True
+
+    if not work_bf16.exists():
+        if source_bf16.exists():
+            print(f"[*] Staging base BF16 GGUF from persistent storage to NVMe...", flush=True)
+            subprocess.run(["rsync", "-av", str(source_bf16), str(work_bf16)])
+        else:
+            print(f"[Error] Base BF16 GGUF not found for {model_name} at {source_bf16}", flush=True)
+            return False
+
+    print(f"\n=======================================================", flush=True)
+    print(f"  PROCESSING MODEL (R2Q Workflow): {model_name}", flush=True)
+    print(f"=======================================================", flush=True)
+
+    convert_to_r2q_gguf(
+        src_base_gguf=work_bf16,
+        dst_r2q_gguf=work_r2q,
+        dad_steps=dad_steps,
+        dad_lr=dad_lr
+    )
+    
+    if work_r2q.exists():
+        print(f"[*] Syncing R2Q GGUF back to persistent storage ({source_r2q})...", flush=True)
+        subprocess.run(["rsync", "-av", str(work_r2q), str(source_r2q)])
+        return True
+    return False
+
 def main():
     parser = argparse.ArgumentParser(description="Convert model to R2Q 2.06 bpw GGUF")
-    parser.add_argument("--src", type=str, required=True, help="Path to base BF16/FP16 GGUF")
-    parser.add_argument("--dst", type=str, required=True, help="Path to output R2Q GGUF")
+    parser.add_argument("--model", type=str, default=None, help="Model name or 'all'")
+    parser.add_argument("--src", type=str, default=None, help="Path to base BF16/FP16 GGUF")
+    parser.add_argument("--dst", type=str, default=None, help="Path to output R2Q GGUF")
     parser.add_argument("--corpus", type=str, default=str(DEFAULT_CORPUS), help="Path to calibration corpus")
     parser.add_argument("--dad-steps", type=int, default=15, help="Number of DAD distillation steps")
     parser.add_argument("--dad-lr", type=float, default=1e-2, help="Learning rate for DAD")
     args = parser.parse_args()
     
-    convert_to_r2q_gguf(
-        src_base_gguf=Path(args.src),
-        dst_r2q_gguf=Path(args.dst),
-        corpus_path=Path(args.corpus) if args.corpus else None,
-        dad_steps=args.dad_steps,
-        dad_lr=args.dad_lr
-    )
+    if args.model:
+        models = TEST_MODELS if args.model == "all" else [args.model]
+        results = {}
+        for m in models:
+            ok = convert_model_r2q(m, dad_steps=args.dad_steps, dad_lr=args.dad_lr)
+            results[m] = "SUCCESS" if ok else "FAILED"
+        print("\n=======================================================", flush=True)
+        print("  WORKFLOW 2 (R2Q) BATCH CONVERSION SUMMARY", flush=True)
+        print("=======================================================", flush=True)
+        for m, status in results.items():
+            print(f"  - {m}: {status}", flush=True)
+    elif args.src and args.dst:
+        convert_to_r2q_gguf(
+            src_base_gguf=Path(args.src),
+            dst_r2q_gguf=Path(args.dst),
+            corpus_path=Path(args.corpus) if args.corpus else None,
+            dad_steps=args.dad_steps,
+            dad_lr=args.dad_lr
+        )
+    else:
+        parser.print_help()
 
 if __name__ == "__main__":
     main()
