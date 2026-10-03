@@ -525,8 +525,7 @@ void IMatrixCollector::save_imatrix_legacy(int32_t ncall) const {
         out.write(dataset_file, len);
     }
 
-    LOGV(1, "\n");
-    LOG_DBGV(1, "%s: stored collected data after %d chunks in %s\n", __func__, m_last_chunk, fname.c_str());
+    LOG_INF("%s: Stored collected imatrix data after %d chunks in %s\n", __func__, m_last_chunk, fname.c_str());
 }
 
 void IMatrixCollector::save_imatrix(int32_t n_chunk) const {
@@ -632,8 +631,7 @@ void IMatrixCollector::save_imatrix(int32_t n_chunk) const {
 
     gguf_write_to_file(ctx_gguf, fname.c_str(), false);
 
-    LOGV(1, "\n");
-    LOG_DBGV(1, "%s: stored collected data after %d chunks in %s\n", __func__, m_last_chunk, fname.c_str());
+    LOG_INF("%s: Stored collected imatrix data after %d chunks in %s\n", __func__, m_last_chunk, fname.c_str());
 
     gguf_free(ctx_gguf);
     ggml_free(ctx);
@@ -856,6 +854,8 @@ static bool compute_imatrix(llama_context * ctx, const common_params & params, c
 
     std::vector<std::thread> workers(std::thread::hardware_concurrency() - 1);
 
+    const auto t_all_start = std::chrono::high_resolution_clock::now();
+
     for (int i = 0; i < n_chunk; i += n_seq) {
         const int start =     i * n_ctx;
         const int end   = start + n_ctx;
@@ -863,6 +863,9 @@ static bool compute_imatrix(llama_context * ctx, const common_params & params, c
         const int n_seq_batch = std::min(n_seq, n_chunk - i);
 
         const auto t_start = std::chrono::high_resolution_clock::now();
+
+        LOG_INF("%s: Starting chunk batch %d..%d of %d (n_seq=%d, n_ctx=%d)...\n",
+                __func__, i + 1, i + n_seq_batch, n_chunk, n_seq_batch, n_ctx);
 
         // clear the KV cache
         llama_memory_clear(llama_get_memory(ctx), true);
@@ -908,19 +911,21 @@ static bool compute_imatrix(llama_context * ctx, const common_params & params, c
             }
         }
 
+        llama_synchronize(ctx);
+        const auto t_end = std::chrono::high_resolution_clock::now();
+        const float t_batch = std::chrono::duration<float>(t_end - t_start).count();
+        const float t_total_elapsed = std::chrono::duration<float>(t_end - t_all_start).count();
+        const int chunks_done = i + n_seq_batch;
+        const float avg_sec_per_chunk = t_total_elapsed / (float)chunks_done;
+        const float eta_sec = avg_sec_per_chunk * (float)(n_chunk - chunks_done);
 
-        if (i == 0) {
-            llama_synchronize(ctx);
-            const auto t_end = std::chrono::high_resolution_clock::now();
-            const float t_total = std::chrono::duration<float>(t_end - t_start).count();
-            LOG_INF("%s: %.2f seconds per pass - ETA ", __func__, t_total);
-            int total_seconds = (int)(t_total * n_chunk / n_seq);
-            if (total_seconds >= 60*60) {
-                LOG("%d hours ", total_seconds / (60*60));
-                total_seconds = total_seconds % (60*60);
-            }
-            LOG("%.2f minutes\n", total_seconds / 60.0);
-        }
+        int total_eta_s = (int)eta_sec;
+        int eta_h = total_eta_s / 3600;
+        int eta_m = (total_eta_s % 3600) / 60;
+        int eta_s = total_eta_s % 60;
+
+        LOG_INF("%s: Processed chunk batch %d..%d of %d (took %.2fs | avg %.2fs/chunk | ETA: %02dh%02dm%02ds)\n",
+                __func__, i + 1, chunks_done, n_chunk, t_batch, avg_sec_per_chunk, eta_h, eta_m, eta_s);
 
         if (params.compute_ppl) {
             const int first = n_ctx/2;

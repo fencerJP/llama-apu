@@ -137,24 +137,26 @@ def convert_model_wf1(model_name: str, quant_type: str = "IQ2_S"):
             cpu_env = {**os.environ, "HIP_VISIBLE_DEVICES": "", "ROCR_VISIBLE_DEVICES": ""}
             ngl_val = "0" if "occamy" in model_name.lower() else "99"
             cmd_env = cpu_env if ngl_val == "0" else None
-            ok = run_cmd([
+            base_imatrix_args = [
                 LLAMA_IMATRIX,
                 "-m", bf16_gguf,
                 "-f", CALIB_SAMPLES,
                 "-o", imatrix_dat,
+                "-t", "12",
                 "--chunks", "64",
+                "--log-timestamps",
+                "--output-frequency", "1",
+                "--save-frequency", "10",
+                "--ppl"
+            ]
+            ok = run_cmd(base_imatrix_args + [
                 "-ngl", ngl_val
             ], f"Compute imatrix for {model_name} (ngl={ngl_val})", env=cmd_env)
 
             # Fallback to -ngl 0 if GPU offload failed
             if not ok and ngl_val != "0":
                 print(f"[!] GPU imatrix failed. Retrying in CPU mode (-ngl 0)...", flush=True)
-                ok = run_cmd([
-                    LLAMA_IMATRIX,
-                    "-m", bf16_gguf,
-                    "-f", CALIB_SAMPLES,
-                    "-o", imatrix_dat,
-                    "--chunks", "64",
+                ok = run_cmd(base_imatrix_args + [
                     "-ngl", "0"
                 ], f"Compute imatrix for {model_name} (CPU mode)", env=cpu_env)
 
