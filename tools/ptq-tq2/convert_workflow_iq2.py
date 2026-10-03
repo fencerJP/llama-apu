@@ -32,8 +32,8 @@ TEST_MODELS = [
     "NeoHorse-1-4B",
     "occamy-1.0-with-mtp",
     "Qwen3.8-27B-Cold-Fusion",
-    "Qwen3.8-Flash-Next",
-    "Gemma-4-31B-it"
+    "Gemma-4-31B-it",
+    "Qwen3.8-Flash-Next"
 ]
 
 def run_cmd(cmd_list, description: str, env: Optional[dict] = None):
@@ -137,18 +137,21 @@ def convert_model_wf1(model_name: str, quant_type: str = "IQ2_S"):
         else:
             print(f"[*] imatrix.dat not found. Computing importance matrix on calibration data...", flush=True)
             cpu_env = {**os.environ, "HIP_VISIBLE_DEVICES": "", "ROCR_VISIBLE_DEVICES": ""}
-            ngl_val = "0" if "occamy" in model_name.lower() else "99"
+            is_flash_next = "flash-next" in model_name.lower()
+            is_moe_large = "occamy" in model_name.lower() or is_flash_next
+            ngl_val = "0" if is_moe_large else "99"
             cmd_env = cpu_env if ngl_val == "0" else None
+            chunks_val = "16" if is_flash_next else "64"
             base_imatrix_args = [
                 LLAMA_IMATRIX,
                 "-m", bf16_gguf,
                 "-f", CALIB_SAMPLES,
                 "-o", imatrix_dat,
                 "-t", "12",
-                "--chunks", "64",
+                "--chunks", chunks_val,
                 "--log-timestamps",
                 "--output-frequency", "1",
-                "--save-frequency", "10",
+                "--save-frequency", "5",
                 "--ppl"
             ]
             ok = run_cmd(base_imatrix_args + [
