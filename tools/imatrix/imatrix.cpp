@@ -408,14 +408,7 @@ bool IMatrixCollector::collect_imatrix(struct ggml_tensor * t, bool ask, void * 
             e.counts[i] += ggml_nrows(src1) / n_mat;
             const int32_t n_chunk = e.counts[i] / chunk_size;
             if (n_chunk > m_last_chunk) {
-                const int32_t chunk_step = n_chunk - m_last_chunk;
                 m_last_chunk = n_chunk;
-                if ((m_last_chunk % m_params.n_out_freq) / chunk_step == 0) {
-                    save_imatrix();
-                }
-                if (m_params.n_save_freq > 0 && (m_last_chunk % m_params.n_save_freq) / chunk_step == 0) {
-                    save_imatrix(m_last_chunk);
-                }
             }
         }
     }
@@ -926,6 +919,13 @@ static bool compute_imatrix(llama_context * ctx, const common_params & params, c
 
         LOG_INF("%s: Processed chunk batch %d..%d of %d (took %.2fs | avg %.2fs/chunk | ETA: %02dh%02dm%02ds)\n",
                 __func__, i + 1, chunks_done, n_chunk, t_batch, avg_sec_per_chunk, eta_h, eta_m, eta_s);
+
+        if ((chunks_done % params.n_out_freq) == 0 || chunks_done == n_chunk) {
+            g_collector.save_imatrix();
+        }
+        if (params.n_save_freq > 0 && ((chunks_done % params.n_save_freq) == 0)) {
+            g_collector.save_imatrix(chunks_done);
+        }
 
         if (params.compute_ppl) {
             const int first = n_ctx/2;

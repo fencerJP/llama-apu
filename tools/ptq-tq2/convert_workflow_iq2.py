@@ -138,17 +138,20 @@ def convert_model_wf1(model_name: str, quant_type: str = "IQ2_S"):
             print(f"[*] imatrix.dat not found. Computing importance matrix on calibration data...", flush=True)
             cpu_env = {**os.environ, "HIP_VISIBLE_DEVICES": "", "ROCR_VISIBLE_DEVICES": ""}
             is_flash_next = "flash-next" in model_name.lower()
-            is_moe_large = "occamy" in model_name.lower() or is_flash_next
-            ngl_val = "0" if is_moe_large else "99"
+            is_gemma = "gemma" in model_name.lower()
+            is_cpu_mode = "occamy" in model_name.lower() or is_flash_next or is_gemma
+            ngl_val = "0" if is_cpu_mode else "99"
             cmd_env = cpu_env if ngl_val == "0" else None
-            chunks_val = "16" if is_flash_next else "64"
+            chunks_val = "16" if (is_flash_next or is_gemma) else "64"
             base_imatrix_args = [
                 LLAMA_IMATRIX,
                 "-m", bf16_gguf,
                 "-f", CALIB_SAMPLES,
                 "-o", imatrix_dat,
                 "-t", "12",
+                "-b", "512",
                 "--chunks", chunks_val,
+                "--output-format", "dat",
                 "--log-timestamps",
                 "--output-frequency", "1",
                 "--save-frequency", "5",

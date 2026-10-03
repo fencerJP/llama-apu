@@ -471,8 +471,8 @@ apu_moe_memory_plan apu_plan_moe_memory(const std::string & model_path, int32_t 
         gpu_total = std::min<uint64_t>(plan.mem_available_bytes / 2, 24ULL * 1024 * 1024 * 1024);
     }
 
-    // Condition for activating chunk loader: model size exceeds usable memory
-    if (plan.total_model_bytes > plan.usable_bytes) {
+    // Condition for activating chunk loader: MoE model and size exceeds usable memory
+    if (plan.is_moe && plan.total_model_bytes > plan.usable_bytes) {
         plan.chunk_loader_active = true;
 
         if (plan.n_layers > 0 && plan.bytes_per_layer > 0) {
