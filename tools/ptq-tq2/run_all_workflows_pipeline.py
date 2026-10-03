@@ -91,12 +91,26 @@ def main():
     
     # --- WORKFLOW 1 MONITOR & BENCHMARK ---
     print("\n[Phase 1] Monitoring Workflow 1 (quant-wf-1-iq2) batch conversion...", flush=True)
+    loop_count = 0
     while True:
         # Check if llama-imatrix or convert_workflow_iq2.py is running
-        proc = subprocess.run(["ps", "aux"], capture_output=True, text=True)
-        if "convert_workflow_iq2.py" not in proc.stdout and "llama-imatrix" not in proc.stdout:
-            print("[+] Workflow 1 conversions completed!", flush=True)
+        proc = subprocess.run(["ps", "-eo", "pid,etime,time,%cpu,comm,args"], capture_output=True, text=True)
+        lines = [l for l in proc.stdout.splitlines() if "convert_workflow_iq2" in l or "llama-imatrix" in l]
+        # Filter out grep or ps itself
+        active_lines = [l for l in lines if not any(x in l for x in ("ps -eo", "grep"))]
+        
+        if not active_lines:
+            print(f"[{time.strftime('%Y-%m-%d %H:%M:%S')}] [+] Workflow 1 conversions completed!", flush=True)
             break
+            
+        loop_count += 1
+        if loop_count % 10 == 1:  # Every 5 minutes (10 * 30s)
+            t_now = time.strftime("%Y-%m-%d %H:%M:%S")
+            print(f"[{t_now}] [Heartbeat] Workflow 1 still active ({len(active_lines)} process(es)):", flush=True)
+            for l in active_lines[:3]:
+                parts = l.strip().split(maxsplit=5)
+                if len(parts) >= 6:
+                    print(f"    - PID {parts[0]}: {parts[4]} (elapsed: {parts[1]}, CPU: {parts[3]}%)", flush=True)
         time.sleep(30)
         
     print("\n[Phase 1] Benchmarking Workflow 1 (IQ2_S)...", flush=True)

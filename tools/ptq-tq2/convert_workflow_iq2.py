@@ -37,15 +37,17 @@ TEST_MODELS = [
 ]
 
 def run_cmd(cmd_list, description: str, env: Optional[dict] = None):
-    print(f"\n[Command] {description}")
+    t_start_str = time.strftime("%Y-%m-%d %H:%M:%S")
+    print(f"\n[{t_start_str}] [Command] {description}", flush=True)
     print(" ".join(str(x) for x in cmd_list), flush=True)
     t0 = time.time()
     res = subprocess.run([str(x) for x in cmd_list], env=env)
     dt = time.time() - t0
+    t_end_str = time.strftime("%Y-%m-%d %H:%M:%S")
     if res.returncode != 0:
-        print(f"[Error] Command failed with exit code {res.returncode} after {dt:.1f}s", flush=True)
+        print(f"[{t_end_str}] [Error] Command failed with exit code {res.returncode} after {dt:.1f}s", flush=True)
         return False
-    print(f"[Success] Completed {description} in {dt:.1f}s", flush=True)
+    print(f"[{t_end_str}] [Success] Completed {description} in {dt:.1f}s", flush=True)
     return True
 
 SCRATCH_DIR = Path("/mnt/Scratch/model_testing")

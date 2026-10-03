@@ -149,8 +149,12 @@ def convert_to_r2q_gguf(
     target_keywords = ["attn_q", "attn_k", "attn_output", "ffn_gate", "ffn_up", "ffn_down", "attn_gate", "ssm_out"]
     sensitive_keywords = ["attn_v", "attn_qkv", "ssm_conv1d", "token_embd", "output_norm"]
     
-    print(f"[*] Processing {len(reader.tensors)} tensors...")
     total_tensors = len(reader.tensors)
+    print(f"[*] Processing {total_tensors} tensors with R2Q quantization...", flush=True)
+    
+    quantized_count = 0
+    skipped_count = 0
+    quant_time_total = 0.0
     
     with open(src_base_gguf, "rb") as f_src:
         for idx, t in enumerate(reader.tensors, start=1):
@@ -169,6 +173,9 @@ def convert_to_r2q_gguf(
             if should_quantize and len(t.shape) == 2:
                 n_cols = int(t.shape[0])
                 n_rows = int(t.shape[1])
+                size_mb = t.data.size / (1024**2)
+                t_t0 = time.time()
+                print(f"    [{idx}/{total_tensors}] Quantizing {t_name} ({n_rows}x{n_cols}, {size_mb:.1f} MB)...", flush=True)
                 
                 if t.tensor_type == gguf.GGMLQuantizationType.F32:
                     w_np = np.frombuffer(raw_bytes, dtype=np.float32).copy()
@@ -196,23 +203,38 @@ def convert_to_r2q_gguf(
                 bytes_per_row = (n_cols // 256) * 66
                 tq2_np = np.frombuffer(tq2_buf, dtype=np.uint8).reshape(n_rows, bytes_per_row)
                 writer.add_tensor(t_name, tq2_np, raw_dtype=gguf.GGMLQuantizationType.TQ2_0)
+                
+                dt_t = time.time() - t_t0
+                quantized_count += 1
+                quant_time_total += dt_t
+                avg_t = quant_time_total / quantized_count
+                rem_tensors = total_tensors - idx
+                # Rough upper-bound ETA
+                est_rem_sec = rem_tensors * avg_t * (quantized_count / max(1, idx))
+                eta_m, eta_s = divmod(int(est_rem_sec), 60)
+                eta_h, eta_m = divmod(eta_m, 60)
+                print(f"    [{idx}/{total_tensors}] Quantized {t_name} in {dt_t:.2f}s (avg: {avg_t:.2f}s/q-tensor | ETA: {eta_h:02d}h{eta_m:02d}m{eta_s:02d}s)", flush=True)
             else:
                 # Copy unquantized/existing tensor directly using reader numpy memmap data
                 writer.add_tensor(t_name, t.data, raw_dtype=t.tensor_type)
+                skipped_count += 1
+                if idx % 50 == 0 or idx == total_tensors:
+                    print(f"    [{idx}/{total_tensors}] Copied unquantized tensor {t_name} (total copied: {skipped_count})", flush=True)
                 
-            if idx % 50 == 0 or idx == total_tensors:
-                print(f"    [{idx}/{total_tensors}] Processed {t_name}")
-                
-    print("[*] Writing GGUF header, metadata, and tensor data...")
+    print(f"[*] Completed tensor processing: {quantized_count} quantized, {skipped_count} copied directly.", flush=True)
+    print(f"[*] Writing GGUF header, metadata, and tensor payloads to disk...", flush=True)
+    t_w0 = time.time()
     writer.write_header_to_file()
     writer.write_kv_data_to_file()
     writer.write_tensors_to_file()
     writer.close()
+    dt_w = time.time() - t_w0
+    print(f"[+] Finalized GGUF write in {dt_w:.2f}s.", flush=True)
     
     total_time = time.time() - t_start
     out_size_mb = os.path.getsize(dst_r2q_gguf) / (1024**2)
-    print(f"[+] Successfully converted to R2Q GGUF in {total_time:.2f}s!")
-    print(f"[+] Output: {dst_r2q_gguf} ({out_size_mb:.2f} MiB)")
+    print(f"[+] Successfully converted to R2Q GGUF in {total_time:.2f}s!", flush=True)
+    print(f"[+] Output: {dst_r2q_gguf} ({out_size_mb:.2f} MiB)", flush=True)
 
 MODELS_DIR = Path("/mnt/Media/Downloads/model_testing")
 SCRATCH_DIR = Path("/mnt/Scratch/model_testing")

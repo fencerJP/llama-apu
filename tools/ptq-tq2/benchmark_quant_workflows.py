@@ -127,7 +127,7 @@ def detect_gibberish_or_repetition(text: str) -> Dict[str, Any]:
 
     return {"coherent": True, "reason": "OK"}
 
-def run_prompt_evaluation(model_path: Path, prompt_entry: Dict[str, Any], max_tokens: int = 128, timeout_sec: int = 120) -> Dict[str, Any]:
+def run_prompt_evaluation(model_path: Path, prompt_entry: Dict[str, Any], max_tokens: int = 128, timeout_sec: int = 180) -> Dict[str, Any]:
     cmd = [
         str(LLAMA_CLI),
         "-m", str(model_path),
@@ -140,6 +140,8 @@ def run_prompt_evaluation(model_path: Path, prompt_entry: Dict[str, Any], max_to
     ]
     
     t0 = time.time()
+    t_start_str = time.strftime("%H:%M:%S")
+    print(f"  [{t_start_str}] Invoking llama-cli (tokens={max_tokens}, timeout={timeout_sec}s)...", flush=True)
     try:
         proc = subprocess.run(cmd, capture_output=True, text=True, timeout=timeout_sec)
         dt = time.time() - t0
@@ -170,6 +172,7 @@ def run_prompt_evaluation(model_path: Path, prompt_entry: Dict[str, Any], max_to
             "keyword_matched": kw_matched
         }
     except subprocess.TimeoutExpired:
+        print(f"  [!] llama-cli prompt evaluation timed out after {timeout_sec}s", flush=True)
         return {
             "success": False,
             "response": f"TIMEOUT (>{timeout_sec}s)",
@@ -180,6 +183,7 @@ def run_prompt_evaluation(model_path: Path, prompt_entry: Dict[str, Any], max_to
             "coherence_reason": "Timeout exceeded"
         }
     except Exception as e:
+        print(f"  [!] llama-cli error: {e}", flush=True)
         return {
             "success": False,
             "response": f"ERROR: {str(e)}",
@@ -190,7 +194,7 @@ def run_prompt_evaluation(model_path: Path, prompt_entry: Dict[str, Any], max_to
             "coherence_reason": str(e)
         }
 
-def run_ppl_evaluation(model_path: Path, test_file: Path, max_chunks: int = 4, timeout_sec: int = 180) -> Dict[str, Any]:
+def run_ppl_evaluation(model_path: Path, test_file: Path, max_chunks: int = 4, timeout_sec: int = 600) -> Dict[str, Any]:
     """Runs llama-perplexity over test chunks."""
     if not LLAMA_PERPLEXITY.exists() or not test_file.exists():
         return {"success": False, "ppl": None, "note": "Binary or test file missing"}
@@ -204,6 +208,8 @@ def run_ppl_evaluation(model_path: Path, test_file: Path, max_chunks: int = 4, t
     ]
     
     t0 = time.time()
+    t_start_str = time.strftime("%H:%M:%S")
+    print(f"  [{t_start_str}] Invoking llama-perplexity ({max_chunks} chunks, timeout={timeout_sec}s)...", flush=True)
     try:
         proc = subprocess.run(cmd, capture_output=True, text=True, timeout=timeout_sec)
         dt = time.time() - t0
@@ -215,6 +221,7 @@ def run_ppl_evaluation(model_path: Path, test_file: Path, max_chunks: int = 4, t
         if m:
             ppl = float(m.group(1))
             
+        print(f"  [{time.strftime('%H:%M:%S')}] llama-perplexity completed in {dt:.1f}s (PPL: {ppl})", flush=True)
         return {
             "success": proc.returncode == 0 and (ppl is not None),
             "ppl": ppl,
@@ -222,8 +229,10 @@ def run_ppl_evaluation(model_path: Path, test_file: Path, max_chunks: int = 4, t
             "raw_output": output[-500:] if output else ""
         }
     except subprocess.TimeoutExpired:
+        print(f"  [!] llama-perplexity timed out after {timeout_sec}s", flush=True)
         return {"success": False, "ppl": None, "note": "Timeout exceeded"}
     except Exception as e:
+        print(f"  [!] llama-perplexity error: {e}", flush=True)
         return {"success": False, "ppl": None, "note": str(e)}
 
 def stage_and_evaluate_model(
