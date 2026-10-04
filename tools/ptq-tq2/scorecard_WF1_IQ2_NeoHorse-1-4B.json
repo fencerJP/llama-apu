@@ -1,0 +1,83 @@
+{
+  "workflow_id": "WF1_IQ2",
+  "model_name": "NeoHorse-1-4B-IQ2_S.gguf",
+  "source_path": "/mnt/Scratch/model_testing/NeoHorse-1-4B/NeoHorse-1-4B-IQ2_S.gguf",
+  "evaluated_at": "2026-10-04 11:25:10",
+  "questions": {
+    "Q1_EASY": {
+      "success": true,
+      "response": "The capital of France is **Paris**, and the river that runs through it is the **Seine**.",
+      "raw_output": "\n\nLoading model... \n\n\u2584\u2584 \u2584\u2584\n\u2588\u2588 \u2588\u2588\n\u2588\u2588 \u2588\u2588  \u2580\u2580\u2588\u2584 \u2588\u2588\u2588\u2584\u2588\u2588\u2588\u2584  \u2580\u2580\u2588\u2584    \u2584\u2588\u2588\u2588\u2588 \u2588\u2588\u2588\u2588\u2584 \u2588\u2588\u2588\u2588\u2584\n\u2588\u2588 \u2588\u2588 \u2584\u2588\u2580\u2588\u2588 \u2588\u2588 \u2588\u2588 \u2588\u2588 \u2584\u2588\u2580\u2588\u2588    \u2588\u2588    \u2588\u2588 \u2588\u2588 \u2588\u2588 \u2588\u2588\n\u2588\u2588 \u2588\u2588 \u2580\u2588\u2584\u2588\u2588 \u2588\u2588 \u2588\u2588 \u2588\u2588 \u2580\u2588\u2584\u2588\u2588 \u2588\u2588 \u2580\u2588\u2588\u2588\u2588 \u2588\u2588\u2588\u2588\u2580 \u2588\u2588\u2588\u2588\u2580\n                                    \u2588\u2588    \u2588\u2588\n                                    \u2580\u2580    \u2580\u2580\n\nbuild      : b11179-789bbef09\nmodel      : /mnt/Scratch/model_testing/NeoHorse-1-4B/NeoHorse-1-4B-IQ2_S.gguf\nftype      : IQ2_S - 2.5 bpw\nmodalities : text\n\navailable commands:\n  /exit or Ctrl+C     stop or exit\n  /regen              regenerate the last response\n  /clear              clear the chat history\n  /read <file>        add a text file\n  /glob <pattern>     add text files using globbing pattern\n\n\n\n> What is the capital of France, and what river runs through it?\n\n[Start thinking]\n\nThe user asks: \"What is the capital of France, and what river runs through it?\" The capital of France is Paris. The river that runs through Paris is the Seine. The Seine runs through Paris. The question: \"What is the capital of France, and what river runs through it?\" The answer: The capital of France is Paris, and the river that runs through it is the Seine.\n\nWe can answer concisely. The user asks a simple factual question. Provide answer. No need for extra.\n[End thinking]\n\nThe capital of France is **Paris**, and the river that runs through it is the **Seine**.\n\n[ Prompt: 84.1 t/s | Generation: 13.2 t/s | Zero-copy handoff: PASS (host memcpy: 0) ]\n\n\nExiting...\n",
+      "latency_sec": 12.43,
+      "prompt_speed_tps": 84.1,
+      "gen_speed_tps": 13.2,
+      "coherent": true,
+      "coherence_reason": "OK",
+      "keyword_matched": true
+    },
+    "Q2_EASY_MED": {
+      "success": true,
+      "response": "[Start thinking]\n\nThe user wants me to solve a word problem. Let's break it down.\n\n1.  **Start:** I have 15 pencils.\n2.  **Action 1:** Give 4 pencils to a friend.\n    *   Remaining: 15 - 4 = 11.\n3.  **Action 2:** Give 3 pencils to a sister.\n    *   Remaining: 11 - 3 = 8.\n4.  **Final Count:** 8 pencils.\n\nThe question asks \"how many pencils do you have left?\"\n\nLet's double check.",
+      "raw_output": "\n\nLoading model... \n\n\u2584\u2584 \u2584\u2584\n\u2588\u2588 \u2588\u2588\n\u2588\u2588 \u2588\u2588  \u2580\u2580\u2588\u2584 \u2588\u2588\u2588\u2584\u2588\u2588\u2588\u2584  \u2580\u2580\u2588\u2584    \u2584\u2588\u2588\u2588\u2588 \u2588\u2588\u2588\u2588\u2584 \u2588\u2588\u2588\u2588\u2584\n\u2588\u2588 \u2588\u2588 \u2584\u2588\u2580\u2588\u2588 \u2588\u2588 \u2588\u2588 \u2588\u2588 \u2584\u2588\u2580\u2588\u2588    \u2588\u2588    \u2588\u2588 \u2588\u2588 \u2588\u2588 \u2588\u2588\n\u2588\u2588 \u2588\u2588 \u2580\u2588\u2584\u2588\u2588 \u2588\u2588 \u2588\u2588 \u2588\u2588 \u2580\u2588\u2584\u2588\u2588 \u2588\u2588 \u2580\u2588\u2588\u2588\u2588 \u2588\u2588\u2588\u2588\u2580 \u2588\u2588\u2588\u2588\u2580\n                                    \u2588\u2588    \u2588\u2588\n                                    \u2580\u2580    \u2580\u2580\n\nbuild      : b11179-789bbef09\nmodel      : /mnt/Scratch/model_testing/NeoHorse-1-4B/NeoHorse-1-4B-IQ2_S.gguf\nftype      : IQ2_S - 2.5 bpw\nmodalities : text\n\navailable commands:\n  /exit or Ctrl+C     stop or exit\n  /regen              regenerate the last response\n  /clear              clear the chat history\n  /read <file>        add a text file\n  /glob <pattern>     add text files using globbing pattern\n\n\n\n> If you have 15 pencils and give 4 to your friend and 3 to your sister, how many pencils do you have left?\n\n[Start thinking]\n\nThe user wants me to solve a word problem. Let's break it down.\n\n1.  **Start:** I have 15 pencils.\n2.  **Action 1:** Give 4 pencils to a friend.\n    *   Remaining: 15 - 4 = 11.\n3.  **Action 2:** Give 3 pencils to a sister.\n    *   Remaining: 11 - 3 = 8.\n4.  **Final Count:** 8 pencils.\n\nThe question asks \"how many pencils do you have left?\"\n\nLet's double check.\n\n[ Prompt: 110.5 t/s | Generation: 12.2 t/s | Zero-copy handoff: PASS (host memcpy: 0) ]\n\n\nExiting...\n",
+      "latency_sec": 13.01,
+      "prompt_speed_tps": 110.5,
+      "gen_speed_tps": 12.2,
+      "coherent": true,
+      "coherence_reason": "OK",
+      "keyword_matched": true
+    },
+    "Q3_MEDIUM": {
+      "success": true,
+      "response": "[Start thinking]\n\nThe user wants me to write a Python function `is_even(n)` that returns `True` if `n` is an even integer and `False` otherwise.\n\nLet me think about the requirements:\n1. The function should return `True` if `n` is an even integer\n2. It should return `False` otherwise (which includes non-integer numbers, odd numbers, etc.)\n\nThe key consideration here is that the function should return `False` for non-integer numbers as well. So I need to handle the case where `n` is not an integer.\n\nLet me write the function:",
+      "raw_output": "\n\nLoading model... \n\n\u2584\u2584 \u2584\u2584\n\u2588\u2588 \u2588\u2588\n\u2588\u2588 \u2588\u2588  \u2580\u2580\u2588\u2584 \u2588\u2588\u2588\u2584\u2588\u2588\u2588\u2584  \u2580\u2580\u2588\u2584    \u2584\u2588\u2588\u2588\u2588 \u2588\u2588\u2588\u2588\u2584 \u2588\u2588\u2588\u2588\u2584\n\u2588\u2588 \u2588\u2588 \u2584\u2588\u2580\u2588\u2588 \u2588\u2588 \u2588\u2588 \u2588\u2588 \u2584\u2588\u2580\u2588\u2588    \u2588\u2588    \u2588\u2588 \u2588\u2588 \u2588\u2588 \u2588\u2588\n\u2588\u2588 \u2588\u2588 \u2580\u2588\u2584\u2588\u2588 \u2588\u2588 \u2588\u2588 \u2588\u2588 \u2580\u2588\u2584\u2588\u2588 \u2588\u2588 \u2580\u2588\u2588\u2588\u2588 \u2588\u2588\u2588\u2588\u2580 \u2588\u2588\u2588\u2588\u2580\n                                    \u2588\u2588    \u2588\u2588\n                                    \u2580\u2580    \u2580\u2580\n\nbuild      : b11179-789bbef09\nmodel      : /mnt/Scratch/model_testing/NeoHorse-1-4B/NeoHorse-1-4B-IQ2_S.gguf\nftype      : IQ2_S - 2.5 bpw\nmodalities : text\n\navailable commands:\n  /exit or Ctrl+C     stop or exit\n  /regen              regenerate the last response\n  /clear              clear the chat history\n  /read <file>        add a text file\n  /glob <pattern>     add text files using globbing pattern\n\n\n\n> Write a Python function is_even(n) that returns True if n is an even integer, and False otherwise.\n\n[Start thinking]\n\nThe user wants me to write a Python function `is_even(n)` that returns `True` if `n` is an even integer and `False` otherwise.\n\nLet me think about the requirements:\n1. The function should return `True` if `n` is an even integer\n2. It should return `False` otherwise (which includes non-integer numbers, odd numbers, etc.)\n\nThe key consideration here is that the function should return `False` for non-integer numbers as well. So I need to handle the case where `n` is not an integer.\n\nLet me write the function:\n\n\n[ Prompt: 91.9 t/s | Generation: 15.9 t/s | Zero-copy handoff: PASS (host memcpy: 0) ]\n\n\nExiting...\n",
+      "latency_sec": 11.49,
+      "prompt_speed_tps": 91.9,
+      "gen_speed_tps": 15.9,
+      "coherent": true,
+      "coherence_reason": "OK",
+      "keyword_matched": false
+    },
+    "Q4_MED_HARD": {
+      "success": true,
+      "response": "[Start thinking]\n\nThe user wants me to answer a logic puzzle. The question is: \"No reptiles have fur. All snakes are reptiles. Can a snake have fur? Answer with YES or NO and a brief explanation.\"\n\nLet's break down the logic:\n1. No reptiles have fur.\n2. All snakes are reptiles.\n3. Therefore, no snakes have fur.\n\nThe answer is NO. The explanation is that since snakes are reptiles, and no reptiles have fur, snakes cannot have fur.\n\nWait, is this a trick question? \"No reptiles have fur\" means the set of rept",
+      "raw_output": "\n\nLoading model... \n\n\u2584\u2584 \u2584\u2584\n\u2588\u2588 \u2588\u2588\n\u2588\u2588 \u2588\u2588  \u2580\u2580\u2588\u2584 \u2588\u2588\u2588\u2584\u2588\u2588\u2588\u2584  \u2580\u2580\u2588\u2584    \u2584\u2588\u2588\u2588\u2588 \u2588\u2588\u2588\u2588\u2584 \u2588\u2588\u2588\u2588\u2584\n\u2588\u2588 \u2588\u2588 \u2584\u2588\u2580\u2588\u2588 \u2588\u2588 \u2588\u2588 \u2588\u2588 \u2584\u2588\u2580\u2588\u2588    \u2588\u2588    \u2588\u2588 \u2588\u2588 \u2588\u2588 \u2588\u2588\n\u2588\u2588 \u2588\u2588 \u2580\u2588\u2584\u2588\u2588 \u2588\u2588 \u2588\u2588 \u2588\u2588 \u2580\u2588\u2584\u2588\u2588 \u2588\u2588 \u2580\u2588\u2588\u2588\u2588 \u2588\u2588\u2588\u2588\u2580 \u2588\u2588\u2588\u2588\u2580\n                                    \u2588\u2588    \u2588\u2588\n                                    \u2580\u2580    \u2580\u2580\n\nbuild      : b11179-789bbef09\nmodel      : /mnt/Scratch/model_testing/NeoHorse-1-4B/NeoHorse-1-4B-IQ2_S.gguf\nftype      : IQ2_S - 2.5 bpw\nmodalities : text\n\navailable commands:\n  /exit or Ctrl+C     stop or exit\n  /regen              regenerate the last response\n  /clear              clear the chat history\n  /read <file>        add a text file\n  /glob <pattern>     add text files using globbing pattern\n\n\n\n> No reptiles have fur. All snakes are reptiles. Can a snake have fur? Answer with YES or NO and a brief explanation.\n\n[Start thinking]\n\nThe user wants me to answer a logic puzzle. The question is: \"No reptiles have fur. All snakes are reptiles. Can a snake have fur? Answer with YES or NO and a brief explanation.\"\n\nLet's break down the logic:\n1. No reptiles have fur.\n2. All snakes are reptiles.\n3. Therefore, no snakes have fur.\n\nThe answer is NO. The explanation is that since snakes are reptiles, and no reptiles have fur, snakes cannot have fur.\n\nWait, is this a trick question? \"No reptiles have fur\" means the set of rept\n\n[ Prompt: 173.0 t/s | Generation: 14.5 t/s | Zero-copy handoff: PASS (host memcpy: 0) ]\n\n\nExiting...\n",
+      "latency_sec": 10.63,
+      "prompt_speed_tps": 173.0,
+      "gen_speed_tps": 14.5,
+      "coherent": true,
+      "coherence_reason": "OK",
+      "keyword_matched": true
+    },
+    "Q5_HARD": {
+      "success": true,
+      "response": "[Start thinking]\n\nWe are given a function f(x) = 3*x^2 + 5*x - 7. We need to find the derivative with respect to x. This is a straightforward calculus problem.\n\nThe function is f(x) = 3x^2 + 5x - 7. The derivative with respect to x is f'(x) = d/dx (3x^2 + 5x - 7). Using the sum rule and power rule: d/dx (3x^2) = 6x, d/dx (5x) = 5, d/dx (-7)",
+      "raw_output": "\n\nLoading model... \n\n\u2584\u2584 \u2584\u2584\n\u2588\u2588 \u2588\u2588\n\u2588\u2588 \u2588\u2588  \u2580\u2580\u2588\u2584 \u2588\u2588\u2588\u2584\u2588\u2588\u2588\u2584  \u2580\u2580\u2588\u2584    \u2584\u2588\u2588\u2588\u2588 \u2588\u2588\u2588\u2588\u2584 \u2588\u2588\u2588\u2588\u2584\n\u2588\u2588 \u2588\u2588 \u2584\u2588\u2580\u2588\u2588 \u2588\u2588 \u2588\u2588 \u2588\u2588 \u2584\u2588\u2580\u2588\u2588    \u2588\u2588    \u2588\u2588 \u2588\u2588 \u2588\u2588 \u2588\u2588\n\u2588\u2588 \u2588\u2588 \u2580\u2588\u2584\u2588\u2588 \u2588\u2588 \u2588\u2588 \u2588\u2588 \u2580\u2588\u2584\u2588\u2588 \u2588\u2588 \u2580\u2588\u2588\u2588\u2588 \u2588\u2588\u2588\u2588\u2580 \u2588\u2588\u2588\u2588\u2580\n                                    \u2588\u2588    \u2588\u2588\n                                    \u2580\u2580    \u2580\u2580\n\nbuild      : b11179-789bbef09\nmodel      : /mnt/Scratch/model_testing/NeoHorse-1-4B/NeoHorse-1-4B-IQ2_S.gguf\nftype      : IQ2_S - 2.5 bpw\nmodalities : text\n\navailable commands:\n  /exit or Ctrl+C     stop or exit\n  /regen              regenerate the last response\n  /clear              clear the chat history\n  /read <file>        add a text file\n  /glob <pattern>     add text files using globbing pattern\n\n\n\n> What is the derivative of f(x) = 3*x^2 + 5*x - 7 with respect to x?\n\n[Start thinking]\n\nWe are given a function f(x) = 3*x^2 + 5*x - 7. We need to find the derivative with respect to x. This is a straightforward calculus problem.\n\nThe function is f(x) = 3x^2 + 5x - 7. The derivative with respect to x is f'(x) = d/dx (3x^2 + 5x - 7). Using the sum rule and power rule: d/dx (3x^2) = 6x, d/dx (5x) = 5, d/dx (-7)\n\n[ Prompt: 150.5 t/s | Generation: 11.6 t/s | Zero-copy handoff: PASS (host memcpy: 0) ]\n\n\nExiting...\n",
+      "latency_sec": 13.13,
+      "prompt_speed_tps": 150.5,
+      "gen_speed_tps": 11.6,
+      "coherent": true,
+      "coherence_reason": "OK",
+      "keyword_matched": false
+    },
+    "Q6_FRONTIER": {
+      "success": true,
+      "response": "[Start thinking]\n\nHere, I need to explain the Byzantine Generals Problem in the context of distributed consensus and determine how many faulty nodes a system of N nodes can tolerate.\n\nFirst, let's recall the problem. The Byzantine Generals Problem is a classic problem in computer science, named after a problem posed by the Byzantine city of Nicaea in the Roman Empire. The problem is about a group of people who need to reach a consensus on a decision, but some of them are faulty or malicious. The problem is to design a protocol that allows the remaining honest nodes to reach a consensus, even if some of the nodes are faulty or",
+      "raw_output": "\n\nLoading model... \n\n\u2584\u2584 \u2584\u2584\n\u2588\u2588 \u2588\u2588\n\u2588\u2588 \u2588\u2588  \u2580\u2580\u2588\u2584 \u2588\u2588\u2588\u2584\u2588\u2588\u2588\u2584  \u2580\u2580\u2588\u2584    \u2584\u2588\u2588\u2588\u2588 \u2588\u2588\u2588\u2588\u2584 \u2588\u2588\u2588\u2588\u2584\n\u2588\u2588 \u2588\u2588 \u2584\u2588\u2580\u2588\u2588 \u2588\u2588 \u2588\u2588 \u2588\u2588 \u2584\u2588\u2580\u2588\u2588    \u2588\u2588    \u2588\u2588 \u2588\u2588 \u2588\u2588 \u2588\u2588\n\u2588\u2588 \u2588\u2588 \u2580\u2588\u2584\u2588\u2588 \u2588\u2588 \u2588\u2588 \u2588\u2588 \u2580\u2588\u2584\u2588\u2588 \u2588\u2588 \u2580\u2588\u2588\u2588\u2588 \u2588\u2588\u2588\u2588\u2580 \u2588\u2588\u2588\u2588\u2580\n                                    \u2588\u2588    \u2588\u2588\n                                    \u2580\u2580    \u2580\u2580\n\nbuild      : b11179-789bbef09\nmodel      : /mnt/Scratch/model_testing/NeoHorse-1-4B/NeoHorse-1-4B-IQ2_S.gguf\nftype      : IQ2_S - 2.5 bpw\nmodalities : text\n\navailable commands:\n  /exit or Ctrl+C     stop or exit\n  /regen              regenerate the last response\n  /clear              clear the chat history\n  /read <file>        add a text file\n  /glob <pattern>     add text files using globbing pattern\n\n\n\n> Explain what the Byzantine Generals Problem is in distributed consensus and how many faulty nodes a system of N nodes can tolerate.\n\n[Start thinking]\n\nHere, I need to explain the Byzantine Generals Problem in the context of distributed consensus and determine how many faulty nodes a system of N nodes can tolerate.\n\nFirst, let's recall the problem. The Byzantine Generals Problem is a classic problem in computer science, named after a problem posed by the Byzantine city of Nicaea in the Roman Empire. The problem is about a group of people who need to reach a consensus on a decision, but some of them are faulty or malicious. The problem is to design a protocol that allows the remaining honest nodes to reach a consensus, even if some of the nodes are faulty or\n\n[ Prompt: 104.2 t/s | Generation: 12.2 t/s | Zero-copy handoff: PASS (host memcpy: 0) ]\n\n\nExiting...\n",
+      "latency_sec": 12.85,
+      "prompt_speed_tps": 104.2,
+      "gen_speed_tps": 12.2,
+      "coherent": true,
+      "coherence_reason": "OK",
+      "keyword_matched": true
+    }
+  },
+  "summary": {
+    "total_questions": 6,
+    "passed_questions": 6,
+    "pass_rate_pct": 100.0,
+    "avg_gen_speed_tps": 13.27,
+    "avg_prompt_speed_tps": 119.03,
+    "ppl_score": 3.7715,
+    "overall_status": "COHERENT_PASS"
+  }
+}
