@@ -152,35 +152,56 @@ def convert_to_r2q_gguf(
     total_tensors = len(reader.tensors)
     print(f"[*] Processing {total_tensors} tensors with R2Q quantization...", flush=True)
     
+    # 2-Pass Streaming GGUF Conversion:
+    # Pass 1: Plan tensor layouts and register metadata + tensor info headers without buffering weights in RAM.
+    plan = []
+    for idx, t in enumerate(reader.tensors, start=1):
+        t_name = t.name
+        should_quantize = (
+            any(k in t_name for k in target_keywords) and
+            not any(s in t_name for s in sensitive_keywords) and
+            t_name.endswith(".weight") and
+            len(t.shape) == 2 and
+            int(t.shape[0]) % 256 == 0 and
+            t.data.nbytes >= 1024
+        )
+        if should_quantize:
+            n_cols = int(t.shape[0])
+            n_rows = int(t.shape[1])
+            byte_shape = [n_rows, (n_cols // 256) * 66]
+            nbytes = n_rows * (n_cols // 256) * 66
+            writer.add_tensor_info(t_name, byte_shape, np.dtype("uint8"), nbytes, raw_dtype=gguf.GGMLQuantizationType.TQ2_0)
+            plan.append((t, True, n_rows, n_cols, nbytes))
+        else:
+            writer.add_tensor_info(t_name, list(t.shape), t.data.dtype, t.data.nbytes, raw_dtype=t.tensor_type)
+            plan.append((t, False, 0, 0, t.data.nbytes))
+
+    print(f"[*] Writing GGUF header, metadata, and tensor info dictionary to disk...", flush=True)
+    t_w0 = time.time()
+    writer.write_header_to_file()
+    writer.write_kv_data_to_file()
+    writer.write_ti_data_to_file()
+    dt_w = time.time() - t_w0
+    print(f"[+] Finalized GGUF header dictionary in {dt_w:.2f}s.", flush=True)
+
+    # Pass 2: Stream quantized matrices and unquantized tensor chunks directly to disk
+    assert writer.fout is not None
+    fout = writer.fout[0]
     quantized_count = 0
     skipped_count = 0
     quant_time_total = 0.0
-    
+
     with open(src_base_gguf, "rb") as f_src:
-        for idx, t in enumerate(reader.tensors, start=1):
+        for idx, (t, is_q, n_rows, n_cols, nbytes) in enumerate(plan, start=1):
             t_name = t.name
             f_src.seek(t.data_offset)
-            raw_bytes = f_src.read(t.data.nbytes)
-            
-            should_quantize = (
-                any(k in t_name for k in target_keywords) and
-                not any(s in t_name for s in sensitive_keywords) and
-                t_name.endswith(".weight") and
-                len(t.shape) >= 2 and
-                t.data.nbytes >= 1024
-            )
-            
-            if should_quantize and len(t.shape) == 2:
-                n_cols = int(t.shape[0])
-                n_rows = int(t.shape[1])
-                if n_cols % 256 != 0:
-                    writer.add_tensor(t_name, t.data, raw_dtype=t.tensor_type)
-                    skipped_count += 1
-                    continue
+            writer.write_padding(fout, fout.tell())
+
+            if is_q:
                 size_mb = t.data.nbytes / (1024**2)
                 t_t0 = time.time()
                 print(f"    [{idx}/{total_tensors}] Quantizing {t_name} ({n_rows}x{n_cols}, {size_mb:.1f} MB)...", flush=True)
-                
+                raw_bytes = f_src.read(t.data.nbytes)
                 if t.tensor_type == gguf.GGMLQuantizationType.F32:
                     w_np = np.frombuffer(raw_bytes, dtype=np.float32).copy()
                 elif t.tensor_type == gguf.GGMLQuantizationType.F16:
@@ -191,11 +212,10 @@ def convert_to_r2q_gguf(
                     w_np = u32.view(np.float32)
                 else:
                     w_np = np.frombuffer(raw_bytes, dtype=np.float32).copy()
-                    
+
                 w_mat = w_np.reshape(n_rows, n_cols)
-                
                 X_calib = generate_activations(texts, dim=w_mat.shape[1]) if dad_steps > 0 else None
-                
+
                 tq2_buf = quantize_matrix_to_tq2_0_r2q(
                     W=w_mat,
                     X_calib=X_calib,
@@ -203,37 +223,32 @@ def convert_to_r2q_gguf(
                     dad_lr=dad_lr,
                     block_size=block_size
                 )
-                
-                bytes_per_row = (n_cols // 256) * 66
-                tq2_np = np.frombuffer(tq2_buf, dtype=np.uint8).reshape(n_rows, bytes_per_row)
-                writer.add_tensor(t_name, tq2_np, raw_dtype=gguf.GGMLQuantizationType.TQ2_0)
-                
+                fout.write(tq2_buf)
+
                 dt_t = time.time() - t_t0
                 quantized_count += 1
                 quant_time_total += dt_t
                 avg_t = quant_time_total / quantized_count
                 rem_tensors = total_tensors - idx
-                # Rough upper-bound ETA
                 est_rem_sec = rem_tensors * avg_t * (quantized_count / max(1, idx))
                 eta_m, eta_s = divmod(int(est_rem_sec), 60)
                 eta_h, eta_m = divmod(eta_m, 60)
                 print(f"    [{idx}/{total_tensors}] Quantized {t_name} in {dt_t:.2f}s (avg: {avg_t:.2f}s/q-tensor | ETA: {eta_h:02d}h{eta_m:02d}m{eta_s:02d}s)", flush=True)
             else:
-                # Copy unquantized/existing tensor directly using reader numpy memmap data
-                writer.add_tensor(t_name, t.data, raw_dtype=t.tensor_type)
+                # Stream copy unquantized weights in 64MB chunks
+                rem = t.data.nbytes
+                while rem > 0:
+                    chunk = f_src.read(min(rem, 64 * 1024 * 1024))
+                    fout.write(chunk)
+                    rem -= len(chunk)
                 skipped_count += 1
                 if idx % 50 == 0 or idx == total_tensors:
                     print(f"    [{idx}/{total_tensors}] Copied unquantized tensor {t_name} (total copied: {skipped_count})", flush=True)
-                
-    print(f"[*] Completed tensor processing: {quantized_count} quantized, {skipped_count} copied directly.", flush=True)
-    print(f"[*] Writing GGUF header, metadata, and tensor payloads to disk...", flush=True)
-    t_w0 = time.time()
-    writer.write_header_to_file()
-    writer.write_kv_data_to_file()
-    writer.write_tensors_to_file()
+
+            writer.write_padding(fout, nbytes)
+
     writer.close()
-    dt_w = time.time() - t_w0
-    print(f"[+] Finalized GGUF write in {dt_w:.2f}s.", flush=True)
+    print(f"[*] Completed tensor processing: {quantized_count} quantized, {skipped_count} copied directly.", flush=True)
     
     total_time = time.time() - t_start
     out_size_mb = os.path.getsize(dst_r2q_gguf) / (1024**2)
