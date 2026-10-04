@@ -266,7 +266,7 @@ TEST_MODELS = [
     "Gemma-4-31B-it"
 ]
 
-def convert_model_r2q(model_name: str, dad_steps: int = 15, dad_lr: float = 1e-2):
+def convert_model_r2q(model_name: str, dad_steps: int = 15, dad_lr: float = 1e-2, force: bool = False):
     source_model_dir = MODELS_DIR / model_name
     if not source_model_dir.exists():
         print(f"[Warning] Source model dir {source_model_dir} does not exist, skipping.", flush=True)
@@ -281,7 +281,7 @@ def convert_model_r2q(model_name: str, dad_steps: int = 15, dad_lr: float = 1e-2
     source_r2q = source_model_dir / f"{model_name}-R2Q.gguf"
     work_r2q = work_dir / f"{model_name}-R2Q.gguf"
     
-    if source_r2q.exists() or work_r2q.exists():
+    if not force and (source_r2q.exists() or work_r2q.exists()):
         print(f"[*] Found existing R2Q GGUF for {model_name}, ensuring synced to persistent storage...", flush=True)
         if work_r2q.exists() and not source_r2q.exists():
             subprocess.run(["rsync", "-av", str(work_r2q), str(source_r2q)])
@@ -320,13 +320,14 @@ def main():
     parser.add_argument("--corpus", type=str, default=str(DEFAULT_CORPUS), help="Path to calibration corpus")
     parser.add_argument("--dad-steps", type=int, default=15, help="Number of DAD distillation steps")
     parser.add_argument("--dad-lr", type=float, default=1e-2, help="Learning rate for DAD")
+    parser.add_argument("--force", action="store_true", help="Force re-conversion even if destination exists")
     args = parser.parse_args()
     
     if args.model:
         models = TEST_MODELS if args.model == "all" else [args.model]
         results = {}
         for m in models:
-            ok = convert_model_r2q(m, dad_steps=args.dad_steps, dad_lr=args.dad_lr)
+            ok = convert_model_r2q(m, dad_steps=args.dad_steps, dad_lr=args.dad_lr, force=args.force)
             results[m] = "SUCCESS" if ok else "FAILED"
         print("\n=======================================================", flush=True)
         print("  WORKFLOW 2 (R2Q) BATCH CONVERSION SUMMARY", flush=True)
