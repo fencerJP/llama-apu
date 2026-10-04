@@ -174,7 +174,7 @@ def convert_to_r2q_gguf(
             plan.append((t, True, n_rows, n_cols, nbytes))
         else:
             t_dtype = np.dtype("uint16") if t.tensor_type == gguf.GGMLQuantizationType.BF16 else t.data.dtype
-            writer.add_tensor_info(t_name, list(t.shape), t_dtype, t.data.nbytes, raw_dtype=t.tensor_type)
+            writer.add_tensor_info(t_name, list(reversed(t.shape)), t_dtype, t.data.nbytes, raw_dtype=t.tensor_type)
             plan.append((t, False, 0, 0, t.data.nbytes))
 
     print(f"[*] Writing GGUF header, metadata, and tensor info dictionary to disk...", flush=True)
