@@ -1,0 +1,417 @@
+{
+  "NeoHorse-1-4B": {
+    "workflow_id": "WF1_IQ2",
+    "model_name": "NeoHorse-1-4B-IQ2_S.gguf",
+    "source_path": "/mnt/Scratch/model_testing/NeoHorse-1-4B/NeoHorse-1-4B-IQ2_S.gguf",
+    "evaluated_at": "2026-10-04 09:29:27",
+    "questions": {
+      "Q1_EASY": {
+        "success": false,
+        "response": "load model from /mnt/Scratch/model_testing/NeoHorse-1-4B/NeoHorse-1-4B-IQ2_S.gguf\n0.00.036.409 E llama_model_load_from_file_impl: failed to load model\n0.00.036.412 E cmn  common_init_: failed to load model '/mnt/Scratch/model_testing/NeoHorse-1-4B/NeoHorse-1-4B-IQ2_S.gguf'\n0.00.036.417 E srv    load_model: failed to load model, '/mnt/Scratch/model_testing/NeoHorse-1-4B/NeoHorse-1-4B-IQ2_S.gguf'\n0.00.037.114 E srv  llama_server: exiting due to model loading error\nllama_server exited with code 1",
+        "raw_output": "\n\nLoading model... Error: the server exited before becoming ready\n0.00.031.776 E gguf_init_from_reader: invalid magic characters: '????', expected 'GGUF'\n0.00.035.348 E gguf_init_from_reader: invalid magic characters: '????', expected 'GGUF'\n0.00.035.819 E llama_model_load: error loading model: llama_model_loader: failed to load model from /mnt/Scratch/model_testing/NeoHorse-1-4B/NeoHorse-1-4B-IQ2_S.gguf\n0.00.035.829 E llama_model_load_from_file_impl: failed to load model\n0.00.036.393 E common_fit_params: encountered an error while trying to fit params to free device memory: failed to load model\n0.00.036.404 E gguf_init_from_reader: invalid magic characters: '????', expected 'GGUF'\n0.00.036.409 E llama_model_load: error loading model: llama_model_loader: failed to load model from /mnt/Scratch/model_testing/NeoHorse-1-4B/NeoHorse-1-4B-IQ2_S.gguf\n0.00.036.409 E llama_model_load_from_file_impl: failed to load model\n0.00.036.412 E cmn  common_init_: failed to load model '/mnt/Scratch/model_testing/NeoHorse-1-4B/NeoHorse-1-4B-IQ2_S.gguf'\n0.00.036.417 E srv    load_model: failed to load model, '/mnt/Scratch/model_testing/NeoHorse-1-4B/NeoHorse-1-4B-IQ2_S.gguf'\n0.00.037.114 E srv  llama_server: exiting due to model loading error\nllama_server exited with code 1\n",
+        "latency_sec": 0.29,
+        "prompt_speed_tps": 0.0,
+        "gen_speed_tps": 0.0,
+        "coherent": true,
+        "coherence_reason": "OK",
+        "keyword_matched": false
+      },
+      "Q2_EASY_MED": {
+        "success": false,
+        "response": "load model from /mnt/Scratch/model_testing/NeoHorse-1-4B/NeoHorse-1-4B-IQ2_S.gguf\n0.00.026.534 E llama_model_load_from_file_impl: failed to load model\n0.00.026.537 E cmn  common_init_: failed to load model '/mnt/Scratch/model_testing/NeoHorse-1-4B/NeoHorse-1-4B-IQ2_S.gguf'\n0.00.026.542 E srv    load_model: failed to load model, '/mnt/Scratch/model_testing/NeoHorse-1-4B/NeoHorse-1-4B-IQ2_S.gguf'\n0.00.027.030 E srv  llama_server: exiting due to model loading error\nllama_server exited with code 1",
+        "raw_output": "\n\nLoading model... Error: the server exited before becoming ready\n0.00.023.467 E gguf_init_from_reader: invalid magic characters: '????', expected 'GGUF'\n0.00.026.377 E gguf_init_from_reader: invalid magic characters: '????', expected 'GGUF'\n0.00.026.477 E llama_model_load: error loading model: llama_model_loader: failed to load model from /mnt/Scratch/model_testing/NeoHorse-1-4B/NeoHorse-1-4B-IQ2_S.gguf\n0.00.026.489 E llama_model_load_from_file_impl: failed to load model\n0.00.026.518 E common_fit_params: encountered an error while trying to fit params to free device memory: failed to load model\n0.00.026.528 E gguf_init_from_reader: invalid magic characters: '????', expected 'GGUF'\n0.00.026.533 E llama_model_load: error loading model: llama_model_loader: failed to load model from /mnt/Scratch/model_testing/NeoHorse-1-4B/NeoHorse-1-4B-IQ2_S.gguf\n0.00.026.534 E llama_model_load_from_file_impl: failed to load model\n0.00.026.537 E cmn  common_init_: failed to load model '/mnt/Scratch/model_testing/NeoHorse-1-4B/NeoHorse-1-4B-IQ2_S.gguf'\n0.00.026.542 E srv    load_model: failed to load model, '/mnt/Scratch/model_testing/NeoHorse-1-4B/NeoHorse-1-4B-IQ2_S.gguf'\n0.00.027.030 E srv  llama_server: exiting due to model loading error\nllama_server exited with code 1\n",
+        "latency_sec": 0.27,
+        "prompt_speed_tps": 0.0,
+        "gen_speed_tps": 0.0,
+        "coherent": true,
+        "coherence_reason": "OK",
+        "keyword_matched": false
+      },
+      "Q3_MEDIUM": {
+        "success": false,
+        "response": "load model from /mnt/Scratch/model_testing/NeoHorse-1-4B/NeoHorse-1-4B-IQ2_S.gguf\n0.00.029.164 E llama_model_load_from_file_impl: failed to load model\n0.00.029.167 E cmn  common_init_: failed to load model '/mnt/Scratch/model_testing/NeoHorse-1-4B/NeoHorse-1-4B-IQ2_S.gguf'\n0.00.029.172 E srv    load_model: failed to load model, '/mnt/Scratch/model_testing/NeoHorse-1-4B/NeoHorse-1-4B-IQ2_S.gguf'\n0.00.029.745 E srv  llama_server: exiting due to model loading error\nllama_server exited with code 1",
+        "raw_output": "\n\nLoading model... Error: the server exited before becoming ready\n0.00.026.147 E gguf_init_from_reader: invalid magic characters: '????', expected 'GGUF'\n0.00.029.014 E gguf_init_from_reader: invalid magic characters: '????', expected 'GGUF'\n0.00.029.109 E llama_model_load: error loading model: llama_model_loader: failed to load model from /mnt/Scratch/model_testing/NeoHorse-1-4B/NeoHorse-1-4B-IQ2_S.gguf\n0.00.029.120 E llama_model_load_from_file_impl: failed to load model\n0.00.029.149 E common_fit_params: encountered an error while trying to fit params to free device memory: failed to load model\n0.00.029.158 E gguf_init_from_reader: invalid magic characters: '????', expected 'GGUF'\n0.00.029.164 E llama_model_load: error loading model: llama_model_loader: failed to load model from /mnt/Scratch/model_testing/NeoHorse-1-4B/NeoHorse-1-4B-IQ2_S.gguf\n0.00.029.164 E llama_model_load_from_file_impl: failed to load model\n0.00.029.167 E cmn  common_init_: failed to load model '/mnt/Scratch/model_testing/NeoHorse-1-4B/NeoHorse-1-4B-IQ2_S.gguf'\n0.00.029.172 E srv    load_model: failed to load model, '/mnt/Scratch/model_testing/NeoHorse-1-4B/NeoHorse-1-4B-IQ2_S.gguf'\n0.00.029.745 E srv  llama_server: exiting due to model loading error\nllama_server exited with code 1\n",
+        "latency_sec": 0.28,
+        "prompt_speed_tps": 0.0,
+        "gen_speed_tps": 0.0,
+        "coherent": true,
+        "coherence_reason": "OK",
+        "keyword_matched": false
+      },
+      "Q4_MED_HARD": {
+        "success": false,
+        "response": "load model from /mnt/Scratch/model_testing/NeoHorse-1-4B/NeoHorse-1-4B-IQ2_S.gguf\n0.00.027.113 E llama_model_load_from_file_impl: failed to load model\n0.00.027.116 E cmn  common_init_: failed to load model '/mnt/Scratch/model_testing/NeoHorse-1-4B/NeoHorse-1-4B-IQ2_S.gguf'\n0.00.027.121 E srv    load_model: failed to load model, '/mnt/Scratch/model_testing/NeoHorse-1-4B/NeoHorse-1-4B-IQ2_S.gguf'\n0.00.027.883 E srv  llama_server: exiting due to model loading error\nllama_server exited with code 1",
+        "raw_output": "\n\nLoading model... Error: the server exited before becoming ready\n0.00.023.714 E gguf_init_from_reader: invalid magic characters: '????', expected 'GGUF'\n0.00.026.955 E gguf_init_from_reader: invalid magic characters: '????', expected 'GGUF'\n0.00.027.055 E llama_model_load: error loading model: llama_model_loader: failed to load model from /mnt/Scratch/model_testing/NeoHorse-1-4B/NeoHorse-1-4B-IQ2_S.gguf\n0.00.027.067 E llama_model_load_from_file_impl: failed to load model\n0.00.027.096 E common_fit_params: encountered an error while trying to fit params to free device memory: failed to load model\n0.00.027.106 E gguf_init_from_reader: invalid magic characters: '????', expected 'GGUF'\n0.00.027.112 E llama_model_load: error loading model: llama_model_loader: failed to load model from /mnt/Scratch/model_testing/NeoHorse-1-4B/NeoHorse-1-4B-IQ2_S.gguf\n0.00.027.113 E llama_model_load_from_file_impl: failed to load model\n0.00.027.116 E cmn  common_init_: failed to load model '/mnt/Scratch/model_testing/NeoHorse-1-4B/NeoHorse-1-4B-IQ2_S.gguf'\n0.00.027.121 E srv    load_model: failed to load model, '/mnt/Scratch/model_testing/NeoHorse-1-4B/NeoHorse-1-4B-IQ2_S.gguf'\n0.00.027.883 E srv  llama_server: exiting due to model loading error\nllama_server exited with code 1\n",
+        "latency_sec": 0.27,
+        "prompt_speed_tps": 0.0,
+        "gen_speed_tps": 0.0,
+        "coherent": true,
+        "coherence_reason": "OK",
+        "keyword_matched": false
+      },
+      "Q5_HARD": {
+        "success": false,
+        "response": "load model from /mnt/Scratch/model_testing/NeoHorse-1-4B/NeoHorse-1-4B-IQ2_S.gguf\n0.00.024.490 E llama_model_load_from_file_impl: failed to load model\n0.00.024.494 E cmn  common_init_: failed to load model '/mnt/Scratch/model_testing/NeoHorse-1-4B/NeoHorse-1-4B-IQ2_S.gguf'\n0.00.024.499 E srv    load_model: failed to load model, '/mnt/Scratch/model_testing/NeoHorse-1-4B/NeoHorse-1-4B-IQ2_S.gguf'\n0.00.024.976 E srv  llama_server: exiting due to model loading error\nllama_server exited with code 1",
+        "raw_output": "\n\nLoading model... Error: the server exited before becoming ready\n0.00.021.485 E gguf_init_from_reader: invalid magic characters: '????', expected 'GGUF'\n0.00.024.320 E gguf_init_from_reader: invalid magic characters: '????', expected 'GGUF'\n0.00.024.420 E llama_model_load: error loading model: llama_model_loader: failed to load model from /mnt/Scratch/model_testing/NeoHorse-1-4B/NeoHorse-1-4B-IQ2_S.gguf\n0.00.024.437 E llama_model_load_from_file_impl: failed to load model\n0.00.024.469 E common_fit_params: encountered an error while trying to fit params to free device memory: failed to load model\n0.00.024.482 E gguf_init_from_reader: invalid magic characters: '????', expected 'GGUF'\n0.00.024.489 E llama_model_load: error loading model: llama_model_loader: failed to load model from /mnt/Scratch/model_testing/NeoHorse-1-4B/NeoHorse-1-4B-IQ2_S.gguf\n0.00.024.490 E llama_model_load_from_file_impl: failed to load model\n0.00.024.494 E cmn  common_init_: failed to load model '/mnt/Scratch/model_testing/NeoHorse-1-4B/NeoHorse-1-4B-IQ2_S.gguf'\n0.00.024.499 E srv    load_model: failed to load model, '/mnt/Scratch/model_testing/NeoHorse-1-4B/NeoHorse-1-4B-IQ2_S.gguf'\n0.00.024.976 E srv  llama_server: exiting due to model loading error\nllama_server exited with code 1\n",
+        "latency_sec": 0.27,
+        "prompt_speed_tps": 0.0,
+        "gen_speed_tps": 0.0,
+        "coherent": true,
+        "coherence_reason": "OK",
+        "keyword_matched": false
+      },
+      "Q6_FRONTIER": {
+        "success": false,
+        "response": "load model from /mnt/Scratch/model_testing/NeoHorse-1-4B/NeoHorse-1-4B-IQ2_S.gguf\n0.00.025.657 E llama_model_load_from_file_impl: failed to load model\n0.00.025.660 E cmn  common_init_: failed to load model '/mnt/Scratch/model_testing/NeoHorse-1-4B/NeoHorse-1-4B-IQ2_S.gguf'\n0.00.025.667 E srv    load_model: failed to load model, '/mnt/Scratch/model_testing/NeoHorse-1-4B/NeoHorse-1-4B-IQ2_S.gguf'\n0.00.026.482 E srv  llama_server: exiting due to model loading error\nllama_server exited with code 1",
+        "raw_output": "\n\nLoading model... Error: the server exited before becoming ready\n0.00.022.320 E gguf_init_from_reader: invalid magic characters: '????', expected 'GGUF'\n0.00.025.431 E gguf_init_from_reader: invalid magic characters: '????', expected 'GGUF'\n0.00.025.570 E llama_model_load: error loading model: llama_model_loader: failed to load model from /mnt/Scratch/model_testing/NeoHorse-1-4B/NeoHorse-1-4B-IQ2_S.gguf\n0.00.025.587 E llama_model_load_from_file_impl: failed to load model\n0.00.025.628 E common_fit_params: encountered an error while trying to fit params to free device memory: failed to load model\n0.00.025.645 E gguf_init_from_reader: invalid magic characters: '????', expected 'GGUF'\n0.00.025.655 E llama_model_load: error loading model: llama_model_loader: failed to load model from /mnt/Scratch/model_testing/NeoHorse-1-4B/NeoHorse-1-4B-IQ2_S.gguf\n0.00.025.657 E llama_model_load_from_file_impl: failed to load model\n0.00.025.660 E cmn  common_init_: failed to load model '/mnt/Scratch/model_testing/NeoHorse-1-4B/NeoHorse-1-4B-IQ2_S.gguf'\n0.00.025.667 E srv    load_model: failed to load model, '/mnt/Scratch/model_testing/NeoHorse-1-4B/NeoHorse-1-4B-IQ2_S.gguf'\n0.00.026.482 E srv  llama_server: exiting due to model loading error\nllama_server exited with code 1\n",
+        "latency_sec": 0.28,
+        "prompt_speed_tps": 0.0,
+        "gen_speed_tps": 0.0,
+        "coherent": true,
+        "coherence_reason": "OK",
+        "keyword_matched": false
+      }
+    },
+    "summary": {
+      "total_questions": 6,
+      "passed_questions": 0,
+      "pass_rate_pct": 0.0,
+      "avg_gen_speed_tps": 0.0,
+      "avg_prompt_speed_tps": 0.0,
+      "ppl_score": null,
+      "overall_status": "COLLAPSED_FAIL"
+    }
+  },
+  "occamy-1.0-with-mtp": {
+    "workflow_id": "WF1_IQ2",
+    "model_name": "occamy-1.0-with-mtp-IQ2_S.gguf",
+    "source_path": "/mnt/Scratch/model_testing/occamy-1.0-with-mtp/occamy-1.0-with-mtp-IQ2_S.gguf",
+    "evaluated_at": "2026-10-04 09:29:29",
+    "questions": {
+      "Q1_EASY": {
+        "success": false,
+        "response": "testing/occamy-1.0-with-mtp/occamy-1.0-with-mtp-IQ2_S.gguf\n0.00.030.338 E llama_model_load_from_file_impl: failed to load model\n0.00.030.342 E cmn  common_init_: failed to load model '/mnt/Scratch/model_testing/occamy-1.0-with-mtp/occamy-1.0-with-mtp-IQ2_S.gguf'\n0.00.030.349 E srv    load_model: failed to load model, '/mnt/Scratch/model_testing/occamy-1.0-with-mtp/occamy-1.0-with-mtp-IQ2_S.gguf'\n0.00.030.993 E srv  llama_server: exiting due to model loading error\nllama_server exited with code 1",
+        "raw_output": "\n\nLoading model... Error: the server exited before becoming ready\n0.00.026.877 E gguf_init_from_reader: invalid magic characters: '????', expected 'GGUF'\n0.00.030.133 E gguf_init_from_reader: invalid magic characters: '????', expected 'GGUF'\n0.00.030.260 E llama_model_load: error loading model: llama_model_loader: failed to load model from /mnt/Scratch/model_testing/occamy-1.0-with-mtp/occamy-1.0-with-mtp-IQ2_S.gguf\n0.00.030.273 E llama_model_load_from_file_impl: failed to load model\n0.00.030.311 E common_fit_params: encountered an error while trying to fit params to free device memory: failed to load model\n0.00.030.328 E gguf_init_from_reader: invalid magic characters: '????', expected 'GGUF'\n0.00.030.337 E llama_model_load: error loading model: llama_model_loader: failed to load model from /mnt/Scratch/model_testing/occamy-1.0-with-mtp/occamy-1.0-with-mtp-IQ2_S.gguf\n0.00.030.338 E llama_model_load_from_file_impl: failed to load model\n0.00.030.342 E cmn  common_init_: failed to load model '/mnt/Scratch/model_testing/occamy-1.0-with-mtp/occamy-1.0-with-mtp-IQ2_S.gguf'\n0.00.030.349 E srv    load_model: failed to load model, '/mnt/Scratch/model_testing/occamy-1.0-with-mtp/occamy-1.0-with-mtp-IQ2_S.gguf'\n0.00.030.993 E srv  llama_server: exiting due to model loading error\nllama_server exited with code 1\n",
+        "latency_sec": 0.28,
+        "prompt_speed_tps": 0.0,
+        "gen_speed_tps": 0.0,
+        "coherent": true,
+        "coherence_reason": "OK",
+        "keyword_matched": false
+      },
+      "Q2_EASY_MED": {
+        "success": false,
+        "response": "testing/occamy-1.0-with-mtp/occamy-1.0-with-mtp-IQ2_S.gguf\n0.00.023.944 E llama_model_load_from_file_impl: failed to load model\n0.00.023.947 E cmn  common_init_: failed to load model '/mnt/Scratch/model_testing/occamy-1.0-with-mtp/occamy-1.0-with-mtp-IQ2_S.gguf'\n0.00.023.953 E srv    load_model: failed to load model, '/mnt/Scratch/model_testing/occamy-1.0-with-mtp/occamy-1.0-with-mtp-IQ2_S.gguf'\n0.00.024.458 E srv  llama_server: exiting due to model loading error\nllama_server exited with code 1",
+        "raw_output": "\n\nLoading model... Error: the server exited before becoming ready\n0.00.020.832 E gguf_init_from_reader: invalid magic characters: '????', expected 'GGUF'\n0.00.023.791 E gguf_init_from_reader: invalid magic characters: '????', expected 'GGUF'\n0.00.023.889 E llama_model_load: error loading model: llama_model_loader: failed to load model from /mnt/Scratch/model_testing/occamy-1.0-with-mtp/occamy-1.0-with-mtp-IQ2_S.gguf\n0.00.023.899 E llama_model_load_from_file_impl: failed to load model\n0.00.023.928 E common_fit_params: encountered an error while trying to fit params to free device memory: failed to load model\n0.00.023.938 E gguf_init_from_reader: invalid magic characters: '????', expected 'GGUF'\n0.00.023.943 E llama_model_load: error loading model: llama_model_loader: failed to load model from /mnt/Scratch/model_testing/occamy-1.0-with-mtp/occamy-1.0-with-mtp-IQ2_S.gguf\n0.00.023.944 E llama_model_load_from_file_impl: failed to load model\n0.00.023.947 E cmn  common_init_: failed to load model '/mnt/Scratch/model_testing/occamy-1.0-with-mtp/occamy-1.0-with-mtp-IQ2_S.gguf'\n0.00.023.953 E srv    load_model: failed to load model, '/mnt/Scratch/model_testing/occamy-1.0-with-mtp/occamy-1.0-with-mtp-IQ2_S.gguf'\n0.00.024.458 E srv  llama_server: exiting due to model loading error\nllama_server exited with code 1\n",
+        "latency_sec": 0.27,
+        "prompt_speed_tps": 0.0,
+        "gen_speed_tps": 0.0,
+        "coherent": true,
+        "coherence_reason": "OK",
+        "keyword_matched": true
+      },
+      "Q3_MEDIUM": {
+        "success": false,
+        "response": "testing/occamy-1.0-with-mtp/occamy-1.0-with-mtp-IQ2_S.gguf\n0.00.026.179 E llama_model_load_from_file_impl: failed to load model\n0.00.026.181 E cmn  common_init_: failed to load model '/mnt/Scratch/model_testing/occamy-1.0-with-mtp/occamy-1.0-with-mtp-IQ2_S.gguf'\n0.00.026.186 E srv    load_model: failed to load model, '/mnt/Scratch/model_testing/occamy-1.0-with-mtp/occamy-1.0-with-mtp-IQ2_S.gguf'\n0.00.026.734 E srv  llama_server: exiting due to model loading error\nllama_server exited with code 1",
+        "raw_output": "\n\nLoading model... Error: the server exited before becoming ready\n0.00.022.782 E gguf_init_from_reader: invalid magic characters: '????', expected 'GGUF'\n0.00.026.032 E gguf_init_from_reader: invalid magic characters: '????', expected 'GGUF'\n0.00.026.123 E llama_model_load: error loading model: llama_model_loader: failed to load model from /mnt/Scratch/model_testing/occamy-1.0-with-mtp/occamy-1.0-with-mtp-IQ2_S.gguf\n0.00.026.134 E llama_model_load_from_file_impl: failed to load model\n0.00.026.163 E common_fit_params: encountered an error while trying to fit params to free device memory: failed to load model\n0.00.026.173 E gguf_init_from_reader: invalid magic characters: '????', expected 'GGUF'\n0.00.026.178 E llama_model_load: error loading model: llama_model_loader: failed to load model from /mnt/Scratch/model_testing/occamy-1.0-with-mtp/occamy-1.0-with-mtp-IQ2_S.gguf\n0.00.026.179 E llama_model_load_from_file_impl: failed to load model\n0.00.026.181 E cmn  common_init_: failed to load model '/mnt/Scratch/model_testing/occamy-1.0-with-mtp/occamy-1.0-with-mtp-IQ2_S.gguf'\n0.00.026.186 E srv    load_model: failed to load model, '/mnt/Scratch/model_testing/occamy-1.0-with-mtp/occamy-1.0-with-mtp-IQ2_S.gguf'\n0.00.026.734 E srv  llama_server: exiting due to model loading error\nllama_server exited with code 1\n",
+        "latency_sec": 0.27,
+        "prompt_speed_tps": 0.0,
+        "gen_speed_tps": 0.0,
+        "coherent": true,
+        "coherence_reason": "OK",
+        "keyword_matched": false
+      },
+      "Q4_MED_HARD": {
+        "success": false,
+        "response": "testing/occamy-1.0-with-mtp/occamy-1.0-with-mtp-IQ2_S.gguf\n0.00.030.864 E llama_model_load_from_file_impl: failed to load model\n0.00.030.868 E cmn  common_init_: failed to load model '/mnt/Scratch/model_testing/occamy-1.0-with-mtp/occamy-1.0-with-mtp-IQ2_S.gguf'\n0.00.030.875 E srv    load_model: failed to load model, '/mnt/Scratch/model_testing/occamy-1.0-with-mtp/occamy-1.0-with-mtp-IQ2_S.gguf'\n0.00.031.542 E srv  llama_server: exiting due to model loading error\nllama_server exited with code 1",
+        "raw_output": "\n\nLoading model... Error: the server exited before becoming ready\n0.00.027.597 E gguf_init_from_reader: invalid magic characters: '????', expected 'GGUF'\n0.00.030.691 E gguf_init_from_reader: invalid magic characters: '????', expected 'GGUF'\n0.00.030.801 E llama_model_load: error loading model: llama_model_loader: failed to load model from /mnt/Scratch/model_testing/occamy-1.0-with-mtp/occamy-1.0-with-mtp-IQ2_S.gguf\n0.00.030.813 E llama_model_load_from_file_impl: failed to load model\n0.00.030.845 E common_fit_params: encountered an error while trying to fit params to free device memory: failed to load model\n0.00.030.857 E gguf_init_from_reader: invalid magic characters: '????', expected 'GGUF'\n0.00.030.863 E llama_model_load: error loading model: llama_model_loader: failed to load model from /mnt/Scratch/model_testing/occamy-1.0-with-mtp/occamy-1.0-with-mtp-IQ2_S.gguf\n0.00.030.864 E llama_model_load_from_file_impl: failed to load model\n0.00.030.868 E cmn  common_init_: failed to load model '/mnt/Scratch/model_testing/occamy-1.0-with-mtp/occamy-1.0-with-mtp-IQ2_S.gguf'\n0.00.030.875 E srv    load_model: failed to load model, '/mnt/Scratch/model_testing/occamy-1.0-with-mtp/occamy-1.0-with-mtp-IQ2_S.gguf'\n0.00.031.542 E srv  llama_server: exiting due to model loading error\nllama_server exited with code 1\n",
+        "latency_sec": 0.28,
+        "prompt_speed_tps": 0.0,
+        "gen_speed_tps": 0.0,
+        "coherent": true,
+        "coherence_reason": "OK",
+        "keyword_matched": false
+      },
+      "Q5_HARD": {
+        "success": false,
+        "response": "testing/occamy-1.0-with-mtp/occamy-1.0-with-mtp-IQ2_S.gguf\n0.00.027.810 E llama_model_load_from_file_impl: failed to load model\n0.00.027.812 E cmn  common_init_: failed to load model '/mnt/Scratch/model_testing/occamy-1.0-with-mtp/occamy-1.0-with-mtp-IQ2_S.gguf'\n0.00.027.817 E srv    load_model: failed to load model, '/mnt/Scratch/model_testing/occamy-1.0-with-mtp/occamy-1.0-with-mtp-IQ2_S.gguf'\n0.00.028.295 E srv  llama_server: exiting due to model loading error\nllama_server exited with code 1",
+        "raw_output": "\n\nLoading model... Error: the server exited before becoming ready\n0.00.024.838 E gguf_init_from_reader: invalid magic characters: '????', expected 'GGUF'\n0.00.027.655 E gguf_init_from_reader: invalid magic characters: '????', expected 'GGUF'\n0.00.027.754 E llama_model_load: error loading model: llama_model_loader: failed to load model from /mnt/Scratch/model_testing/occamy-1.0-with-mtp/occamy-1.0-with-mtp-IQ2_S.gguf\n0.00.027.765 E llama_model_load_from_file_impl: failed to load model\n0.00.027.793 E common_fit_params: encountered an error while trying to fit params to free device memory: failed to load model\n0.00.027.803 E gguf_init_from_reader: invalid magic characters: '????', expected 'GGUF'\n0.00.027.809 E llama_model_load: error loading model: llama_model_loader: failed to load model from /mnt/Scratch/model_testing/occamy-1.0-with-mtp/occamy-1.0-with-mtp-IQ2_S.gguf\n0.00.027.810 E llama_model_load_from_file_impl: failed to load model\n0.00.027.812 E cmn  common_init_: failed to load model '/mnt/Scratch/model_testing/occamy-1.0-with-mtp/occamy-1.0-with-mtp-IQ2_S.gguf'\n0.00.027.817 E srv    load_model: failed to load model, '/mnt/Scratch/model_testing/occamy-1.0-with-mtp/occamy-1.0-with-mtp-IQ2_S.gguf'\n0.00.028.295 E srv  llama_server: exiting due to model loading error\nllama_server exited with code 1\n",
+        "latency_sec": 0.28,
+        "prompt_speed_tps": 0.0,
+        "gen_speed_tps": 0.0,
+        "coherent": true,
+        "coherence_reason": "OK",
+        "keyword_matched": false
+      },
+      "Q6_FRONTIER": {
+        "success": false,
+        "response": "testing/occamy-1.0-with-mtp/occamy-1.0-with-mtp-IQ2_S.gguf\n0.00.029.524 E llama_model_load_from_file_impl: failed to load model\n0.00.029.528 E cmn  common_init_: failed to load model '/mnt/Scratch/model_testing/occamy-1.0-with-mtp/occamy-1.0-with-mtp-IQ2_S.gguf'\n0.00.029.535 E srv    load_model: failed to load model, '/mnt/Scratch/model_testing/occamy-1.0-with-mtp/occamy-1.0-with-mtp-IQ2_S.gguf'\n0.00.030.414 E srv  llama_server: exiting due to model loading error\nllama_server exited with code 1",
+        "raw_output": "\n\nLoading model... Error: the server exited before becoming ready\n0.00.025.891 E gguf_init_from_reader: invalid magic characters: '????', expected 'GGUF'\n0.00.029.320 E gguf_init_from_reader: invalid magic characters: '????', expected 'GGUF'\n0.00.029.430 E llama_model_load: error loading model: llama_model_loader: failed to load model from /mnt/Scratch/model_testing/occamy-1.0-with-mtp/occamy-1.0-with-mtp-IQ2_S.gguf\n0.00.029.444 E llama_model_load_from_file_impl: failed to load model\n0.00.029.495 E common_fit_params: encountered an error while trying to fit params to free device memory: failed to load model\n0.00.029.515 E gguf_init_from_reader: invalid magic characters: '????', expected 'GGUF'\n0.00.029.524 E llama_model_load: error loading model: llama_model_loader: failed to load model from /mnt/Scratch/model_testing/occamy-1.0-with-mtp/occamy-1.0-with-mtp-IQ2_S.gguf\n0.00.029.524 E llama_model_load_from_file_impl: failed to load model\n0.00.029.528 E cmn  common_init_: failed to load model '/mnt/Scratch/model_testing/occamy-1.0-with-mtp/occamy-1.0-with-mtp-IQ2_S.gguf'\n0.00.029.535 E srv    load_model: failed to load model, '/mnt/Scratch/model_testing/occamy-1.0-with-mtp/occamy-1.0-with-mtp-IQ2_S.gguf'\n0.00.030.414 E srv  llama_server: exiting due to model loading error\nllama_server exited with code 1\n",
+        "latency_sec": 0.27,
+        "prompt_speed_tps": 0.0,
+        "gen_speed_tps": 0.0,
+        "coherent": true,
+        "coherence_reason": "OK",
+        "keyword_matched": false
+      }
+    },
+    "summary": {
+      "total_questions": 6,
+      "passed_questions": 0,
+      "pass_rate_pct": 0.0,
+      "avg_gen_speed_tps": 0.0,
+      "avg_prompt_speed_tps": 0.0,
+      "ppl_score": null,
+      "overall_status": "COLLAPSED_FAIL"
+    }
+  },
+  "Qwen3.8-27B-Cold-Fusion": {
+    "workflow_id": "WF1_IQ2",
+    "model_name": "Qwen3.8-27B-Cold-Fusion-IQ2_S.gguf",
+    "source_path": "/mnt/Scratch/model_testing/Qwen3.8-27B-Cold-Fusion/Qwen3.8-27B-Cold-Fusion-IQ2_S.gguf",
+    "evaluated_at": "2026-10-04 09:29:31",
+    "questions": {
+      "Q1_EASY": {
+        "success": false,
+        "response": "-Fusion/Qwen3.8-27B-Cold-Fusion-IQ2_S.gguf\n0.00.029.677 E llama_model_load_from_file_impl: failed to load model\n0.00.029.679 E cmn  common_init_: failed to load model '/mnt/Scratch/model_testing/Qwen3.8-27B-Cold-Fusion/Qwen3.8-27B-Cold-Fusion-IQ2_S.gguf'\n0.00.029.684 E srv    load_model: failed to load model, '/mnt/Scratch/model_testing/Qwen3.8-27B-Cold-Fusion/Qwen3.8-27B-Cold-Fusion-IQ2_S.gguf'\n0.00.030.235 E srv  llama_server: exiting due to model loading error\nllama_server exited with code 1",
+        "raw_output": "\n\nLoading model... Error: the server exited before becoming ready\n0.00.026.679 E gguf_init_from_reader: invalid magic characters: '????', expected 'GGUF'\n0.00.029.527 E gguf_init_from_reader: invalid magic characters: '????', expected 'GGUF'\n0.00.029.623 E llama_model_load: error loading model: llama_model_loader: failed to load model from /mnt/Scratch/model_testing/Qwen3.8-27B-Cold-Fusion/Qwen3.8-27B-Cold-Fusion-IQ2_S.gguf\n0.00.029.634 E llama_model_load_from_file_impl: failed to load model\n0.00.029.661 E common_fit_params: encountered an error while trying to fit params to free device memory: failed to load model\n0.00.029.670 E gguf_init_from_reader: invalid magic characters: '????', expected 'GGUF'\n0.00.029.676 E llama_model_load: error loading model: llama_model_loader: failed to load model from /mnt/Scratch/model_testing/Qwen3.8-27B-Cold-Fusion/Qwen3.8-27B-Cold-Fusion-IQ2_S.gguf\n0.00.029.677 E llama_model_load_from_file_impl: failed to load model\n0.00.029.679 E cmn  common_init_: failed to load model '/mnt/Scratch/model_testing/Qwen3.8-27B-Cold-Fusion/Qwen3.8-27B-Cold-Fusion-IQ2_S.gguf'\n0.00.029.684 E srv    load_model: failed to load model, '/mnt/Scratch/model_testing/Qwen3.8-27B-Cold-Fusion/Qwen3.8-27B-Cold-Fusion-IQ2_S.gguf'\n0.00.030.235 E srv  llama_server: exiting due to model loading error\nllama_server exited with code 1\n",
+        "latency_sec": 0.28,
+        "prompt_speed_tps": 0.0,
+        "gen_speed_tps": 0.0,
+        "coherent": true,
+        "coherence_reason": "OK",
+        "keyword_matched": false
+      },
+      "Q2_EASY_MED": {
+        "success": false,
+        "response": "-Fusion/Qwen3.8-27B-Cold-Fusion-IQ2_S.gguf\n0.00.027.578 E llama_model_load_from_file_impl: failed to load model\n0.00.027.582 E cmn  common_init_: failed to load model '/mnt/Scratch/model_testing/Qwen3.8-27B-Cold-Fusion/Qwen3.8-27B-Cold-Fusion-IQ2_S.gguf'\n0.00.027.588 E srv    load_model: failed to load model, '/mnt/Scratch/model_testing/Qwen3.8-27B-Cold-Fusion/Qwen3.8-27B-Cold-Fusion-IQ2_S.gguf'\n0.00.028.200 E srv  llama_server: exiting due to model loading error\nllama_server exited with code 1",
+        "raw_output": "\n\nLoading model... Error: the server exited before becoming ready\n0.00.024.070 E gguf_init_from_reader: invalid magic characters: '????', expected 'GGUF'\n0.00.027.377 E gguf_init_from_reader: invalid magic characters: '????', expected 'GGUF'\n0.00.027.503 E llama_model_load: error loading model: llama_model_loader: failed to load model from /mnt/Scratch/model_testing/Qwen3.8-27B-Cold-Fusion/Qwen3.8-27B-Cold-Fusion-IQ2_S.gguf\n0.00.027.517 E llama_model_load_from_file_impl: failed to load model\n0.00.027.553 E common_fit_params: encountered an error while trying to fit params to free device memory: failed to load model\n0.00.027.568 E gguf_init_from_reader: invalid magic characters: '????', expected 'GGUF'\n0.00.027.577 E llama_model_load: error loading model: llama_model_loader: failed to load model from /mnt/Scratch/model_testing/Qwen3.8-27B-Cold-Fusion/Qwen3.8-27B-Cold-Fusion-IQ2_S.gguf\n0.00.027.578 E llama_model_load_from_file_impl: failed to load model\n0.00.027.582 E cmn  common_init_: failed to load model '/mnt/Scratch/model_testing/Qwen3.8-27B-Cold-Fusion/Qwen3.8-27B-Cold-Fusion-IQ2_S.gguf'\n0.00.027.588 E srv    load_model: failed to load model, '/mnt/Scratch/model_testing/Qwen3.8-27B-Cold-Fusion/Qwen3.8-27B-Cold-Fusion-IQ2_S.gguf'\n0.00.028.200 E srv  llama_server: exiting due to model loading error\nllama_server exited with code 1\n",
+        "latency_sec": 0.27,
+        "prompt_speed_tps": 0.0,
+        "gen_speed_tps": 0.0,
+        "coherent": true,
+        "coherence_reason": "OK",
+        "keyword_matched": true
+      },
+      "Q3_MEDIUM": {
+        "success": false,
+        "response": "-Fusion/Qwen3.8-27B-Cold-Fusion-IQ2_S.gguf\n0.00.030.572 E llama_model_load_from_file_impl: failed to load model\n0.00.030.578 E cmn  common_init_: failed to load model '/mnt/Scratch/model_testing/Qwen3.8-27B-Cold-Fusion/Qwen3.8-27B-Cold-Fusion-IQ2_S.gguf'\n0.00.030.588 E srv    load_model: failed to load model, '/mnt/Scratch/model_testing/Qwen3.8-27B-Cold-Fusion/Qwen3.8-27B-Cold-Fusion-IQ2_S.gguf'\n0.00.031.229 E srv  llama_server: exiting due to model loading error\nllama_server exited with code 1",
+        "raw_output": "\n\nLoading model... Error: the server exited before becoming ready\n0.00.027.076 E gguf_init_from_reader: invalid magic characters: '????', expected 'GGUF'\n0.00.030.398 E gguf_init_from_reader: invalid magic characters: '????', expected 'GGUF'\n0.00.030.504 E llama_model_load: error loading model: llama_model_loader: failed to load model from /mnt/Scratch/model_testing/Qwen3.8-27B-Cold-Fusion/Qwen3.8-27B-Cold-Fusion-IQ2_S.gguf\n0.00.030.517 E llama_model_load_from_file_impl: failed to load model\n0.00.030.552 E common_fit_params: encountered an error while trying to fit params to free device memory: failed to load model\n0.00.030.566 E gguf_init_from_reader: invalid magic characters: '????', expected 'GGUF'\n0.00.030.572 E llama_model_load: error loading model: llama_model_loader: failed to load model from /mnt/Scratch/model_testing/Qwen3.8-27B-Cold-Fusion/Qwen3.8-27B-Cold-Fusion-IQ2_S.gguf\n0.00.030.572 E llama_model_load_from_file_impl: failed to load model\n0.00.030.578 E cmn  common_init_: failed to load model '/mnt/Scratch/model_testing/Qwen3.8-27B-Cold-Fusion/Qwen3.8-27B-Cold-Fusion-IQ2_S.gguf'\n0.00.030.588 E srv    load_model: failed to load model, '/mnt/Scratch/model_testing/Qwen3.8-27B-Cold-Fusion/Qwen3.8-27B-Cold-Fusion-IQ2_S.gguf'\n0.00.031.229 E srv  llama_server: exiting due to model loading error\nllama_server exited with code 1\n",
+        "latency_sec": 0.28,
+        "prompt_speed_tps": 0.0,
+        "gen_speed_tps": 0.0,
+        "coherent": true,
+        "coherence_reason": "OK",
+        "keyword_matched": false
+      },
+      "Q4_MED_HARD": {
+        "success": false,
+        "response": "-Fusion/Qwen3.8-27B-Cold-Fusion-IQ2_S.gguf\n0.00.026.687 E llama_model_load_from_file_impl: failed to load model\n0.00.026.692 E cmn  common_init_: failed to load model '/mnt/Scratch/model_testing/Qwen3.8-27B-Cold-Fusion/Qwen3.8-27B-Cold-Fusion-IQ2_S.gguf'\n0.00.026.702 E srv    load_model: failed to load model, '/mnt/Scratch/model_testing/Qwen3.8-27B-Cold-Fusion/Qwen3.8-27B-Cold-Fusion-IQ2_S.gguf'\n0.00.028.253 E srv  llama_server: exiting due to model loading error\nllama_server exited with code 1",
+        "raw_output": "\n\nLoading model... Error: the server exited before becoming ready\n0.00.023.235 E gguf_init_from_reader: invalid magic characters: '????', expected 'GGUF'\n0.00.026.427 E gguf_init_from_reader: invalid magic characters: '????', expected 'GGUF'\n0.00.026.586 E llama_model_load: error loading model: llama_model_loader: failed to load model from /mnt/Scratch/model_testing/Qwen3.8-27B-Cold-Fusion/Qwen3.8-27B-Cold-Fusion-IQ2_S.gguf\n0.00.026.607 E llama_model_load_from_file_impl: failed to load model\n0.00.026.655 E common_fit_params: encountered an error while trying to fit params to free device memory: failed to load model\n0.00.026.676 E gguf_init_from_reader: invalid magic characters: '????', expected 'GGUF'\n0.00.026.685 E llama_model_load: error loading model: llama_model_loader: failed to load model from /mnt/Scratch/model_testing/Qwen3.8-27B-Cold-Fusion/Qwen3.8-27B-Cold-Fusion-IQ2_S.gguf\n0.00.026.687 E llama_model_load_from_file_impl: failed to load model\n0.00.026.692 E cmn  common_init_: failed to load model '/mnt/Scratch/model_testing/Qwen3.8-27B-Cold-Fusion/Qwen3.8-27B-Cold-Fusion-IQ2_S.gguf'\n0.00.026.702 E srv    load_model: failed to load model, '/mnt/Scratch/model_testing/Qwen3.8-27B-Cold-Fusion/Qwen3.8-27B-Cold-Fusion-IQ2_S.gguf'\n0.00.028.253 E srv  llama_server: exiting due to model loading error\nllama_server exited with code 1\n",
+        "latency_sec": 0.28,
+        "prompt_speed_tps": 0.0,
+        "gen_speed_tps": 0.0,
+        "coherent": true,
+        "coherence_reason": "OK",
+        "keyword_matched": false
+      },
+      "Q5_HARD": {
+        "success": false,
+        "response": "-Fusion/Qwen3.8-27B-Cold-Fusion-IQ2_S.gguf\n0.00.025.721 E llama_model_load_from_file_impl: failed to load model\n0.00.025.724 E cmn  common_init_: failed to load model '/mnt/Scratch/model_testing/Qwen3.8-27B-Cold-Fusion/Qwen3.8-27B-Cold-Fusion-IQ2_S.gguf'\n0.00.025.728 E srv    load_model: failed to load model, '/mnt/Scratch/model_testing/Qwen3.8-27B-Cold-Fusion/Qwen3.8-27B-Cold-Fusion-IQ2_S.gguf'\n0.00.026.331 E srv  llama_server: exiting due to model loading error\nllama_server exited with code 1",
+        "raw_output": "\n\nLoading model... Error: the server exited before becoming ready\n0.00.022.736 E gguf_init_from_reader: invalid magic characters: '????', expected 'GGUF'\n0.00.025.600 E gguf_init_from_reader: invalid magic characters: '????', expected 'GGUF'\n0.00.025.674 E llama_model_load: error loading model: llama_model_loader: failed to load model from /mnt/Scratch/model_testing/Qwen3.8-27B-Cold-Fusion/Qwen3.8-27B-Cold-Fusion-IQ2_S.gguf\n0.00.025.684 E llama_model_load_from_file_impl: failed to load model\n0.00.025.709 E common_fit_params: encountered an error while trying to fit params to free device memory: failed to load model\n0.00.025.716 E gguf_init_from_reader: invalid magic characters: '????', expected 'GGUF'\n0.00.025.721 E llama_model_load: error loading model: llama_model_loader: failed to load model from /mnt/Scratch/model_testing/Qwen3.8-27B-Cold-Fusion/Qwen3.8-27B-Cold-Fusion-IQ2_S.gguf\n0.00.025.721 E llama_model_load_from_file_impl: failed to load model\n0.00.025.724 E cmn  common_init_: failed to load model '/mnt/Scratch/model_testing/Qwen3.8-27B-Cold-Fusion/Qwen3.8-27B-Cold-Fusion-IQ2_S.gguf'\n0.00.025.728 E srv    load_model: failed to load model, '/mnt/Scratch/model_testing/Qwen3.8-27B-Cold-Fusion/Qwen3.8-27B-Cold-Fusion-IQ2_S.gguf'\n0.00.026.331 E srv  llama_server: exiting due to model loading error\nllama_server exited with code 1\n",
+        "latency_sec": 0.28,
+        "prompt_speed_tps": 0.0,
+        "gen_speed_tps": 0.0,
+        "coherent": true,
+        "coherence_reason": "OK",
+        "keyword_matched": false
+      },
+      "Q6_FRONTIER": {
+        "success": false,
+        "response": "-Fusion/Qwen3.8-27B-Cold-Fusion-IQ2_S.gguf\n0.00.026.810 E llama_model_load_from_file_impl: failed to load model\n0.00.026.813 E cmn  common_init_: failed to load model '/mnt/Scratch/model_testing/Qwen3.8-27B-Cold-Fusion/Qwen3.8-27B-Cold-Fusion-IQ2_S.gguf'\n0.00.026.818 E srv    load_model: failed to load model, '/mnt/Scratch/model_testing/Qwen3.8-27B-Cold-Fusion/Qwen3.8-27B-Cold-Fusion-IQ2_S.gguf'\n0.00.027.378 E srv  llama_server: exiting due to model loading error\nllama_server exited with code 1",
+        "raw_output": "\n\nLoading model... Error: the server exited before becoming ready\n0.00.023.716 E gguf_init_from_reader: invalid magic characters: '????', expected 'GGUF'\n0.00.026.661 E gguf_init_from_reader: invalid magic characters: '????', expected 'GGUF'\n0.00.026.754 E llama_model_load: error loading model: llama_model_loader: failed to load model from /mnt/Scratch/model_testing/Qwen3.8-27B-Cold-Fusion/Qwen3.8-27B-Cold-Fusion-IQ2_S.gguf\n0.00.026.765 E llama_model_load_from_file_impl: failed to load model\n0.00.026.793 E common_fit_params: encountered an error while trying to fit params to free device memory: failed to load model\n0.00.026.803 E gguf_init_from_reader: invalid magic characters: '????', expected 'GGUF'\n0.00.026.809 E llama_model_load: error loading model: llama_model_loader: failed to load model from /mnt/Scratch/model_testing/Qwen3.8-27B-Cold-Fusion/Qwen3.8-27B-Cold-Fusion-IQ2_S.gguf\n0.00.026.810 E llama_model_load_from_file_impl: failed to load model\n0.00.026.813 E cmn  common_init_: failed to load model '/mnt/Scratch/model_testing/Qwen3.8-27B-Cold-Fusion/Qwen3.8-27B-Cold-Fusion-IQ2_S.gguf'\n0.00.026.818 E srv    load_model: failed to load model, '/mnt/Scratch/model_testing/Qwen3.8-27B-Cold-Fusion/Qwen3.8-27B-Cold-Fusion-IQ2_S.gguf'\n0.00.027.378 E srv  llama_server: exiting due to model loading error\nllama_server exited with code 1\n",
+        "latency_sec": 0.27,
+        "prompt_speed_tps": 0.0,
+        "gen_speed_tps": 0.0,
+        "coherent": true,
+        "coherence_reason": "OK",
+        "keyword_matched": false
+      }
+    },
+    "summary": {
+      "total_questions": 6,
+      "passed_questions": 0,
+      "pass_rate_pct": 0.0,
+      "avg_gen_speed_tps": 0.0,
+      "avg_prompt_speed_tps": 0.0,
+      "ppl_score": null,
+      "overall_status": "COLLAPSED_FAIL"
+    }
+  },
+  "Qwen3.8-Flash-Next": {
+    "workflow_id": "WF1_IQ2",
+    "model_name": "Qwen3.8-Flash-Next-IQ2_S.gguf",
+    "source_path": "/mnt/Scratch/model_testing/Qwen3.8-Flash-Next/Qwen3.8-Flash-Next-IQ2_S.gguf",
+    "evaluated_at": "2026-10-04 09:29:33",
+    "questions": {
+      "Q1_EASY": {
+        "success": false,
+        "response": "model_testing/Qwen3.8-Flash-Next/Qwen3.8-Flash-Next-IQ2_S.gguf\n0.00.030.466 E llama_model_load_from_file_impl: failed to load model\n0.00.030.468 E cmn  common_init_: failed to load model '/mnt/Scratch/model_testing/Qwen3.8-Flash-Next/Qwen3.8-Flash-Next-IQ2_S.gguf'\n0.00.030.473 E srv    load_model: failed to load model, '/mnt/Scratch/model_testing/Qwen3.8-Flash-Next/Qwen3.8-Flash-Next-IQ2_S.gguf'\n0.00.031.012 E srv  llama_server: exiting due to model loading error\nllama_server exited with code 1",
+        "raw_output": "\n\nLoading model... Error: the server exited before becoming ready\n0.00.027.416 E gguf_init_from_reader: invalid magic characters: '????', expected 'GGUF'\n0.00.030.314 E gguf_init_from_reader: invalid magic characters: '????', expected 'GGUF'\n0.00.030.411 E llama_model_load: error loading model: llama_model_loader: failed to load model from /mnt/Scratch/model_testing/Qwen3.8-Flash-Next/Qwen3.8-Flash-Next-IQ2_S.gguf\n0.00.030.422 E llama_model_load_from_file_impl: failed to load model\n0.00.030.451 E common_fit_params: encountered an error while trying to fit params to free device memory: failed to load model\n0.00.030.460 E gguf_init_from_reader: invalid magic characters: '????', expected 'GGUF'\n0.00.030.466 E llama_model_load: error loading model: llama_model_loader: failed to load model from /mnt/Scratch/model_testing/Qwen3.8-Flash-Next/Qwen3.8-Flash-Next-IQ2_S.gguf\n0.00.030.466 E llama_model_load_from_file_impl: failed to load model\n0.00.030.468 E cmn  common_init_: failed to load model '/mnt/Scratch/model_testing/Qwen3.8-Flash-Next/Qwen3.8-Flash-Next-IQ2_S.gguf'\n0.00.030.473 E srv    load_model: failed to load model, '/mnt/Scratch/model_testing/Qwen3.8-Flash-Next/Qwen3.8-Flash-Next-IQ2_S.gguf'\n0.00.031.012 E srv  llama_server: exiting due to model loading error\nllama_server exited with code 1\n",
+        "latency_sec": 0.28,
+        "prompt_speed_tps": 0.0,
+        "gen_speed_tps": 0.0,
+        "coherent": true,
+        "coherence_reason": "OK",
+        "keyword_matched": false
+      },
+      "Q2_EASY_MED": {
+        "success": false,
+        "response": "model_testing/Qwen3.8-Flash-Next/Qwen3.8-Flash-Next-IQ2_S.gguf\n0.00.025.689 E llama_model_load_from_file_impl: failed to load model\n0.00.025.692 E cmn  common_init_: failed to load model '/mnt/Scratch/model_testing/Qwen3.8-Flash-Next/Qwen3.8-Flash-Next-IQ2_S.gguf'\n0.00.025.697 E srv    load_model: failed to load model, '/mnt/Scratch/model_testing/Qwen3.8-Flash-Next/Qwen3.8-Flash-Next-IQ2_S.gguf'\n0.00.026.423 E srv  llama_server: exiting due to model loading error\nllama_server exited with code 1",
+        "raw_output": "\n\nLoading model... Error: the server exited before becoming ready\n0.00.022.744 E gguf_init_from_reader: invalid magic characters: '????', expected 'GGUF'\n0.00.025.537 E gguf_init_from_reader: invalid magic characters: '????', expected 'GGUF'\n0.00.025.631 E llama_model_load: error loading model: llama_model_loader: failed to load model from /mnt/Scratch/model_testing/Qwen3.8-Flash-Next/Qwen3.8-Flash-Next-IQ2_S.gguf\n0.00.025.645 E llama_model_load_from_file_impl: failed to load model\n0.00.025.674 E common_fit_params: encountered an error while trying to fit params to free device memory: failed to load model\n0.00.025.684 E gguf_init_from_reader: invalid magic characters: '????', expected 'GGUF'\n0.00.025.689 E llama_model_load: error loading model: llama_model_loader: failed to load model from /mnt/Scratch/model_testing/Qwen3.8-Flash-Next/Qwen3.8-Flash-Next-IQ2_S.gguf\n0.00.025.689 E llama_model_load_from_file_impl: failed to load model\n0.00.025.692 E cmn  common_init_: failed to load model '/mnt/Scratch/model_testing/Qwen3.8-Flash-Next/Qwen3.8-Flash-Next-IQ2_S.gguf'\n0.00.025.697 E srv    load_model: failed to load model, '/mnt/Scratch/model_testing/Qwen3.8-Flash-Next/Qwen3.8-Flash-Next-IQ2_S.gguf'\n0.00.026.423 E srv  llama_server: exiting due to model loading error\nllama_server exited with code 1\n",
+        "latency_sec": 0.27,
+        "prompt_speed_tps": 0.0,
+        "gen_speed_tps": 0.0,
+        "coherent": true,
+        "coherence_reason": "OK",
+        "keyword_matched": true
+      },
+      "Q3_MEDIUM": {
+        "success": false,
+        "response": "model_testing/Qwen3.8-Flash-Next/Qwen3.8-Flash-Next-IQ2_S.gguf\n0.00.026.575 E llama_model_load_from_file_impl: failed to load model\n0.00.026.577 E cmn  common_init_: failed to load model '/mnt/Scratch/model_testing/Qwen3.8-Flash-Next/Qwen3.8-Flash-Next-IQ2_S.gguf'\n0.00.026.583 E srv    load_model: failed to load model, '/mnt/Scratch/model_testing/Qwen3.8-Flash-Next/Qwen3.8-Flash-Next-IQ2_S.gguf'\n0.00.027.132 E srv  llama_server: exiting due to model loading error\nllama_server exited with code 1",
+        "raw_output": "\n\nLoading model... Error: the server exited before becoming ready\n0.00.023.239 E gguf_init_from_reader: invalid magic characters: '????', expected 'GGUF'\n0.00.026.416 E gguf_init_from_reader: invalid magic characters: '????', expected 'GGUF'\n0.00.026.514 E llama_model_load: error loading model: llama_model_loader: failed to load model from /mnt/Scratch/model_testing/Qwen3.8-Flash-Next/Qwen3.8-Flash-Next-IQ2_S.gguf\n0.00.026.527 E llama_model_load_from_file_impl: failed to load model\n0.00.026.557 E common_fit_params: encountered an error while trying to fit params to free device memory: failed to load model\n0.00.026.568 E gguf_init_from_reader: invalid magic characters: '????', expected 'GGUF'\n0.00.026.574 E llama_model_load: error loading model: llama_model_loader: failed to load model from /mnt/Scratch/model_testing/Qwen3.8-Flash-Next/Qwen3.8-Flash-Next-IQ2_S.gguf\n0.00.026.575 E llama_model_load_from_file_impl: failed to load model\n0.00.026.577 E cmn  common_init_: failed to load model '/mnt/Scratch/model_testing/Qwen3.8-Flash-Next/Qwen3.8-Flash-Next-IQ2_S.gguf'\n0.00.026.583 E srv    load_model: failed to load model, '/mnt/Scratch/model_testing/Qwen3.8-Flash-Next/Qwen3.8-Flash-Next-IQ2_S.gguf'\n0.00.027.132 E srv  llama_server: exiting due to model loading error\nllama_server exited with code 1\n",
+        "latency_sec": 0.27,
+        "prompt_speed_tps": 0.0,
+        "gen_speed_tps": 0.0,
+        "coherent": true,
+        "coherence_reason": "OK",
+        "keyword_matched": false
+      },
+      "Q4_MED_HARD": {
+        "success": false,
+        "response": "model_testing/Qwen3.8-Flash-Next/Qwen3.8-Flash-Next-IQ2_S.gguf\n0.00.028.114 E llama_model_load_from_file_impl: failed to load model\n0.00.028.119 E cmn  common_init_: failed to load model '/mnt/Scratch/model_testing/Qwen3.8-Flash-Next/Qwen3.8-Flash-Next-IQ2_S.gguf'\n0.00.028.128 E srv    load_model: failed to load model, '/mnt/Scratch/model_testing/Qwen3.8-Flash-Next/Qwen3.8-Flash-Next-IQ2_S.gguf'\n0.00.028.793 E srv  llama_server: exiting due to model loading error\nllama_server exited with code 1",
+        "raw_output": "\n\nLoading model... Error: the server exited before becoming ready\n0.00.024.822 E gguf_init_from_reader: invalid magic characters: '????', expected 'GGUF'\n0.00.027.930 E gguf_init_from_reader: invalid magic characters: '????', expected 'GGUF'\n0.00.028.046 E llama_model_load: error loading model: llama_model_loader: failed to load model from /mnt/Scratch/model_testing/Qwen3.8-Flash-Next/Qwen3.8-Flash-Next-IQ2_S.gguf\n0.00.028.061 E llama_model_load_from_file_impl: failed to load model\n0.00.028.096 E common_fit_params: encountered an error while trying to fit params to free device memory: failed to load model\n0.00.028.107 E gguf_init_from_reader: invalid magic characters: '????', expected 'GGUF'\n0.00.028.113 E llama_model_load: error loading model: llama_model_loader: failed to load model from /mnt/Scratch/model_testing/Qwen3.8-Flash-Next/Qwen3.8-Flash-Next-IQ2_S.gguf\n0.00.028.114 E llama_model_load_from_file_impl: failed to load model\n0.00.028.119 E cmn  common_init_: failed to load model '/mnt/Scratch/model_testing/Qwen3.8-Flash-Next/Qwen3.8-Flash-Next-IQ2_S.gguf'\n0.00.028.128 E srv    load_model: failed to load model, '/mnt/Scratch/model_testing/Qwen3.8-Flash-Next/Qwen3.8-Flash-Next-IQ2_S.gguf'\n0.00.028.793 E srv  llama_server: exiting due to model loading error\nllama_server exited with code 1\n",
+        "latency_sec": 0.27,
+        "prompt_speed_tps": 0.0,
+        "gen_speed_tps": 0.0,
+        "coherent": true,
+        "coherence_reason": "OK",
+        "keyword_matched": false
+      },
+      "Q5_HARD": {
+        "success": false,
+        "response": "model_testing/Qwen3.8-Flash-Next/Qwen3.8-Flash-Next-IQ2_S.gguf\n0.00.025.167 E llama_model_load_from_file_impl: failed to load model\n0.00.025.169 E cmn  common_init_: failed to load model '/mnt/Scratch/model_testing/Qwen3.8-Flash-Next/Qwen3.8-Flash-Next-IQ2_S.gguf'\n0.00.025.173 E srv    load_model: failed to load model, '/mnt/Scratch/model_testing/Qwen3.8-Flash-Next/Qwen3.8-Flash-Next-IQ2_S.gguf'\n0.00.025.739 E srv  llama_server: exiting due to model loading error\nllama_server exited with code 1",
+        "raw_output": "\n\nLoading model... Error: the server exited before becoming ready\n0.00.022.203 E gguf_init_from_reader: invalid magic characters: '????', expected 'GGUF'\n0.00.025.040 E gguf_init_from_reader: invalid magic characters: '????', expected 'GGUF'\n0.00.025.122 E llama_model_load: error loading model: llama_model_loader: failed to load model from /mnt/Scratch/model_testing/Qwen3.8-Flash-Next/Qwen3.8-Flash-Next-IQ2_S.gguf\n0.00.025.132 E llama_model_load_from_file_impl: failed to load model\n0.00.025.155 E common_fit_params: encountered an error while trying to fit params to free device memory: failed to load model\n0.00.025.163 E gguf_init_from_reader: invalid magic characters: '????', expected 'GGUF'\n0.00.025.167 E llama_model_load: error loading model: llama_model_loader: failed to load model from /mnt/Scratch/model_testing/Qwen3.8-Flash-Next/Qwen3.8-Flash-Next-IQ2_S.gguf\n0.00.025.167 E llama_model_load_from_file_impl: failed to load model\n0.00.025.169 E cmn  common_init_: failed to load model '/mnt/Scratch/model_testing/Qwen3.8-Flash-Next/Qwen3.8-Flash-Next-IQ2_S.gguf'\n0.00.025.173 E srv    load_model: failed to load model, '/mnt/Scratch/model_testing/Qwen3.8-Flash-Next/Qwen3.8-Flash-Next-IQ2_S.gguf'\n0.00.025.739 E srv  llama_server: exiting due to model loading error\nllama_server exited with code 1\n",
+        "latency_sec": 0.28,
+        "prompt_speed_tps": 0.0,
+        "gen_speed_tps": 0.0,
+        "coherent": true,
+        "coherence_reason": "OK",
+        "keyword_matched": false
+      },
+      "Q6_FRONTIER": {
+        "success": false,
+        "response": "model_testing/Qwen3.8-Flash-Next/Qwen3.8-Flash-Next-IQ2_S.gguf\n0.00.023.862 E llama_model_load_from_file_impl: failed to load model\n0.00.023.865 E cmn  common_init_: failed to load model '/mnt/Scratch/model_testing/Qwen3.8-Flash-Next/Qwen3.8-Flash-Next-IQ2_S.gguf'\n0.00.023.870 E srv    load_model: failed to load model, '/mnt/Scratch/model_testing/Qwen3.8-Flash-Next/Qwen3.8-Flash-Next-IQ2_S.gguf'\n0.00.024.577 E srv  llama_server: exiting due to model loading error\nllama_server exited with code 1",
+        "raw_output": "\n\nLoading model... Error: the server exited before becoming ready\n0.00.020.817 E gguf_init_from_reader: invalid magic characters: '????', expected 'GGUF'\n0.00.023.690 E gguf_init_from_reader: invalid magic characters: '????', expected 'GGUF'\n0.00.023.798 E llama_model_load: error loading model: llama_model_loader: failed to load model from /mnt/Scratch/model_testing/Qwen3.8-Flash-Next/Qwen3.8-Flash-Next-IQ2_S.gguf\n0.00.023.812 E llama_model_load_from_file_impl: failed to load model\n0.00.023.844 E common_fit_params: encountered an error while trying to fit params to free device memory: failed to load model\n0.00.023.855 E gguf_init_from_reader: invalid magic characters: '????', expected 'GGUF'\n0.00.023.861 E llama_model_load: error loading model: llama_model_loader: failed to load model from /mnt/Scratch/model_testing/Qwen3.8-Flash-Next/Qwen3.8-Flash-Next-IQ2_S.gguf\n0.00.023.862 E llama_model_load_from_file_impl: failed to load model\n0.00.023.865 E cmn  common_init_: failed to load model '/mnt/Scratch/model_testing/Qwen3.8-Flash-Next/Qwen3.8-Flash-Next-IQ2_S.gguf'\n0.00.023.870 E srv    load_model: failed to load model, '/mnt/Scratch/model_testing/Qwen3.8-Flash-Next/Qwen3.8-Flash-Next-IQ2_S.gguf'\n0.00.024.577 E srv  llama_server: exiting due to model loading error\nllama_server exited with code 1\n",
+        "latency_sec": 0.27,
+        "prompt_speed_tps": 0.0,
+        "gen_speed_tps": 0.0,
+        "coherent": true,
+        "coherence_reason": "OK",
+        "keyword_matched": false
+      }
+    },
+    "summary": {
+      "total_questions": 6,
+      "passed_questions": 0,
+      "pass_rate_pct": 0.0,
+      "avg_gen_speed_tps": 0.0,
+      "avg_prompt_speed_tps": 0.0,
+      "ppl_score": null,
+      "overall_status": "COLLAPSED_FAIL"
+    }
+  },
+  "Gemma-4-31B-it": {
+    "workflow_id": "WF1_IQ2",
+    "model_name": "Gemma-4-31B-it-IQ2_S.gguf",
+    "source_path": "/mnt/Scratch/model_testing/Gemma-4-31B-it/Gemma-4-31B-it-IQ2_S.gguf",
+    "evaluated_at": "2026-10-04 09:29:35",
+    "questions": {
+      "Q1_EASY": {
+        "success": true,
+        "response": "The capital of France is **Paris**, and the river that runs through it is the **Seine**.",
+        "raw_output": "\n\nLoading model... \n\n\u2584\u2584 \u2584\u2584\n\u2588\u2588 \u2588\u2588\n\u2588\u2588 \u2588\u2588  \u2580\u2580\u2588\u2584 \u2588\u2588\u2588\u2584\u2588\u2588\u2588\u2584  \u2580\u2580\u2588\u2584    \u2584\u2588\u2588\u2588\u2588 \u2588\u2588\u2588\u2588\u2584 \u2588\u2588\u2588\u2588\u2584\n\u2588\u2588 \u2588\u2588 \u2584\u2588\u2580\u2588\u2588 \u2588\u2588 \u2588\u2588 \u2588\u2588 \u2584\u2588\u2580\u2588\u2588    \u2588\u2588    \u2588\u2588 \u2588\u2588 \u2588\u2588 \u2588\u2588\n\u2588\u2588 \u2588\u2588 \u2580\u2588\u2584\u2588\u2588 \u2588\u2588 \u2588\u2588 \u2588\u2588 \u2580\u2588\u2584\u2588\u2588 \u2588\u2588 \u2580\u2588\u2588\u2588\u2588 \u2588\u2588\u2588\u2588\u2580 \u2588\u2588\u2588\u2588\u2580\n                                    \u2588\u2588    \u2588\u2588\n                                    \u2580\u2580    \u2580\u2580\n\nbuild      : b11178-560d33b75\nmodel      : /mnt/Scratch/model_testing/Gemma-4-31B-it/Gemma-4-31B-it-IQ2_S.gguf\nftype      : IQ2_S - 2.5 bpw\nmodalities : text\n\navailable commands:\n  /exit or Ctrl+C     stop or exit\n  /regen              regenerate the last response\n  /clear              clear the chat history\n  /read <file>        add a text file\n  /glob <pattern>     add text files using globbing pattern\n\n\n\n> What is the capital of France, and what river runs through it?\n\n[Start thinking]\n\n*   Question 1: What is the capital of France?\n    *   Question 2: What river runs through it?\n\n    *   Capital of France: Paris.\n    *   River running through Paris: Seine.\n\n    *   The capital of France is Paris, and the river that runs through it is the Seine.\n[End thinking]\n\nThe capital of France is **Paris**, and the river that runs through it is the **Seine**.\n\n[ Prompt: 22.7 t/s | Generation: 3.3 t/s | Zero-copy handoff: PASS (host memcpy: 0) ]\n\n\nExiting...\n",
+        "latency_sec": 40.36,
+        "prompt_speed_tps": 22.7,
+        "gen_speed_tps": 3.3,
+        "coherent": true,
+        "coherence_reason": "OK",
+        "keyword_matched": true
+      },
+      "Q2_EASY_MED": {
+        "success": true,
+        "response": "You have **",
+        "raw_output": "\n\nLoading model... \n\n\u2584\u2584 \u2584\u2584\n\u2588\u2588 \u2588\u2588\n\u2588\u2588 \u2588\u2588  \u2580\u2580\u2588\u2584 \u2588\u2588\u2588\u2584\u2588\u2588\u2588\u2584  \u2580\u2580\u2588\u2584    \u2584\u2588\u2588\u2588\u2588 \u2588\u2588\u2588\u2588\u2584 \u2588\u2588\u2588\u2588\u2584\n\u2588\u2588 \u2588\u2588 \u2584\u2588\u2580\u2588\u2588 \u2588\u2588 \u2588\u2588 \u2588\u2588 \u2584\u2588\u2580\u2588\u2588    \u2588\u2588    \u2588\u2588 \u2588\u2588 \u2588\u2588 \u2588\u2588\n\u2588\u2588 \u2588\u2588 \u2580\u2588\u2584\u2588\u2588 \u2588\u2588 \u2588\u2588 \u2588\u2588 \u2580\u2588\u2584\u2588\u2588 \u2588\u2588 \u2580\u2588\u2588\u2588\u2588 \u2588\u2588\u2588\u2588\u2580 \u2588\u2588\u2588\u2588\u2580\n                                    \u2588\u2588    \u2588\u2588\n                                    \u2580\u2580    \u2580\u2580\n\nbuild      : b11178-560d33b75\nmodel      : /mnt/Scratch/model_testing/Gemma-4-31B-it/Gemma-4-31B-it-IQ2_S.gguf\nftype      : IQ2_S - 2.5 bpw\nmodalities : text\n\navailable commands:\n  /exit or Ctrl+C     stop or exit\n  /regen              regenerate the last response\n  /clear              clear the chat history\n  /read <file>        add a text file\n  /glob <pattern>     add text files using globbing pattern\n\n\n\n> If you have 15 pencils and give 4 to your friend and 3 to your sister, how many pencils do you have left?\n\n[Start thinking]\n\n*   Initial amount: 15 pencils.\n    *   Action 1: Give 4 pencils to a friend.\n    *   Action 2: Give 3 pencils to a sister.\n    *   Goal: Find the remaining number of pencils.\n\n    *   Total given away = 4 + 3 = 7.\n    *   Remaining = Initial - Total given away.\n    *   Remaining = 15 - 7.\n\n    *   15 - 7 = 8.\n\n    *   You have 8 pencils left.\n[End thinking]\n\nYou have **\n\n[ Prompt: 31.1 t/s | Generation: 3.3 t/s | Zero-copy handoff: PASS (host memcpy: 0) ]\n\n\nExiting...\n",
+        "latency_sec": 44.28,
+        "prompt_speed_tps": 31.1,
+        "gen_speed_tps": 3.3,
+        "coherent": true,
+        "coherence_reason": "OK",
+        "keyword_matched": false
+      },
+      "Q3_MEDIUM": {
+        "success": true,
+        "response": "[Start thinking]\n\nThe objective is to write a Python function `is_even(n)` that checks if a given number `n` is even.\n\n    *   Input: `n` (an integer).\n    *   Output: `True` if `n` is even, `False` if `n` is odd.\n    *   Definition of \"even\": A number is even if it is divisible by 2 without a remainder.\n\n    *   The modulo operator (`%`) returns the remainder of a division.\n    *   If `n % 2 == 0`, the number is even",
+        "raw_output": "\n\nLoading model... \n\n\u2584\u2584 \u2584\u2584\n\u2588\u2588 \u2588\u2588\n\u2588\u2588 \u2588\u2588  \u2580\u2580\u2588\u2584 \u2588\u2588\u2588\u2584\u2588\u2588\u2588\u2584  \u2580\u2580\u2588\u2584    \u2584\u2588\u2588\u2588\u2588 \u2588\u2588\u2588\u2588\u2584 \u2588\u2588\u2588\u2588\u2584\n\u2588\u2588 \u2588\u2588 \u2584\u2588\u2580\u2588\u2588 \u2588\u2588 \u2588\u2588 \u2588\u2588 \u2584\u2588\u2580\u2588\u2588    \u2588\u2588    \u2588\u2588 \u2588\u2588 \u2588\u2588 \u2588\u2588\n\u2588\u2588 \u2588\u2588 \u2580\u2588\u2584\u2588\u2588 \u2588\u2588 \u2588\u2588 \u2588\u2588 \u2580\u2588\u2584\u2588\u2588 \u2588\u2588 \u2580\u2588\u2588\u2588\u2588 \u2588\u2588\u2588\u2588\u2580 \u2588\u2588\u2588\u2588\u2580\n                                    \u2588\u2588    \u2588\u2588\n                                    \u2580\u2580    \u2580\u2580\n\nbuild      : b11178-560d33b75\nmodel      : /mnt/Scratch/model_testing/Gemma-4-31B-it/Gemma-4-31B-it-IQ2_S.gguf\nftype      : IQ2_S - 2.5 bpw\nmodalities : text\n\navailable commands:\n  /exit or Ctrl+C     stop or exit\n  /regen              regenerate the last response\n  /clear              clear the chat history\n  /read <file>        add a text file\n  /glob <pattern>     add text files using globbing pattern\n\n\n\n> Write a Python function is_even(n) that returns True if n is an even integer, and False otherwise.\n\n[Start thinking]\n\nThe objective is to write a Python function `is_even(n)` that checks if a given number `n` is even.\n\n    *   Input: `n` (an integer).\n    *   Output: `True` if `n` is even, `False` if `n` is odd.\n    *   Definition of \"even\": A number is even if it is divisible by 2 without a remainder.\n\n    *   The modulo operator (`%`) returns the remainder of a division.\n    *   If `n % 2 == 0`, the number is even\n\n[ Prompt: 28.4 t/s | Generation: 3.2 t/s | Zero-copy handoff: PASS (host memcpy: 0) ]\n\n\nExiting...\n",
+        "latency_sec": 45.76,
+        "prompt_speed_tps": 28.4,
+        "gen_speed_tps": 3.2,
+        "coherent": true,
+        "coherence_reason": "OK",
+        "keyword_matched": true
+      },
+      "Q4_MED_HARD": {
+        "success": true,
+        "response": "[Start thinking]\n\n*   Premise 1: No reptiles have fur.\n    *   Premise 2: All snakes are reptiles.\n    *   Question: Can a snake have fur?\n\n    *   If \"No reptiles have fur\" is true, then any entity that is a reptile cannot have fur.\n    *   If \"All snakes are reptiles\" is true, then snakes are a subset of reptiles.\n    *   Therefore, since snakes are reptiles, and no reptiles have fur, snakes cannot have fur.\n\n    *   Answer: NO.\n    *   Explanation: Since snakes are reptiles",
+        "raw_output": "\n\nLoading model... \n\n\u2584\u2584 \u2584\u2584\n\u2588\u2588 \u2588\u2588\n\u2588\u2588 \u2588\u2588  \u2580\u2580\u2588\u2584 \u2588\u2588\u2588\u2584\u2588\u2588\u2588\u2584  \u2580\u2580\u2588\u2584    \u2584\u2588\u2588\u2588\u2588 \u2588\u2588\u2588\u2588\u2584 \u2588\u2588\u2588\u2588\u2584\n\u2588\u2588 \u2588\u2588 \u2584\u2588\u2580\u2588\u2588 \u2588\u2588 \u2588\u2588 \u2588\u2588 \u2584\u2588\u2580\u2588\u2588    \u2588\u2588    \u2588\u2588 \u2588\u2588 \u2588\u2588 \u2588\u2588\n\u2588\u2588 \u2588\u2588 \u2580\u2588\u2584\u2588\u2588 \u2588\u2588 \u2588\u2588 \u2588\u2588 \u2580\u2588\u2584\u2588\u2588 \u2588\u2588 \u2580\u2588\u2588\u2588\u2588 \u2588\u2588\u2588\u2588\u2580 \u2588\u2588\u2588\u2588\u2580\n                                    \u2588\u2588    \u2588\u2588\n                                    \u2580\u2580    \u2580\u2580\n\nbuild      : b11178-560d33b75\nmodel      : /mnt/Scratch/model_testing/Gemma-4-31B-it/Gemma-4-31B-it-IQ2_S.gguf\nftype      : IQ2_S - 2.5 bpw\nmodalities : text\n\navailable commands:\n  /exit or Ctrl+C     stop or exit\n  /regen              regenerate the last response\n  /clear              clear the chat history\n  /read <file>        add a text file\n  /glob <pattern>     add text files using globbing pattern\n\n\n\n> No reptiles have fur. All snakes are reptiles. Can a snake have fur? Answer with YES or NO and a brief explanation.\n\n[Start thinking]\n\n*   Premise 1: No reptiles have fur.\n    *   Premise 2: All snakes are reptiles.\n    *   Question: Can a snake have fur?\n\n    *   If \"No reptiles have fur\" is true, then any entity that is a reptile cannot have fur.\n    *   If \"All snakes are reptiles\" is true, then snakes are a subset of reptiles.\n    *   Therefore, since snakes are reptiles, and no reptiles have fur, snakes cannot have fur.\n\n    *   Answer: NO.\n    *   Explanation: Since snakes are reptiles\n\n[ Prompt: 19.7 t/s | Generation: 3.3 t/s | Zero-copy handoff: PASS (host memcpy: 0) ]\n\n\nExiting...\n",
+        "latency_sec": 44.85,
+        "prompt_speed_tps": 19.7,
+        "gen_speed_tps": 3.3,
+        "coherent": true,
+        "coherence_reason": "OK",
+        "keyword_matched": true
+      },
+      "Q5_HARD": {
+        "success": true,
+        "response": "[Start thinking]\n\n*   Function: $f(x) = 3x^2 + 5x - 7$\n    *   Goal: Find the derivative with respect to $x$.\n\n    *   The function is a polynomial.\n    *   It consists of three terms: $3x^2$, $5x$, and $-7$.\n\n    *   *Power Rule:* $\\frac{d}{dx}(x^n) = nx^{n-1}$\n    *   *Constant Multiple Rule:* $\\frac{d}{dx}(cf(x)) = c \\cdot f'(x",
+        "raw_output": "\n\nLoading model... \n\n\u2584\u2584 \u2584\u2584\n\u2588\u2588 \u2588\u2588\n\u2588\u2588 \u2588\u2588  \u2580\u2580\u2588\u2584 \u2588\u2588\u2588\u2584\u2588\u2588\u2588\u2584  \u2580\u2580\u2588\u2584    \u2584\u2588\u2588\u2588\u2588 \u2588\u2588\u2588\u2588\u2584 \u2588\u2588\u2588\u2588\u2584\n\u2588\u2588 \u2588\u2588 \u2584\u2588\u2580\u2588\u2588 \u2588\u2588 \u2588\u2588 \u2588\u2588 \u2584\u2588\u2580\u2588\u2588    \u2588\u2588    \u2588\u2588 \u2588\u2588 \u2588\u2588 \u2588\u2588\n\u2588\u2588 \u2588\u2588 \u2580\u2588\u2584\u2588\u2588 \u2588\u2588 \u2588\u2588 \u2588\u2588 \u2580\u2588\u2584\u2588\u2588 \u2588\u2588 \u2580\u2588\u2588\u2588\u2588 \u2588\u2588\u2588\u2588\u2580 \u2588\u2588\u2588\u2588\u2580\n                                    \u2588\u2588    \u2588\u2588\n                                    \u2580\u2580    \u2580\u2580\n\nbuild      : b11178-560d33b75\nmodel      : /mnt/Scratch/model_testing/Gemma-4-31B-it/Gemma-4-31B-it-IQ2_S.gguf\nftype      : IQ2_S - 2.5 bpw\nmodalities : text\n\navailable commands:\n  /exit or Ctrl+C     stop or exit\n  /regen              regenerate the last response\n  /clear              clear the chat history\n  /read <file>        add a text file\n  /glob <pattern>     add text files using globbing pattern\n\n\n\n> What is the derivative of f(x) = 3*x^2 + 5*x - 7 with respect to x?\n\n[Start thinking]\n\n*   Function: $f(x) = 3x^2 + 5x - 7$\n    *   Goal: Find the derivative with respect to $x$.\n\n    *   The function is a polynomial.\n    *   It consists of three terms: $3x^2$, $5x$, and $-7$.\n\n    *   *Power Rule:* $\\frac{d}{dx}(x^n) = nx^{n-1}$\n    *   *Constant Multiple Rule:* $\\frac{d}{dx}(cf(x)) = c \\cdot f'(x\n\n[ Prompt: 30.0 t/s | Generation: 3.3 t/s | Zero-copy handoff: PASS (host memcpy: 0) ]\n\n\nExiting...\n",
+        "latency_sec": 44.14,
+        "prompt_speed_tps": 30.0,
+        "gen_speed_tps": 3.3,
+        "coherent": true,
+        "coherence_reason": "OK",
+        "keyword_matched": false
+      },
+      "Q6_FRONTIER": {
+        "success": true,
+        "response": "[Start thinking]\n\n*   *Topic:* Byzantine Generals Problem (BGP) in distributed consensus.\n*   *Key Requirement 1:* Explain what it is.\n*   *Key Requirement 2:* Determine how many faulty nodes a system of $N$ nodes can tolerate.\n\n    *   *What is it?* A thought experiment/problem in distributed computing.\n    *   *The Scenario:* Generals (nodes) need to agree on a strategy (attack or retreat). Some generals are \"traitors\" (faulty/malicious nodes) who might lie or send conflicting messages to prevent consensus.\n    *",
+        "raw_output": "\n\nLoading model... \n\n\u2584\u2584 \u2584\u2584\n\u2588\u2588 \u2588\u2588\n\u2588\u2588 \u2588\u2588  \u2580\u2580\u2588\u2584 \u2588\u2588\u2588\u2584\u2588\u2588\u2588\u2584  \u2580\u2580\u2588\u2584    \u2584\u2588\u2588\u2588\u2588 \u2588\u2588\u2588\u2588\u2584 \u2588\u2588\u2588\u2588\u2584\n\u2588\u2588 \u2588\u2588 \u2584\u2588\u2580\u2588\u2588 \u2588\u2588 \u2588\u2588 \u2588\u2588 \u2584\u2588\u2580\u2588\u2588    \u2588\u2588    \u2588\u2588 \u2588\u2588 \u2588\u2588 \u2588\u2588\n\u2588\u2588 \u2588\u2588 \u2580\u2588\u2584\u2588\u2588 \u2588\u2588 \u2588\u2588 \u2588\u2588 \u2580\u2588\u2584\u2588\u2588 \u2588\u2588 \u2580\u2588\u2588\u2588\u2588 \u2588\u2588\u2588\u2588\u2580 \u2588\u2588\u2588\u2588\u2580\n                                    \u2588\u2588    \u2588\u2588\n                                    \u2580\u2580    \u2580\u2580\n\nbuild      : b11178-560d33b75\nmodel      : /mnt/Scratch/model_testing/Gemma-4-31B-it/Gemma-4-31B-it-IQ2_S.gguf\nftype      : IQ2_S - 2.5 bpw\nmodalities : text\n\navailable commands:\n  /exit or Ctrl+C     stop or exit\n  /regen              regenerate the last response\n  /clear              clear the chat history\n  /read <file>        add a text file\n  /glob <pattern>     add text files using globbing pattern\n\n\n\n> Explain what the Byzantine Generals Problem is in distributed consensus and how many faulty nodes a system of N nodes can tolerate.\n\n[Start thinking]\n\n*   *Topic:* Byzantine Generals Problem (BGP) in distributed consensus.\n*   *Key Requirement 1:* Explain what it is.\n*   *Key Requirement 2:* Determine how many faulty nodes a system of $N$ nodes can tolerate.\n\n    *   *What is it?* A thought experiment/problem in distributed computing.\n    *   *The Scenario:* Generals (nodes) need to agree on a strategy (attack or retreat). Some generals are \"traitors\" (faulty/malicious nodes) who might lie or send conflicting messages to prevent consensus.\n    *\n\n[ Prompt: 29.9 t/s | Generation: 3.3 t/s | Zero-copy handoff: PASS (host memcpy: 0) ]\n\n\nExiting...\n",
+        "latency_sec": 44.79,
+        "prompt_speed_tps": 29.9,
+        "gen_speed_tps": 3.3,
+        "coherent": true,
+        "coherence_reason": "OK",
+        "keyword_matched": true
+      }
+    },
+    "summary": {
+      "total_questions": 6,
+      "passed_questions": 6,
+      "pass_rate_pct": 100.0,
+      "avg_gen_speed_tps": 3.28,
+      "avg_prompt_speed_tps": 26.97,
+      "ppl_score": 107.9355,
+      "overall_status": "COHERENT_PASS"
+    }
+  }
+}

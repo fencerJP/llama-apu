@@ -1,0 +1,83 @@
+{
+  "workflow_id": "WF1_IQ2",
+  "model_name": "occamy-1.0-with-mtp-IQ2_S.gguf",
+  "source_path": "/mnt/Scratch/model_testing/occamy-1.0-with-mtp/occamy-1.0-with-mtp-IQ2_S.gguf",
+  "evaluated_at": "2026-10-04 09:29:29",
+  "questions": {
+    "Q1_EASY": {
+      "success": false,
+      "response": "testing/occamy-1.0-with-mtp/occamy-1.0-with-mtp-IQ2_S.gguf\n0.00.030.338 E llama_model_load_from_file_impl: failed to load model\n0.00.030.342 E cmn  common_init_: failed to load model '/mnt/Scratch/model_testing/occamy-1.0-with-mtp/occamy-1.0-with-mtp-IQ2_S.gguf'\n0.00.030.349 E srv    load_model: failed to load model, '/mnt/Scratch/model_testing/occamy-1.0-with-mtp/occamy-1.0-with-mtp-IQ2_S.gguf'\n0.00.030.993 E srv  llama_server: exiting due to model loading error\nllama_server exited with code 1",
+      "raw_output": "\n\nLoading model... Error: the server exited before becoming ready\n0.00.026.877 E gguf_init_from_reader: invalid magic characters: '????', expected 'GGUF'\n0.00.030.133 E gguf_init_from_reader: invalid magic characters: '????', expected 'GGUF'\n0.00.030.260 E llama_model_load: error loading model: llama_model_loader: failed to load model from /mnt/Scratch/model_testing/occamy-1.0-with-mtp/occamy-1.0-with-mtp-IQ2_S.gguf\n0.00.030.273 E llama_model_load_from_file_impl: failed to load model\n0.00.030.311 E common_fit_params: encountered an error while trying to fit params to free device memory: failed to load model\n0.00.030.328 E gguf_init_from_reader: invalid magic characters: '????', expected 'GGUF'\n0.00.030.337 E llama_model_load: error loading model: llama_model_loader: failed to load model from /mnt/Scratch/model_testing/occamy-1.0-with-mtp/occamy-1.0-with-mtp-IQ2_S.gguf\n0.00.030.338 E llama_model_load_from_file_impl: failed to load model\n0.00.030.342 E cmn  common_init_: failed to load model '/mnt/Scratch/model_testing/occamy-1.0-with-mtp/occamy-1.0-with-mtp-IQ2_S.gguf'\n0.00.030.349 E srv    load_model: failed to load model, '/mnt/Scratch/model_testing/occamy-1.0-with-mtp/occamy-1.0-with-mtp-IQ2_S.gguf'\n0.00.030.993 E srv  llama_server: exiting due to model loading error\nllama_server exited with code 1\n",
+      "latency_sec": 0.28,
+      "prompt_speed_tps": 0.0,
+      "gen_speed_tps": 0.0,
+      "coherent": true,
+      "coherence_reason": "OK",
+      "keyword_matched": false
+    },
+    "Q2_EASY_MED": {
+      "success": false,
+      "response": "testing/occamy-1.0-with-mtp/occamy-1.0-with-mtp-IQ2_S.gguf\n0.00.023.944 E llama_model_load_from_file_impl: failed to load model\n0.00.023.947 E cmn  common_init_: failed to load model '/mnt/Scratch/model_testing/occamy-1.0-with-mtp/occamy-1.0-with-mtp-IQ2_S.gguf'\n0.00.023.953 E srv    load_model: failed to load model, '/mnt/Scratch/model_testing/occamy-1.0-with-mtp/occamy-1.0-with-mtp-IQ2_S.gguf'\n0.00.024.458 E srv  llama_server: exiting due to model loading error\nllama_server exited with code 1",
+      "raw_output": "\n\nLoading model... Error: the server exited before becoming ready\n0.00.020.832 E gguf_init_from_reader: invalid magic characters: '????', expected 'GGUF'\n0.00.023.791 E gguf_init_from_reader: invalid magic characters: '????', expected 'GGUF'\n0.00.023.889 E llama_model_load: error loading model: llama_model_loader: failed to load model from /mnt/Scratch/model_testing/occamy-1.0-with-mtp/occamy-1.0-with-mtp-IQ2_S.gguf\n0.00.023.899 E llama_model_load_from_file_impl: failed to load model\n0.00.023.928 E common_fit_params: encountered an error while trying to fit params to free device memory: failed to load model\n0.00.023.938 E gguf_init_from_reader: invalid magic characters: '????', expected 'GGUF'\n0.00.023.943 E llama_model_load: error loading model: llama_model_loader: failed to load model from /mnt/Scratch/model_testing/occamy-1.0-with-mtp/occamy-1.0-with-mtp-IQ2_S.gguf\n0.00.023.944 E llama_model_load_from_file_impl: failed to load model\n0.00.023.947 E cmn  common_init_: failed to load model '/mnt/Scratch/model_testing/occamy-1.0-with-mtp/occamy-1.0-with-mtp-IQ2_S.gguf'\n0.00.023.953 E srv    load_model: failed to load model, '/mnt/Scratch/model_testing/occamy-1.0-with-mtp/occamy-1.0-with-mtp-IQ2_S.gguf'\n0.00.024.458 E srv  llama_server: exiting due to model loading error\nllama_server exited with code 1\n",
+      "latency_sec": 0.27,
+      "prompt_speed_tps": 0.0,
+      "gen_speed_tps": 0.0,
+      "coherent": true,
+      "coherence_reason": "OK",
+      "keyword_matched": true
+    },
+    "Q3_MEDIUM": {
+      "success": false,
+      "response": "testing/occamy-1.0-with-mtp/occamy-1.0-with-mtp-IQ2_S.gguf\n0.00.026.179 E llama_model_load_from_file_impl: failed to load model\n0.00.026.181 E cmn  common_init_: failed to load model '/mnt/Scratch/model_testing/occamy-1.0-with-mtp/occamy-1.0-with-mtp-IQ2_S.gguf'\n0.00.026.186 E srv    load_model: failed to load model, '/mnt/Scratch/model_testing/occamy-1.0-with-mtp/occamy-1.0-with-mtp-IQ2_S.gguf'\n0.00.026.734 E srv  llama_server: exiting due to model loading error\nllama_server exited with code 1",
+      "raw_output": "\n\nLoading model... Error: the server exited before becoming ready\n0.00.022.782 E gguf_init_from_reader: invalid magic characters: '????', expected 'GGUF'\n0.00.026.032 E gguf_init_from_reader: invalid magic characters: '????', expected 'GGUF'\n0.00.026.123 E llama_model_load: error loading model: llama_model_loader: failed to load model from /mnt/Scratch/model_testing/occamy-1.0-with-mtp/occamy-1.0-with-mtp-IQ2_S.gguf\n0.00.026.134 E llama_model_load_from_file_impl: failed to load model\n0.00.026.163 E common_fit_params: encountered an error while trying to fit params to free device memory: failed to load model\n0.00.026.173 E gguf_init_from_reader: invalid magic characters: '????', expected 'GGUF'\n0.00.026.178 E llama_model_load: error loading model: llama_model_loader: failed to load model from /mnt/Scratch/model_testing/occamy-1.0-with-mtp/occamy-1.0-with-mtp-IQ2_S.gguf\n0.00.026.179 E llama_model_load_from_file_impl: failed to load model\n0.00.026.181 E cmn  common_init_: failed to load model '/mnt/Scratch/model_testing/occamy-1.0-with-mtp/occamy-1.0-with-mtp-IQ2_S.gguf'\n0.00.026.186 E srv    load_model: failed to load model, '/mnt/Scratch/model_testing/occamy-1.0-with-mtp/occamy-1.0-with-mtp-IQ2_S.gguf'\n0.00.026.734 E srv  llama_server: exiting due to model loading error\nllama_server exited with code 1\n",
+      "latency_sec": 0.27,
+      "prompt_speed_tps": 0.0,
+      "gen_speed_tps": 0.0,
+      "coherent": true,
+      "coherence_reason": "OK",
+      "keyword_matched": false
+    },
+    "Q4_MED_HARD": {
+      "success": false,
+      "response": "testing/occamy-1.0-with-mtp/occamy-1.0-with-mtp-IQ2_S.gguf\n0.00.030.864 E llama_model_load_from_file_impl: failed to load model\n0.00.030.868 E cmn  common_init_: failed to load model '/mnt/Scratch/model_testing/occamy-1.0-with-mtp/occamy-1.0-with-mtp-IQ2_S.gguf'\n0.00.030.875 E srv    load_model: failed to load model, '/mnt/Scratch/model_testing/occamy-1.0-with-mtp/occamy-1.0-with-mtp-IQ2_S.gguf'\n0.00.031.542 E srv  llama_server: exiting due to model loading error\nllama_server exited with code 1",
+      "raw_output": "\n\nLoading model... Error: the server exited before becoming ready\n0.00.027.597 E gguf_init_from_reader: invalid magic characters: '????', expected 'GGUF'\n0.00.030.691 E gguf_init_from_reader: invalid magic characters: '????', expected 'GGUF'\n0.00.030.801 E llama_model_load: error loading model: llama_model_loader: failed to load model from /mnt/Scratch/model_testing/occamy-1.0-with-mtp/occamy-1.0-with-mtp-IQ2_S.gguf\n0.00.030.813 E llama_model_load_from_file_impl: failed to load model\n0.00.030.845 E common_fit_params: encountered an error while trying to fit params to free device memory: failed to load model\n0.00.030.857 E gguf_init_from_reader: invalid magic characters: '????', expected 'GGUF'\n0.00.030.863 E llama_model_load: error loading model: llama_model_loader: failed to load model from /mnt/Scratch/model_testing/occamy-1.0-with-mtp/occamy-1.0-with-mtp-IQ2_S.gguf\n0.00.030.864 E llama_model_load_from_file_impl: failed to load model\n0.00.030.868 E cmn  common_init_: failed to load model '/mnt/Scratch/model_testing/occamy-1.0-with-mtp/occamy-1.0-with-mtp-IQ2_S.gguf'\n0.00.030.875 E srv    load_model: failed to load model, '/mnt/Scratch/model_testing/occamy-1.0-with-mtp/occamy-1.0-with-mtp-IQ2_S.gguf'\n0.00.031.542 E srv  llama_server: exiting due to model loading error\nllama_server exited with code 1\n",
+      "latency_sec": 0.28,
+      "prompt_speed_tps": 0.0,
+      "gen_speed_tps": 0.0,
+      "coherent": true,
+      "coherence_reason": "OK",
+      "keyword_matched": false
+    },
+    "Q5_HARD": {
+      "success": false,
+      "response": "testing/occamy-1.0-with-mtp/occamy-1.0-with-mtp-IQ2_S.gguf\n0.00.027.810 E llama_model_load_from_file_impl: failed to load model\n0.00.027.812 E cmn  common_init_: failed to load model '/mnt/Scratch/model_testing/occamy-1.0-with-mtp/occamy-1.0-with-mtp-IQ2_S.gguf'\n0.00.027.817 E srv    load_model: failed to load model, '/mnt/Scratch/model_testing/occamy-1.0-with-mtp/occamy-1.0-with-mtp-IQ2_S.gguf'\n0.00.028.295 E srv  llama_server: exiting due to model loading error\nllama_server exited with code 1",
+      "raw_output": "\n\nLoading model... Error: the server exited before becoming ready\n0.00.024.838 E gguf_init_from_reader: invalid magic characters: '????', expected 'GGUF'\n0.00.027.655 E gguf_init_from_reader: invalid magic characters: '????', expected 'GGUF'\n0.00.027.754 E llama_model_load: error loading model: llama_model_loader: failed to load model from /mnt/Scratch/model_testing/occamy-1.0-with-mtp/occamy-1.0-with-mtp-IQ2_S.gguf\n0.00.027.765 E llama_model_load_from_file_impl: failed to load model\n0.00.027.793 E common_fit_params: encountered an error while trying to fit params to free device memory: failed to load model\n0.00.027.803 E gguf_init_from_reader: invalid magic characters: '????', expected 'GGUF'\n0.00.027.809 E llama_model_load: error loading model: llama_model_loader: failed to load model from /mnt/Scratch/model_testing/occamy-1.0-with-mtp/occamy-1.0-with-mtp-IQ2_S.gguf\n0.00.027.810 E llama_model_load_from_file_impl: failed to load model\n0.00.027.812 E cmn  common_init_: failed to load model '/mnt/Scratch/model_testing/occamy-1.0-with-mtp/occamy-1.0-with-mtp-IQ2_S.gguf'\n0.00.027.817 E srv    load_model: failed to load model, '/mnt/Scratch/model_testing/occamy-1.0-with-mtp/occamy-1.0-with-mtp-IQ2_S.gguf'\n0.00.028.295 E srv  llama_server: exiting due to model loading error\nllama_server exited with code 1\n",
+      "latency_sec": 0.28,
+      "prompt_speed_tps": 0.0,
+      "gen_speed_tps": 0.0,
+      "coherent": true,
+      "coherence_reason": "OK",
+      "keyword_matched": false
+    },
+    "Q6_FRONTIER": {
+      "success": false,
+      "response": "testing/occamy-1.0-with-mtp/occamy-1.0-with-mtp-IQ2_S.gguf\n0.00.029.524 E llama_model_load_from_file_impl: failed to load model\n0.00.029.528 E cmn  common_init_: failed to load model '/mnt/Scratch/model_testing/occamy-1.0-with-mtp/occamy-1.0-with-mtp-IQ2_S.gguf'\n0.00.029.535 E srv    load_model: failed to load model, '/mnt/Scratch/model_testing/occamy-1.0-with-mtp/occamy-1.0-with-mtp-IQ2_S.gguf'\n0.00.030.414 E srv  llama_server: exiting due to model loading error\nllama_server exited with code 1",
+      "raw_output": "\n\nLoading model... Error: the server exited before becoming ready\n0.00.025.891 E gguf_init_from_reader: invalid magic characters: '????', expected 'GGUF'\n0.00.029.320 E gguf_init_from_reader: invalid magic characters: '????', expected 'GGUF'\n0.00.029.430 E llama_model_load: error loading model: llama_model_loader: failed to load model from /mnt/Scratch/model_testing/occamy-1.0-with-mtp/occamy-1.0-with-mtp-IQ2_S.gguf\n0.00.029.444 E llama_model_load_from_file_impl: failed to load model\n0.00.029.495 E common_fit_params: encountered an error while trying to fit params to free device memory: failed to load model\n0.00.029.515 E gguf_init_from_reader: invalid magic characters: '????', expected 'GGUF'\n0.00.029.524 E llama_model_load: error loading model: llama_model_loader: failed to load model from /mnt/Scratch/model_testing/occamy-1.0-with-mtp/occamy-1.0-with-mtp-IQ2_S.gguf\n0.00.029.524 E llama_model_load_from_file_impl: failed to load model\n0.00.029.528 E cmn  common_init_: failed to load model '/mnt/Scratch/model_testing/occamy-1.0-with-mtp/occamy-1.0-with-mtp-IQ2_S.gguf'\n0.00.029.535 E srv    load_model: failed to load model, '/mnt/Scratch/model_testing/occamy-1.0-with-mtp/occamy-1.0-with-mtp-IQ2_S.gguf'\n0.00.030.414 E srv  llama_server: exiting due to model loading error\nllama_server exited with code 1\n",
+      "latency_sec": 0.27,
+      "prompt_speed_tps": 0.0,
+      "gen_speed_tps": 0.0,
+      "coherent": true,
+      "coherence_reason": "OK",
+      "keyword_matched": false
+    }
+  },
+  "summary": {
+    "total_questions": 6,
+    "passed_questions": 0,
+    "pass_rate_pct": 0.0,
+    "avg_gen_speed_tps": 0.0,
+    "avg_prompt_speed_tps": 0.0,
+    "ppl_score": null,
+    "overall_status": "COLLAPSED_FAIL"
+  }
+}

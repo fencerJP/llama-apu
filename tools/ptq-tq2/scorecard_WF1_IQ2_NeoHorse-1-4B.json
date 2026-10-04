@@ -1,0 +1,83 @@
+{
+  "workflow_id": "WF1_IQ2",
+  "model_name": "NeoHorse-1-4B-IQ2_S.gguf",
+  "source_path": "/mnt/Scratch/model_testing/NeoHorse-1-4B/NeoHorse-1-4B-IQ2_S.gguf",
+  "evaluated_at": "2026-10-04 09:29:27",
+  "questions": {
+    "Q1_EASY": {
+      "success": false,
+      "response": "load model from /mnt/Scratch/model_testing/NeoHorse-1-4B/NeoHorse-1-4B-IQ2_S.gguf\n0.00.036.409 E llama_model_load_from_file_impl: failed to load model\n0.00.036.412 E cmn  common_init_: failed to load model '/mnt/Scratch/model_testing/NeoHorse-1-4B/NeoHorse-1-4B-IQ2_S.gguf'\n0.00.036.417 E srv    load_model: failed to load model, '/mnt/Scratch/model_testing/NeoHorse-1-4B/NeoHorse-1-4B-IQ2_S.gguf'\n0.00.037.114 E srv  llama_server: exiting due to model loading error\nllama_server exited with code 1",
+      "raw_output": "\n\nLoading model... Error: the server exited before becoming ready\n0.00.031.776 E gguf_init_from_reader: invalid magic characters: '????', expected 'GGUF'\n0.00.035.348 E gguf_init_from_reader: invalid magic characters: '????', expected 'GGUF'\n0.00.035.819 E llama_model_load: error loading model: llama_model_loader: failed to load model from /mnt/Scratch/model_testing/NeoHorse-1-4B/NeoHorse-1-4B-IQ2_S.gguf\n0.00.035.829 E llama_model_load_from_file_impl: failed to load model\n0.00.036.393 E common_fit_params: encountered an error while trying to fit params to free device memory: failed to load model\n0.00.036.404 E gguf_init_from_reader: invalid magic characters: '????', expected 'GGUF'\n0.00.036.409 E llama_model_load: error loading model: llama_model_loader: failed to load model from /mnt/Scratch/model_testing/NeoHorse-1-4B/NeoHorse-1-4B-IQ2_S.gguf\n0.00.036.409 E llama_model_load_from_file_impl: failed to load model\n0.00.036.412 E cmn  common_init_: failed to load model '/mnt/Scratch/model_testing/NeoHorse-1-4B/NeoHorse-1-4B-IQ2_S.gguf'\n0.00.036.417 E srv    load_model: failed to load model, '/mnt/Scratch/model_testing/NeoHorse-1-4B/NeoHorse-1-4B-IQ2_S.gguf'\n0.00.037.114 E srv  llama_server: exiting due to model loading error\nllama_server exited with code 1\n",
+      "latency_sec": 0.29,
+      "prompt_speed_tps": 0.0,
+      "gen_speed_tps": 0.0,
+      "coherent": true,
+      "coherence_reason": "OK",
+      "keyword_matched": false
+    },
+    "Q2_EASY_MED": {
+      "success": false,
+      "response": "load model from /mnt/Scratch/model_testing/NeoHorse-1-4B/NeoHorse-1-4B-IQ2_S.gguf\n0.00.026.534 E llama_model_load_from_file_impl: failed to load model\n0.00.026.537 E cmn  common_init_: failed to load model '/mnt/Scratch/model_testing/NeoHorse-1-4B/NeoHorse-1-4B-IQ2_S.gguf'\n0.00.026.542 E srv    load_model: failed to load model, '/mnt/Scratch/model_testing/NeoHorse-1-4B/NeoHorse-1-4B-IQ2_S.gguf'\n0.00.027.030 E srv  llama_server: exiting due to model loading error\nllama_server exited with code 1",
+      "raw_output": "\n\nLoading model... Error: the server exited before becoming ready\n0.00.023.467 E gguf_init_from_reader: invalid magic characters: '????', expected 'GGUF'\n0.00.026.377 E gguf_init_from_reader: invalid magic characters: '????', expected 'GGUF'\n0.00.026.477 E llama_model_load: error loading model: llama_model_loader: failed to load model from /mnt/Scratch/model_testing/NeoHorse-1-4B/NeoHorse-1-4B-IQ2_S.gguf\n0.00.026.489 E llama_model_load_from_file_impl: failed to load model\n0.00.026.518 E common_fit_params: encountered an error while trying to fit params to free device memory: failed to load model\n0.00.026.528 E gguf_init_from_reader: invalid magic characters: '????', expected 'GGUF'\n0.00.026.533 E llama_model_load: error loading model: llama_model_loader: failed to load model from /mnt/Scratch/model_testing/NeoHorse-1-4B/NeoHorse-1-4B-IQ2_S.gguf\n0.00.026.534 E llama_model_load_from_file_impl: failed to load model\n0.00.026.537 E cmn  common_init_: failed to load model '/mnt/Scratch/model_testing/NeoHorse-1-4B/NeoHorse-1-4B-IQ2_S.gguf'\n0.00.026.542 E srv    load_model: failed to load model, '/mnt/Scratch/model_testing/NeoHorse-1-4B/NeoHorse-1-4B-IQ2_S.gguf'\n0.00.027.030 E srv  llama_server: exiting due to model loading error\nllama_server exited with code 1\n",
+      "latency_sec": 0.27,
+      "prompt_speed_tps": 0.0,
+      "gen_speed_tps": 0.0,
+      "coherent": true,
+      "coherence_reason": "OK",
+      "keyword_matched": false
+    },
+    "Q3_MEDIUM": {
+      "success": false,
+      "response": "load model from /mnt/Scratch/model_testing/NeoHorse-1-4B/NeoHorse-1-4B-IQ2_S.gguf\n0.00.029.164 E llama_model_load_from_file_impl: failed to load model\n0.00.029.167 E cmn  common_init_: failed to load model '/mnt/Scratch/model_testing/NeoHorse-1-4B/NeoHorse-1-4B-IQ2_S.gguf'\n0.00.029.172 E srv    load_model: failed to load model, '/mnt/Scratch/model_testing/NeoHorse-1-4B/NeoHorse-1-4B-IQ2_S.gguf'\n0.00.029.745 E srv  llama_server: exiting due to model loading error\nllama_server exited with code 1",
+      "raw_output": "\n\nLoading model... Error: the server exited before becoming ready\n0.00.026.147 E gguf_init_from_reader: invalid magic characters: '????', expected 'GGUF'\n0.00.029.014 E gguf_init_from_reader: invalid magic characters: '????', expected 'GGUF'\n0.00.029.109 E llama_model_load: error loading model: llama_model_loader: failed to load model from /mnt/Scratch/model_testing/NeoHorse-1-4B/NeoHorse-1-4B-IQ2_S.gguf\n0.00.029.120 E llama_model_load_from_file_impl: failed to load model\n0.00.029.149 E common_fit_params: encountered an error while trying to fit params to free device memory: failed to load model\n0.00.029.158 E gguf_init_from_reader: invalid magic characters: '????', expected 'GGUF'\n0.00.029.164 E llama_model_load: error loading model: llama_model_loader: failed to load model from /mnt/Scratch/model_testing/NeoHorse-1-4B/NeoHorse-1-4B-IQ2_S.gguf\n0.00.029.164 E llama_model_load_from_file_impl: failed to load model\n0.00.029.167 E cmn  common_init_: failed to load model '/mnt/Scratch/model_testing/NeoHorse-1-4B/NeoHorse-1-4B-IQ2_S.gguf'\n0.00.029.172 E srv    load_model: failed to load model, '/mnt/Scratch/model_testing/NeoHorse-1-4B/NeoHorse-1-4B-IQ2_S.gguf'\n0.00.029.745 E srv  llama_server: exiting due to model loading error\nllama_server exited with code 1\n",
+      "latency_sec": 0.28,
+      "prompt_speed_tps": 0.0,
+      "gen_speed_tps": 0.0,
+      "coherent": true,
+      "coherence_reason": "OK",
+      "keyword_matched": false
+    },
+    "Q4_MED_HARD": {
+      "success": false,
+      "response": "load model from /mnt/Scratch/model_testing/NeoHorse-1-4B/NeoHorse-1-4B-IQ2_S.gguf\n0.00.027.113 E llama_model_load_from_file_impl: failed to load model\n0.00.027.116 E cmn  common_init_: failed to load model '/mnt/Scratch/model_testing/NeoHorse-1-4B/NeoHorse-1-4B-IQ2_S.gguf'\n0.00.027.121 E srv    load_model: failed to load model, '/mnt/Scratch/model_testing/NeoHorse-1-4B/NeoHorse-1-4B-IQ2_S.gguf'\n0.00.027.883 E srv  llama_server: exiting due to model loading error\nllama_server exited with code 1",
+      "raw_output": "\n\nLoading model... Error: the server exited before becoming ready\n0.00.023.714 E gguf_init_from_reader: invalid magic characters: '????', expected 'GGUF'\n0.00.026.955 E gguf_init_from_reader: invalid magic characters: '????', expected 'GGUF'\n0.00.027.055 E llama_model_load: error loading model: llama_model_loader: failed to load model from /mnt/Scratch/model_testing/NeoHorse-1-4B/NeoHorse-1-4B-IQ2_S.gguf\n0.00.027.067 E llama_model_load_from_file_impl: failed to load model\n0.00.027.096 E common_fit_params: encountered an error while trying to fit params to free device memory: failed to load model\n0.00.027.106 E gguf_init_from_reader: invalid magic characters: '????', expected 'GGUF'\n0.00.027.112 E llama_model_load: error loading model: llama_model_loader: failed to load model from /mnt/Scratch/model_testing/NeoHorse-1-4B/NeoHorse-1-4B-IQ2_S.gguf\n0.00.027.113 E llama_model_load_from_file_impl: failed to load model\n0.00.027.116 E cmn  common_init_: failed to load model '/mnt/Scratch/model_testing/NeoHorse-1-4B/NeoHorse-1-4B-IQ2_S.gguf'\n0.00.027.121 E srv    load_model: failed to load model, '/mnt/Scratch/model_testing/NeoHorse-1-4B/NeoHorse-1-4B-IQ2_S.gguf'\n0.00.027.883 E srv  llama_server: exiting due to model loading error\nllama_server exited with code 1\n",
+      "latency_sec": 0.27,
+      "prompt_speed_tps": 0.0,
+      "gen_speed_tps": 0.0,
+      "coherent": true,
+      "coherence_reason": "OK",
+      "keyword_matched": false
+    },
+    "Q5_HARD": {
+      "success": false,
+      "response": "load model from /mnt/Scratch/model_testing/NeoHorse-1-4B/NeoHorse-1-4B-IQ2_S.gguf\n0.00.024.490 E llama_model_load_from_file_impl: failed to load model\n0.00.024.494 E cmn  common_init_: failed to load model '/mnt/Scratch/model_testing/NeoHorse-1-4B/NeoHorse-1-4B-IQ2_S.gguf'\n0.00.024.499 E srv    load_model: failed to load model, '/mnt/Scratch/model_testing/NeoHorse-1-4B/NeoHorse-1-4B-IQ2_S.gguf'\n0.00.024.976 E srv  llama_server: exiting due to model loading error\nllama_server exited with code 1",
+      "raw_output": "\n\nLoading model... Error: the server exited before becoming ready\n0.00.021.485 E gguf_init_from_reader: invalid magic characters: '????', expected 'GGUF'\n0.00.024.320 E gguf_init_from_reader: invalid magic characters: '????', expected 'GGUF'\n0.00.024.420 E llama_model_load: error loading model: llama_model_loader: failed to load model from /mnt/Scratch/model_testing/NeoHorse-1-4B/NeoHorse-1-4B-IQ2_S.gguf\n0.00.024.437 E llama_model_load_from_file_impl: failed to load model\n0.00.024.469 E common_fit_params: encountered an error while trying to fit params to free device memory: failed to load model\n0.00.024.482 E gguf_init_from_reader: invalid magic characters: '????', expected 'GGUF'\n0.00.024.489 E llama_model_load: error loading model: llama_model_loader: failed to load model from /mnt/Scratch/model_testing/NeoHorse-1-4B/NeoHorse-1-4B-IQ2_S.gguf\n0.00.024.490 E llama_model_load_from_file_impl: failed to load model\n0.00.024.494 E cmn  common_init_: failed to load model '/mnt/Scratch/model_testing/NeoHorse-1-4B/NeoHorse-1-4B-IQ2_S.gguf'\n0.00.024.499 E srv    load_model: failed to load model, '/mnt/Scratch/model_testing/NeoHorse-1-4B/NeoHorse-1-4B-IQ2_S.gguf'\n0.00.024.976 E srv  llama_server: exiting due to model loading error\nllama_server exited with code 1\n",
+      "latency_sec": 0.27,
+      "prompt_speed_tps": 0.0,
+      "gen_speed_tps": 0.0,
+      "coherent": true,
+      "coherence_reason": "OK",
+      "keyword_matched": false
+    },
+    "Q6_FRONTIER": {
+      "success": false,
+      "response": "load model from /mnt/Scratch/model_testing/NeoHorse-1-4B/NeoHorse-1-4B-IQ2_S.gguf\n0.00.025.657 E llama_model_load_from_file_impl: failed to load model\n0.00.025.660 E cmn  common_init_: failed to load model '/mnt/Scratch/model_testing/NeoHorse-1-4B/NeoHorse-1-4B-IQ2_S.gguf'\n0.00.025.667 E srv    load_model: failed to load model, '/mnt/Scratch/model_testing/NeoHorse-1-4B/NeoHorse-1-4B-IQ2_S.gguf'\n0.00.026.482 E srv  llama_server: exiting due to model loading error\nllama_server exited with code 1",
+      "raw_output": "\n\nLoading model... Error: the server exited before becoming ready\n0.00.022.320 E gguf_init_from_reader: invalid magic characters: '????', expected 'GGUF'\n0.00.025.431 E gguf_init_from_reader: invalid magic characters: '????', expected 'GGUF'\n0.00.025.570 E llama_model_load: error loading model: llama_model_loader: failed to load model from /mnt/Scratch/model_testing/NeoHorse-1-4B/NeoHorse-1-4B-IQ2_S.gguf\n0.00.025.587 E llama_model_load_from_file_impl: failed to load model\n0.00.025.628 E common_fit_params: encountered an error while trying to fit params to free device memory: failed to load model\n0.00.025.645 E gguf_init_from_reader: invalid magic characters: '????', expected 'GGUF'\n0.00.025.655 E llama_model_load: error loading model: llama_model_loader: failed to load model from /mnt/Scratch/model_testing/NeoHorse-1-4B/NeoHorse-1-4B-IQ2_S.gguf\n0.00.025.657 E llama_model_load_from_file_impl: failed to load model\n0.00.025.660 E cmn  common_init_: failed to load model '/mnt/Scratch/model_testing/NeoHorse-1-4B/NeoHorse-1-4B-IQ2_S.gguf'\n0.00.025.667 E srv    load_model: failed to load model, '/mnt/Scratch/model_testing/NeoHorse-1-4B/NeoHorse-1-4B-IQ2_S.gguf'\n0.00.026.482 E srv  llama_server: exiting due to model loading error\nllama_server exited with code 1\n",
+      "latency_sec": 0.28,
+      "prompt_speed_tps": 0.0,
+      "gen_speed_tps": 0.0,
+      "coherent": true,
+      "coherence_reason": "OK",
+      "keyword_matched": false
+    }
+  },
+  "summary": {
+    "total_questions": 6,
+    "passed_questions": 0,
+    "pass_rate_pct": 0.0,
+    "avg_gen_speed_tps": 0.0,
+    "avg_prompt_speed_tps": 0.0,
+    "ppl_score": null,
+    "overall_status": "COLLAPSED_FAIL"
+  }
+}

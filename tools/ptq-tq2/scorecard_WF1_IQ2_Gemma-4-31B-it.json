@@ -1,0 +1,83 @@
+{
+  "workflow_id": "WF1_IQ2",
+  "model_name": "Gemma-4-31B-it-IQ2_S.gguf",
+  "source_path": "/mnt/Scratch/model_testing/Gemma-4-31B-it/Gemma-4-31B-it-IQ2_S.gguf",
+  "evaluated_at": "2026-10-04 09:29:35",
+  "questions": {
+    "Q1_EASY": {
+      "success": true,
+      "response": "The capital of France is **Paris**, and the river that runs through it is the **Seine**.",
+      "raw_output": "\n\nLoading model... \n\n\u2584\u2584 \u2584\u2584\n\u2588\u2588 \u2588\u2588\n\u2588\u2588 \u2588\u2588  \u2580\u2580\u2588\u2584 \u2588\u2588\u2588\u2584\u2588\u2588\u2588\u2584  \u2580\u2580\u2588\u2584    \u2584\u2588\u2588\u2588\u2588 \u2588\u2588\u2588\u2588\u2584 \u2588\u2588\u2588\u2588\u2584\n\u2588\u2588 \u2588\u2588 \u2584\u2588\u2580\u2588\u2588 \u2588\u2588 \u2588\u2588 \u2588\u2588 \u2584\u2588\u2580\u2588\u2588    \u2588\u2588    \u2588\u2588 \u2588\u2588 \u2588\u2588 \u2588\u2588\n\u2588\u2588 \u2588\u2588 \u2580\u2588\u2584\u2588\u2588 \u2588\u2588 \u2588\u2588 \u2588\u2588 \u2580\u2588\u2584\u2588\u2588 \u2588\u2588 \u2580\u2588\u2588\u2588\u2588 \u2588\u2588\u2588\u2588\u2580 \u2588\u2588\u2588\u2588\u2580\n                                    \u2588\u2588    \u2588\u2588\n                                    \u2580\u2580    \u2580\u2580\n\nbuild      : b11178-560d33b75\nmodel      : /mnt/Scratch/model_testing/Gemma-4-31B-it/Gemma-4-31B-it-IQ2_S.gguf\nftype      : IQ2_S - 2.5 bpw\nmodalities : text\n\navailable commands:\n  /exit or Ctrl+C     stop or exit\n  /regen              regenerate the last response\n  /clear              clear the chat history\n  /read <file>        add a text file\n  /glob <pattern>     add text files using globbing pattern\n\n\n\n> What is the capital of France, and what river runs through it?\n\n[Start thinking]\n\n*   Question 1: What is the capital of France?\n    *   Question 2: What river runs through it?\n\n    *   Capital of France: Paris.\n    *   River running through Paris: Seine.\n\n    *   The capital of France is Paris, and the river that runs through it is the Seine.\n[End thinking]\n\nThe capital of France is **Paris**, and the river that runs through it is the **Seine**.\n\n[ Prompt: 22.7 t/s | Generation: 3.3 t/s | Zero-copy handoff: PASS (host memcpy: 0) ]\n\n\nExiting...\n",
+      "latency_sec": 40.36,
+      "prompt_speed_tps": 22.7,
+      "gen_speed_tps": 3.3,
+      "coherent": true,
+      "coherence_reason": "OK",
+      "keyword_matched": true
+    },
+    "Q2_EASY_MED": {
+      "success": true,
+      "response": "You have **",
+      "raw_output": "\n\nLoading model... \n\n\u2584\u2584 \u2584\u2584\n\u2588\u2588 \u2588\u2588\n\u2588\u2588 \u2588\u2588  \u2580\u2580\u2588\u2584 \u2588\u2588\u2588\u2584\u2588\u2588\u2588\u2584  \u2580\u2580\u2588\u2584    \u2584\u2588\u2588\u2588\u2588 \u2588\u2588\u2588\u2588\u2584 \u2588\u2588\u2588\u2588\u2584\n\u2588\u2588 \u2588\u2588 \u2584\u2588\u2580\u2588\u2588 \u2588\u2588 \u2588\u2588 \u2588\u2588 \u2584\u2588\u2580\u2588\u2588    \u2588\u2588    \u2588\u2588 \u2588\u2588 \u2588\u2588 \u2588\u2588\n\u2588\u2588 \u2588\u2588 \u2580\u2588\u2584\u2588\u2588 \u2588\u2588 \u2588\u2588 \u2588\u2588 \u2580\u2588\u2584\u2588\u2588 \u2588\u2588 \u2580\u2588\u2588\u2588\u2588 \u2588\u2588\u2588\u2588\u2580 \u2588\u2588\u2588\u2588\u2580\n                                    \u2588\u2588    \u2588\u2588\n                                    \u2580\u2580    \u2580\u2580\n\nbuild      : b11178-560d33b75\nmodel      : /mnt/Scratch/model_testing/Gemma-4-31B-it/Gemma-4-31B-it-IQ2_S.gguf\nftype      : IQ2_S - 2.5 bpw\nmodalities : text\n\navailable commands:\n  /exit or Ctrl+C     stop or exit\n  /regen              regenerate the last response\n  /clear              clear the chat history\n  /read <file>        add a text file\n  /glob <pattern>     add text files using globbing pattern\n\n\n\n> If you have 15 pencils and give 4 to your friend and 3 to your sister, how many pencils do you have left?\n\n[Start thinking]\n\n*   Initial amount: 15 pencils.\n    *   Action 1: Give 4 pencils to a friend.\n    *   Action 2: Give 3 pencils to a sister.\n    *   Goal: Find the remaining number of pencils.\n\n    *   Total given away = 4 + 3 = 7.\n    *   Remaining = Initial - Total given away.\n    *   Remaining = 15 - 7.\n\n    *   15 - 7 = 8.\n\n    *   You have 8 pencils left.\n[End thinking]\n\nYou have **\n\n[ Prompt: 31.1 t/s | Generation: 3.3 t/s | Zero-copy handoff: PASS (host memcpy: 0) ]\n\n\nExiting...\n",
+      "latency_sec": 44.28,
+      "prompt_speed_tps": 31.1,
+      "gen_speed_tps": 3.3,
+      "coherent": true,
+      "coherence_reason": "OK",
+      "keyword_matched": false
+    },
+    "Q3_MEDIUM": {
+      "success": true,
+      "response": "[Start thinking]\n\nThe objective is to write a Python function `is_even(n)` that checks if a given number `n` is even.\n\n    *   Input: `n` (an integer).\n    *   Output: `True` if `n` is even, `False` if `n` is odd.\n    *   Definition of \"even\": A number is even if it is divisible by 2 without a remainder.\n\n    *   The modulo operator (`%`) returns the remainder of a division.\n    *   If `n % 2 == 0`, the number is even",
+      "raw_output": "\n\nLoading model... \n\n\u2584\u2584 \u2584\u2584\n\u2588\u2588 \u2588\u2588\n\u2588\u2588 \u2588\u2588  \u2580\u2580\u2588\u2584 \u2588\u2588\u2588\u2584\u2588\u2588\u2588\u2584  \u2580\u2580\u2588\u2584    \u2584\u2588\u2588\u2588\u2588 \u2588\u2588\u2588\u2588\u2584 \u2588\u2588\u2588\u2588\u2584\n\u2588\u2588 \u2588\u2588 \u2584\u2588\u2580\u2588\u2588 \u2588\u2588 \u2588\u2588 \u2588\u2588 \u2584\u2588\u2580\u2588\u2588    \u2588\u2588    \u2588\u2588 \u2588\u2588 \u2588\u2588 \u2588\u2588\n\u2588\u2588 \u2588\u2588 \u2580\u2588\u2584\u2588\u2588 \u2588\u2588 \u2588\u2588 \u2588\u2588 \u2580\u2588\u2584\u2588\u2588 \u2588\u2588 \u2580\u2588\u2588\u2588\u2588 \u2588\u2588\u2588\u2588\u2580 \u2588\u2588\u2588\u2588\u2580\n                                    \u2588\u2588    \u2588\u2588\n                                    \u2580\u2580    \u2580\u2580\n\nbuild      : b11178-560d33b75\nmodel      : /mnt/Scratch/model_testing/Gemma-4-31B-it/Gemma-4-31B-it-IQ2_S.gguf\nftype      : IQ2_S - 2.5 bpw\nmodalities : text\n\navailable commands:\n  /exit or Ctrl+C     stop or exit\n  /regen              regenerate the last response\n  /clear              clear the chat history\n  /read <file>        add a text file\n  /glob <pattern>     add text files using globbing pattern\n\n\n\n> Write a Python function is_even(n) that returns True if n is an even integer, and False otherwise.\n\n[Start thinking]\n\nThe objective is to write a Python function `is_even(n)` that checks if a given number `n` is even.\n\n    *   Input: `n` (an integer).\n    *   Output: `True` if `n` is even, `False` if `n` is odd.\n    *   Definition of \"even\": A number is even if it is divisible by 2 without a remainder.\n\n    *   The modulo operator (`%`) returns the remainder of a division.\n    *   If `n % 2 == 0`, the number is even\n\n[ Prompt: 28.4 t/s | Generation: 3.2 t/s | Zero-copy handoff: PASS (host memcpy: 0) ]\n\n\nExiting...\n",
+      "latency_sec": 45.76,
+      "prompt_speed_tps": 28.4,
+      "gen_speed_tps": 3.2,
+      "coherent": true,
+      "coherence_reason": "OK",
+      "keyword_matched": true
+    },
+    "Q4_MED_HARD": {
+      "success": true,
+      "response": "[Start thinking]\n\n*   Premise 1: No reptiles have fur.\n    *   Premise 2: All snakes are reptiles.\n    *   Question: Can a snake have fur?\n\n    *   If \"No reptiles have fur\" is true, then any entity that is a reptile cannot have fur.\n    *   If \"All snakes are reptiles\" is true, then snakes are a subset of reptiles.\n    *   Therefore, since snakes are reptiles, and no reptiles have fur, snakes cannot have fur.\n\n    *   Answer: NO.\n    *   Explanation: Since snakes are reptiles",
+      "raw_output": "\n\nLoading model... \n\n\u2584\u2584 \u2584\u2584\n\u2588\u2588 \u2588\u2588\n\u2588\u2588 \u2588\u2588  \u2580\u2580\u2588\u2584 \u2588\u2588\u2588\u2584\u2588\u2588\u2588\u2584  \u2580\u2580\u2588\u2584    \u2584\u2588\u2588\u2588\u2588 \u2588\u2588\u2588\u2588\u2584 \u2588\u2588\u2588\u2588\u2584\n\u2588\u2588 \u2588\u2588 \u2584\u2588\u2580\u2588\u2588 \u2588\u2588 \u2588\u2588 \u2588\u2588 \u2584\u2588\u2580\u2588\u2588    \u2588\u2588    \u2588\u2588 \u2588\u2588 \u2588\u2588 \u2588\u2588\n\u2588\u2588 \u2588\u2588 \u2580\u2588\u2584\u2588\u2588 \u2588\u2588 \u2588\u2588 \u2588\u2588 \u2580\u2588\u2584\u2588\u2588 \u2588\u2588 \u2580\u2588\u2588\u2588\u2588 \u2588\u2588\u2588\u2588\u2580 \u2588\u2588\u2588\u2588\u2580\n                                    \u2588\u2588    \u2588\u2588\n                                    \u2580\u2580    \u2580\u2580\n\nbuild      : b11178-560d33b75\nmodel      : /mnt/Scratch/model_testing/Gemma-4-31B-it/Gemma-4-31B-it-IQ2_S.gguf\nftype      : IQ2_S - 2.5 bpw\nmodalities : text\n\navailable commands:\n  /exit or Ctrl+C     stop or exit\n  /regen              regenerate the last response\n  /clear              clear the chat history\n  /read <file>        add a text file\n  /glob <pattern>     add text files using globbing pattern\n\n\n\n> No reptiles have fur. All snakes are reptiles. Can a snake have fur? Answer with YES or NO and a brief explanation.\n\n[Start thinking]\n\n*   Premise 1: No reptiles have fur.\n    *   Premise 2: All snakes are reptiles.\n    *   Question: Can a snake have fur?\n\n    *   If \"No reptiles have fur\" is true, then any entity that is a reptile cannot have fur.\n    *   If \"All snakes are reptiles\" is true, then snakes are a subset of reptiles.\n    *   Therefore, since snakes are reptiles, and no reptiles have fur, snakes cannot have fur.\n\n    *   Answer: NO.\n    *   Explanation: Since snakes are reptiles\n\n[ Prompt: 19.7 t/s | Generation: 3.3 t/s | Zero-copy handoff: PASS (host memcpy: 0) ]\n\n\nExiting...\n",
+      "latency_sec": 44.85,
+      "prompt_speed_tps": 19.7,
+      "gen_speed_tps": 3.3,
+      "coherent": true,
+      "coherence_reason": "OK",
+      "keyword_matched": true
+    },
+    "Q5_HARD": {
+      "success": true,
+      "response": "[Start thinking]\n\n*   Function: $f(x) = 3x^2 + 5x - 7$\n    *   Goal: Find the derivative with respect to $x$.\n\n    *   The function is a polynomial.\n    *   It consists of three terms: $3x^2$, $5x$, and $-7$.\n\n    *   *Power Rule:* $\\frac{d}{dx}(x^n) = nx^{n-1}$\n    *   *Constant Multiple Rule:* $\\frac{d}{dx}(cf(x)) = c \\cdot f'(x",
+      "raw_output": "\n\nLoading model... \n\n\u2584\u2584 \u2584\u2584\n\u2588\u2588 \u2588\u2588\n\u2588\u2588 \u2588\u2588  \u2580\u2580\u2588\u2584 \u2588\u2588\u2588\u2584\u2588\u2588\u2588\u2584  \u2580\u2580\u2588\u2584    \u2584\u2588\u2588\u2588\u2588 \u2588\u2588\u2588\u2588\u2584 \u2588\u2588\u2588\u2588\u2584\n\u2588\u2588 \u2588\u2588 \u2584\u2588\u2580\u2588\u2588 \u2588\u2588 \u2588\u2588 \u2588\u2588 \u2584\u2588\u2580\u2588\u2588    \u2588\u2588    \u2588\u2588 \u2588\u2588 \u2588\u2588 \u2588\u2588\n\u2588\u2588 \u2588\u2588 \u2580\u2588\u2584\u2588\u2588 \u2588\u2588 \u2588\u2588 \u2588\u2588 \u2580\u2588\u2584\u2588\u2588 \u2588\u2588 \u2580\u2588\u2588\u2588\u2588 \u2588\u2588\u2588\u2588\u2580 \u2588\u2588\u2588\u2588\u2580\n                                    \u2588\u2588    \u2588\u2588\n                                    \u2580\u2580    \u2580\u2580\n\nbuild      : b11178-560d33b75\nmodel      : /mnt/Scratch/model_testing/Gemma-4-31B-it/Gemma-4-31B-it-IQ2_S.gguf\nftype      : IQ2_S - 2.5 bpw\nmodalities : text\n\navailable commands:\n  /exit or Ctrl+C     stop or exit\n  /regen              regenerate the last response\n  /clear              clear the chat history\n  /read <file>        add a text file\n  /glob <pattern>     add text files using globbing pattern\n\n\n\n> What is the derivative of f(x) = 3*x^2 + 5*x - 7 with respect to x?\n\n[Start thinking]\n\n*   Function: $f(x) = 3x^2 + 5x - 7$\n    *   Goal: Find the derivative with respect to $x$.\n\n    *   The function is a polynomial.\n    *   It consists of three terms: $3x^2$, $5x$, and $-7$.\n\n    *   *Power Rule:* $\\frac{d}{dx}(x^n) = nx^{n-1}$\n    *   *Constant Multiple Rule:* $\\frac{d}{dx}(cf(x)) = c \\cdot f'(x\n\n[ Prompt: 30.0 t/s | Generation: 3.3 t/s | Zero-copy handoff: PASS (host memcpy: 0) ]\n\n\nExiting...\n",
+      "latency_sec": 44.14,
+      "prompt_speed_tps": 30.0,
+      "gen_speed_tps": 3.3,
+      "coherent": true,
+      "coherence_reason": "OK",
+      "keyword_matched": false
+    },
+    "Q6_FRONTIER": {
+      "success": true,
+      "response": "[Start thinking]\n\n*   *Topic:* Byzantine Generals Problem (BGP) in distributed consensus.\n*   *Key Requirement 1:* Explain what it is.\n*   *Key Requirement 2:* Determine how many faulty nodes a system of $N$ nodes can tolerate.\n\n    *   *What is it?* A thought experiment/problem in distributed computing.\n    *   *The Scenario:* Generals (nodes) need to agree on a strategy (attack or retreat). Some generals are \"traitors\" (faulty/malicious nodes) who might lie or send conflicting messages to prevent consensus.\n    *",
+      "raw_output": "\n\nLoading model... \n\n\u2584\u2584 \u2584\u2584\n\u2588\u2588 \u2588\u2588\n\u2588\u2588 \u2588\u2588  \u2580\u2580\u2588\u2584 \u2588\u2588\u2588\u2584\u2588\u2588\u2588\u2584  \u2580\u2580\u2588\u2584    \u2584\u2588\u2588\u2588\u2588 \u2588\u2588\u2588\u2588\u2584 \u2588\u2588\u2588\u2588\u2584\n\u2588\u2588 \u2588\u2588 \u2584\u2588\u2580\u2588\u2588 \u2588\u2588 \u2588\u2588 \u2588\u2588 \u2584\u2588\u2580\u2588\u2588    \u2588\u2588    \u2588\u2588 \u2588\u2588 \u2588\u2588 \u2588\u2588\n\u2588\u2588 \u2588\u2588 \u2580\u2588\u2584\u2588\u2588 \u2588\u2588 \u2588\u2588 \u2588\u2588 \u2580\u2588\u2584\u2588\u2588 \u2588\u2588 \u2580\u2588\u2588\u2588\u2588 \u2588\u2588\u2588\u2588\u2580 \u2588\u2588\u2588\u2588\u2580\n                                    \u2588\u2588    \u2588\u2588\n                                    \u2580\u2580    \u2580\u2580\n\nbuild      : b11178-560d33b75\nmodel      : /mnt/Scratch/model_testing/Gemma-4-31B-it/Gemma-4-31B-it-IQ2_S.gguf\nftype      : IQ2_S - 2.5 bpw\nmodalities : text\n\navailable commands:\n  /exit or Ctrl+C     stop or exit\n  /regen              regenerate the last response\n  /clear              clear the chat history\n  /read <file>        add a text file\n  /glob <pattern>     add text files using globbing pattern\n\n\n\n> Explain what the Byzantine Generals Problem is in distributed consensus and how many faulty nodes a system of N nodes can tolerate.\n\n[Start thinking]\n\n*   *Topic:* Byzantine Generals Problem (BGP) in distributed consensus.\n*   *Key Requirement 1:* Explain what it is.\n*   *Key Requirement 2:* Determine how many faulty nodes a system of $N$ nodes can tolerate.\n\n    *   *What is it?* A thought experiment/problem in distributed computing.\n    *   *The Scenario:* Generals (nodes) need to agree on a strategy (attack or retreat). Some generals are \"traitors\" (faulty/malicious nodes) who might lie or send conflicting messages to prevent consensus.\n    *\n\n[ Prompt: 29.9 t/s | Generation: 3.3 t/s | Zero-copy handoff: PASS (host memcpy: 0) ]\n\n\nExiting...\n",
+      "latency_sec": 44.79,
+      "prompt_speed_tps": 29.9,
+      "gen_speed_tps": 3.3,
+      "coherent": true,
+      "coherence_reason": "OK",
+      "keyword_matched": true
+    }
+  },
+  "summary": {
+    "total_questions": 6,
+    "passed_questions": 6,
+    "pass_rate_pct": 100.0,
+    "avg_gen_speed_tps": 3.28,
+    "avg_prompt_speed_tps": 26.97,
+    "ppl_score": 107.9355,
+    "overall_status": "COHERENT_PASS"
+  }
+}
