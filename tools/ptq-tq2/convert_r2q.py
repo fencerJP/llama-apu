@@ -146,8 +146,12 @@ def convert_to_r2q_gguf(
                 writer.add_key_value(key, [int(field.parts[idx][0]) for idx in field.data], gguf.GGUFValueType.ARRAY, sub_type=arr_t)
                     
     # Target standard linear weights while protecting highly sensitive attention V and QKV projections
-    target_keywords = ["attn_q", "attn_k", "attn_output", "ffn_gate", "ffn_up", "ffn_down", "attn_gate", "ssm_out"]
-    sensitive_keywords = ["attn_v", "attn_qkv", "ssm_conv1d", "ple_conv1d", "token_embd", "output", "indexer", "ffn_gate_inp"]
+    target_keywords = [
+        "attn_q", "attn_k", "attn_output", "ffn_gate", "ffn_up", "ffn_down", "attn_gate", "ssm_out",
+        "ffn_gate_exps", "ffn_up_exps", "ffn_down_exps", "ffn_gate_shexp", "ffn_up_shexp", "ffn_down_shexp"
+    ]
+    # Note: match exact sensitive names or prefixes that do not collide with attn_output
+    sensitive_keywords = ["attn_v", "attn_qkv", "ssm_conv1d", "ple_conv1d", "token_embd", "output.weight", "indexer", "ffn_gate_inp"]
     
     total_tensors = len(reader.tensors)
     print(f"[*] Processing {total_tensors} tensors with R2Q quantization...", flush=True)
@@ -157,25 +161,38 @@ def convert_to_r2q_gguf(
     plan = []
     for idx, t in enumerate(reader.tensors, start=1):
         t_name = t.name
+        is_sensitive = any(s == t_name or (s in t_name and "attn_output" not in t_name) for s in sensitive_keywords)
+        is_target = any(k in t_name for k in target_keywords)
+
         should_quantize = (
-            any(k in t_name for k in target_keywords) and
-            not any(s in t_name for s in sensitive_keywords) and
+            is_target and
+            not is_sensitive and
             t_name.endswith(".weight") and
-            len(t.shape) == 2 and
+            len(t.shape) in (2, 3) and
             int(t.shape[0]) % 256 == 0 and
             t.data.nbytes >= 1024
         )
         if should_quantize:
-            n_cols = int(t.shape[0])
-            n_rows = int(t.shape[1])
-            byte_shape = [n_rows, (n_cols // 256) * 66]
-            nbytes = n_rows * (n_cols // 256) * 66
+            if len(t.shape) == 2:
+                n_cols = int(t.shape[0])
+                n_rows = int(t.shape[1])
+                n_slices = 1
+                byte_shape = [n_rows, (n_cols // 256) * 66]
+                nbytes = n_rows * (n_cols // 256) * 66
+            else:
+                # 3D stacked expert tensor [ne0, ne1, ne2]
+                n_cols = int(t.shape[0])
+                n_rows = int(t.shape[1])
+                n_slices = int(t.shape[2])
+                byte_shape = [n_slices, n_rows, (n_cols // 256) * 66]
+                nbytes = n_slices * n_rows * (n_cols // 256) * 66
+
             writer.add_tensor_info(t_name, byte_shape, np.dtype("uint8"), nbytes, raw_dtype=gguf.GGMLQuantizationType.TQ2_0)
-            plan.append((t, True, n_rows, n_cols, nbytes))
+            plan.append((t, True, n_rows, n_cols, n_slices, nbytes))
         else:
             t_dtype = np.dtype("uint16") if t.tensor_type == gguf.GGMLQuantizationType.BF16 else t.data.dtype
             writer.add_tensor_info(t_name, list(reversed(t.shape)), t_dtype, t.data.nbytes, raw_dtype=t.tensor_type)
-            plan.append((t, False, 0, 0, t.data.nbytes))
+            plan.append((t, False, 0, 0, 1, t.data.nbytes))
 
     print(f"[*] Writing GGUF header, metadata, and tensor info dictionary to disk...", flush=True)
     t_w0 = time.time()
@@ -193,7 +210,7 @@ def convert_to_r2q_gguf(
     quant_time_total = 0.0
 
     with open(src_base_gguf, "rb") as f_src:
-        for idx, (t, is_q, n_rows, n_cols, nbytes) in enumerate(plan, start=1):
+        for idx, (t, is_q, n_rows, n_cols, n_slices, nbytes) in enumerate(plan, start=1):
             t_name = t.name
             f_src.seek(t.data_offset)
             writer.write_padding(fout, fout.tell())
@@ -201,7 +218,8 @@ def convert_to_r2q_gguf(
             if is_q:
                 size_mb = t.data.nbytes / (1024**2)
                 t_t0 = time.time()
-                print(f"    [{idx}/{total_tensors}] Quantizing {t_name} ({n_rows}x{n_cols}, {size_mb:.1f} MB)...", flush=True)
+                dim_str = f"{n_rows}x{n_cols}" if n_slices == 1 else f"{n_slices}x{n_rows}x{n_cols}"
+                print(f"    [{idx}/{total_tensors}] Quantizing {t_name} ({dim_str}, {size_mb:.1f} MB)...", flush=True)
                 raw_bytes = f_src.read(t.data.nbytes)
                 if t.tensor_type == gguf.GGMLQuantizationType.F32:
                     w_np = np.frombuffer(raw_bytes, dtype=np.float32).copy()
@@ -214,17 +232,30 @@ def convert_to_r2q_gguf(
                 else:
                     w_np = np.frombuffer(raw_bytes, dtype=np.float32).copy()
 
-                w_mat = w_np.reshape(n_rows, n_cols)
-                X_calib = generate_activations(texts, dim=w_mat.shape[1]) if dad_steps > 0 else None
+                if n_slices == 1:
+                    w_mat = w_np.reshape(n_rows, n_cols)
+                    X_calib = generate_activations(texts, dim=w_mat.shape[1]) if dad_steps > 0 else None
 
-                tq2_buf = quantize_matrix_to_tq2_0_r2q(
-                    W=w_mat,
-                    X_calib=X_calib,
-                    dad_steps=dad_steps,
-                    dad_lr=dad_lr,
-                    block_size=block_size
-                )
-                fout.write(tq2_buf)
+                    tq2_buf = quantize_matrix_to_tq2_0_r2q(
+                        W=w_mat,
+                        X_calib=X_calib,
+                        dad_steps=dad_steps,
+                        dad_lr=dad_lr,
+                        block_size=block_size
+                    )
+                    fout.write(tq2_buf)
+                else:
+                    w_3d = w_np.reshape(n_slices, n_rows, n_cols)
+                    for slice_idx in range(n_slices):
+                        w_slice = w_3d[slice_idx]
+                        slice_buf = quantize_matrix_to_tq2_0_r2q(
+                            W=w_slice,
+                            X_calib=None,
+                            dad_steps=0,
+                            dad_lr=dad_lr,
+                            block_size=block_size
+                        )
+                        fout.write(slice_buf)
 
                 dt_t = time.time() - t_t0
                 quantized_count += 1
