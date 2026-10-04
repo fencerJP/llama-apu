@@ -1197,7 +1197,7 @@ static void llama_model_quantize_impl(const std::string & fname_inp, const std::
                ggml_type_name(tensor->type));
 
         const ggml_type cur_type = tensor->type;
-        const ggml_type new_type = tm.target_type;
+        ggml_type new_type = tm.target_type;
 
         // If we've decided to quantize to the same type the tensor is already
         // in then there's nothing to do.
@@ -1242,6 +1242,23 @@ static void llama_model_quantize_impl(const std::string & fname_inp, const std::
                 if (imatrix_data) {
                     auto it = imatrix_data->find(tm.remapped_imatrix_name);
                     if (it == imatrix_data->end()) {
+                        // Check if this is an auxiliary/MTP speculative layer (e.g. blk.40+) that can borrow imatrix statistics from preceding layers
+                        static const std::regex blk_pattern(R"(blk\.(\d+)\.(.*))");
+                        std::smatch match;
+                        if (std::regex_match(tm.remapped_imatrix_name, match, blk_pattern)) {
+                            int cur_blk = std::stoi(match[1]);
+                            for (int b = cur_blk - 1; b >= 0; --b) {
+                                std::string fallback_name = "blk." + std::to_string(b) + "." + match[2].str();
+                                auto it_fb = imatrix_data->find(fallback_name);
+                                if (it_fb != imatrix_data->end() && it_fb->second.size() == (size_t)tensor->ne[0]*tensor->ne[2]) {
+                                    it = it_fb;
+                                    LLAMA_LOG_INFO("\n====== %s: using imatrix weights from %s for %s\n", __func__, fallback_name.c_str(), tensor->name);
+                                    break;
+                                }
+                            }
+                        }
+                    }
+                    if (it == imatrix_data->end()) {
                         LLAMA_LOG_INFO("\n====== %s: did not find weights for %s\n", __func__, tensor->name);
                     } else {
                         if (it->second.size() == (size_t)tensor->ne[0]*tensor->ne[2]) {
@@ -1262,11 +1279,11 @@ static void llama_model_quantize_impl(const std::string & fname_inp, const std::
                     }
                 }
                 if (!imatrix && tm.requires_imatrix) {
-                    LLAMA_LOG_ERROR("\n\n============================================================\n");
-                    LLAMA_LOG_ERROR("Missing importance matrix for tensor %s in a very low-bit quantization\n", tensor->name);
-                    LLAMA_LOG_ERROR("The result will be garbage, so bailing out\n");
-                    LLAMA_LOG_ERROR("============================================================\n\n");
-                    throw std::runtime_error(format("Missing importance matrix for tensor %s in a very low-bit quantization", tensor->name));
+                    // Fall back to Q4_K for auxiliary/speculative layers not present in imatrix
+                    new_type = GGML_TYPE_Q4_K;
+                    ++qs.n_fallback;
+                    LLAMA_LOG_WARN("\n====== %s: tensor %s missing imatrix, falling back to %s\n",
+                                   __func__, tensor->name, ggml_type_name(new_type));
                 }
 
                 if (ggml_is_quantized(tensor->type) && !params->allow_requantize) {
