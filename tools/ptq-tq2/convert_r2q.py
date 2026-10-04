@@ -147,7 +147,7 @@ def convert_to_r2q_gguf(
                     
     # Target standard linear weights while protecting highly sensitive attention V and QKV projections
     target_keywords = ["attn_q", "attn_k", "attn_output", "ffn_gate", "ffn_up", "ffn_down", "attn_gate", "ssm_out"]
-    sensitive_keywords = ["attn_v", "attn_qkv", "ssm_conv1d", "token_embd", "output_norm"]
+    sensitive_keywords = ["attn_v", "attn_qkv", "ssm_conv1d", "ple_conv1d", "token_embd", "output", "indexer", "ffn_gate_inp"]
     
     total_tensors = len(reader.tensors)
     print(f"[*] Processing {total_tensors} tensors with R2Q quantization...", flush=True)
@@ -160,20 +160,24 @@ def convert_to_r2q_gguf(
         for idx, t in enumerate(reader.tensors, start=1):
             t_name = t.name
             f_src.seek(t.data_offset)
-            raw_bytes = f_src.read(t.data.size)
+            raw_bytes = f_src.read(t.data.nbytes)
             
             should_quantize = (
                 any(k in t_name for k in target_keywords) and
                 not any(s in t_name for s in sensitive_keywords) and
                 t_name.endswith(".weight") and
                 len(t.shape) >= 2 and
-                t.data.size >= 1024
+                t.data.nbytes >= 1024
             )
             
             if should_quantize and len(t.shape) == 2:
                 n_cols = int(t.shape[0])
                 n_rows = int(t.shape[1])
-                size_mb = t.data.size / (1024**2)
+                if n_cols % 256 != 0:
+                    writer.add_tensor(t_name, t.data, raw_dtype=t.tensor_type)
+                    skipped_count += 1
+                    continue
+                size_mb = t.data.nbytes / (1024**2)
                 t_t0 = time.time()
                 print(f"    [{idx}/{total_tensors}] Quantizing {t_name} ({n_rows}x{n_cols}, {size_mb:.1f} MB)...", flush=True)
                 
