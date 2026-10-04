@@ -137,13 +137,13 @@ def convert_to_r2q_gguf(
                 if "tokens" in key:
                     writer.add_token_list(str_list)
                 else:
-                    writer.add_array(key, str_list)
+                    writer.add_key_value(key, str_list, gguf.GGUFValueType.ARRAY, sub_type=arr_t)
             elif arr_t in (gguf.GGUFValueType.FLOAT32, gguf.GGUFValueType.FLOAT64):
-                writer.add_array(key, [float(field.parts[idx][0]) for idx in field.data])
+                writer.add_key_value(key, [float(field.parts[idx][0]) for idx in field.data], gguf.GGUFValueType.ARRAY, sub_type=arr_t)
             elif arr_t == gguf.GGUFValueType.BOOL:
-                writer.add_array(key, [bool(field.parts[idx][0]) for idx in field.data])
+                writer.add_key_value(key, [bool(field.parts[idx][0]) for idx in field.data], gguf.GGUFValueType.ARRAY, sub_type=arr_t)
             else:
-                writer.add_array(key, [int(field.parts[idx][0]) for idx in field.data])
+                writer.add_key_value(key, [int(field.parts[idx][0]) for idx in field.data], gguf.GGUFValueType.ARRAY, sub_type=arr_t)
                     
     # Target standard linear weights while protecting highly sensitive attention V and QKV projections
     target_keywords = ["attn_q", "attn_k", "attn_output", "ffn_gate", "ffn_up", "ffn_down", "attn_gate", "ssm_out"]
