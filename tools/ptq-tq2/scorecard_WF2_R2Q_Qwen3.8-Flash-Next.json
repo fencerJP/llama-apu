@@ -1,0 +1,71 @@
+{
+  "workflow_id": "WF2_R2Q",
+  "model_name": "Qwen3.8-Flash-Next-R2Q.gguf",
+  "source_path": "/mnt/Scratch/model_testing/Qwen3.8-Flash-Next/Qwen3.8-Flash-Next-R2Q.gguf",
+  "evaluated_at": "2026-10-05 09:13:34",
+  "questions": {
+    "Q1_EASY": {
+      "success": false,
+      "response": "TIMEOUT (>120s)",
+      "latency_sec": 120.0,
+      "prompt_speed_tps": 0.0,
+      "gen_speed_tps": 0.0,
+      "coherent": false,
+      "coherence_reason": "Timeout exceeded"
+    },
+    "Q2_EASY_MED": {
+      "success": false,
+      "response": "TIMEOUT (>120s)",
+      "latency_sec": 120.0,
+      "prompt_speed_tps": 0.0,
+      "gen_speed_tps": 0.0,
+      "coherent": false,
+      "coherence_reason": "Timeout exceeded"
+    },
+    "Q3_MEDIUM": {
+      "success": false,
+      "response": "TIMEOUT (>120s)",
+      "latency_sec": 120.0,
+      "prompt_speed_tps": 0.0,
+      "gen_speed_tps": 0.0,
+      "coherent": false,
+      "coherence_reason": "Timeout exceeded"
+    },
+    "Q4_MED_HARD": {
+      "success": false,
+      "response": "TIMEOUT (>120s)",
+      "latency_sec": 120.0,
+      "prompt_speed_tps": 0.0,
+      "gen_speed_tps": 0.0,
+      "coherent": false,
+      "coherence_reason": "Timeout exceeded"
+    },
+    "Q5_HARD": {
+      "success": false,
+      "response": "TIMEOUT (>120s)",
+      "latency_sec": 120.0,
+      "prompt_speed_tps": 0.0,
+      "gen_speed_tps": 0.0,
+      "coherent": false,
+      "coherence_reason": "Timeout exceeded"
+    },
+    "Q6_FRONTIER": {
+      "success": false,
+      "response": "TIMEOUT (>120s)",
+      "latency_sec": 120.0,
+      "prompt_speed_tps": 0.0,
+      "gen_speed_tps": 0.0,
+      "coherent": false,
+      "coherence_reason": "Timeout exceeded"
+    }
+  },
+  "summary": {
+    "total_questions": 6,
+    "passed_questions": 0,
+    "pass_rate_pct": 0.0,
+    "avg_gen_speed_tps": 0.0,
+    "avg_prompt_speed_tps": 0.0,
+    "ppl_score": null,
+    "overall_status": "COLLAPSED_FAIL"
+  }
+}
