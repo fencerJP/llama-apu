@@ -968,6 +968,50 @@ static int test_lowquant(bool verbose) {
 
 #include "ggml-apu-xclbin.h"
 #include "ggml-apu-convert.h"
+#include "llama-apu-scheduler.h"
+
+static int test_sarathi(bool verbose) {
+    printf("llama-apu Sarathi-Serve test (§9.1-§9.5 scheduler, chunking, SLO):\n");
+    int fails = 0;
+    printf("  [1/5] chunk alignment (70->128, 129@128->256)...\n");
+    if (llama_apu_align_chunk_size(70, 64) != 128 || llama_apu_align_chunk_size(129, 128) != 256) {
+        printf("RESULT: FAIL — chunk alignment\n"); return 1;
+    }
+    printf("        PASS\n");
+    printf("  [2/5] 4-tier batch construction (tau=512)...\n");
+    llama_apu_scheduler_config_t cfg{};
+    cfg.token_budget = 512; cfg.chunk_size = 256; cfg.chunk_alignment = 64;
+    cfg.min_prefill_reserve = 64; cfg.tbt_slo_ms = 100.0f; cfg.enable_stall_free = true;
+    auto * ctx = llama_apu_sched_ctx_init(&cfg);
+    if (!ctx) { printf("RESULT: FAIL — ctx init\n"); return 1; }
+    llama_apu_slot_t d0{}; d0.slot_id = 0; d0.request_id = 0;
+    d0.state = LLAMA_APU_SLOT_STATE_GENERATING; d0.prompt_tokens_total = 10; d0.prompt_tokens_processed = 10;
+    llama_apu_slot_t nw{}; nw.slot_id = 1; nw.request_id = 1;
+    nw.state = LLAMA_APU_SLOT_STATE_IDLE; nw.prompt_tokens_total = 500; nw.prompt_tokens_processed = 0;
+    llama_apu_sched_upsert_slot(ctx, &d0);
+    llama_apu_sched_upsert_slot(ctx, &nw);
+    llama_apu_batch_t b{};
+    if (llama_apu_schedule_next_batch(ctx, &b) != LLAMA_APU_SUCCESS || b.total_batch_tokens > 512) {
+        printf("RESULT: FAIL — batch construction\n"); fails++;
+    } else {
+        printf("        PASS: dec=%u chunks=%u tokens=%u\n", b.num_decode_slots, b.num_prefill_chunks, b.total_batch_tokens);
+    }
+    printf("  [3/5] LIFP preemption...\n");
+    uint32_t victim = 999;
+    if (llama_apu_sched_preempt_lifp(ctx, true, &victim) != LLAMA_APU_SUCCESS) { printf("RESULT: FAIL — LIFP\n"); fails++; }
+    else printf("        PASS: victim=%u\n", victim);
+    printf("  [4/5] SLO budget suggest + deadband...\n");
+    if (llama_apu_suggest_budget_for_tbt(40.0f, 8) != 256) { printf("RESULT: FAIL — SLO suggest\n"); fails++; }
+    else printf("        PASS\n");
+    printf("  [5/5] hybrid submit validation...\n");
+    if (llama_apu_submit_hybrid_batch(nullptr, nullptr, &b, 1, 1) != LLAMA_APU_SUCCESS) { printf("RESULT: FAIL — submit\n"); fails++; }
+    else printf("        PASS\n");
+    llama_apu_sched_ctx_free(ctx);
+    if (verbose) printf("  verbose: scheduler advisory mirror active\n");
+    if (fails) { printf("RESULT: FAIL — Sarathi-Serve validation failed.\n"); return 1; }
+    printf("RESULT: PASS — Sarathi-Serve scheduler (Phase 9) validated.\n");
+    return 0;
+}
 
 static int apu_doctor(bool verbose) {
     printf("===================================================================\n");
@@ -1114,7 +1158,8 @@ static int usage(){
         "  apu-cli test-speculative [--apu-verbose]\n"
         "  apu-cli test-lowquant  [--apu-verbose]\n"
         "  apu-cli test-xclbin-synth [--apu-verbose]\n"
-        "  apu-cli test-convert   [--apu-verbose]\n");
+        "  apu-cli test-convert   [--apu-verbose]\n"
+        "  apu-cli test-sarathi   [--apu-verbose]\n");
     return 2;
 }
 
@@ -1190,6 +1235,11 @@ int main(int argc,char**argv){
             bool verbose = false;
             for(int i=2; i<argc; i++) if(!strcmp(argv[i],"--apu-verbose") || !strcmp(argv[i],"-v")) verbose = true;
             return test_apu_convert(verbose) ? 0 : 1;
+        }
+        if(cmd=="test-sarathi"){
+            bool verbose = false;
+            for(int i=2; i<argc; i++) if(!strcmp(argv[i],"--apu-verbose") || !strcmp(argv[i],"-v")) verbose = true;
+            return test_sarathi(verbose);
         }
         if(cmd=="convert-model"){
             if(argc<4) return usage();

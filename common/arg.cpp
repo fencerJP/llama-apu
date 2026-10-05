@@ -2976,6 +2976,63 @@ common_params_context common_params_parser_init(common_params & params, llama_ex
         }
     ).set_spec().set_examples({LLAMA_EXAMPLE_SPECULATIVE, LLAMA_EXAMPLE_SERVER, LLAMA_EXAMPLE_CLI}).set_env("LLAMA_ARG_SPEC_TIMELINE_SYNC"));
     add_opt(common_arg(
+        {"--token-budget"}, "N",
+        "APU Sarathi-Serve max tokens per hybrid batch iteration tau (default: 512)\n"
+        "caps prefill chunk + decode coalescing per iteration",
+        [](common_params & params, int value) {
+            if (value < 64 || value > 8192) {
+                throw std::invalid_argument("invalid --token-budget (expected 64..8192)");
+            }
+            params.apu.sarathi_token_budget = (uint32_t) value;
+        }
+    ).set_examples({LLAMA_EXAMPLE_SERVER, LLAMA_EXAMPLE_CLI}).set_env("LLAMA_ARG_TOKEN_BUDGET"));
+    add_opt(common_arg(
+        {"--sarathi-chunk-size"}, "N",
+        "APU Sarathi-Serve target prefill chunk size in tokens (default: 256, auto-aligned to 64/128)\n"
+        "note: named --sarathi-chunk-size to avoid collision with retrieval --chunk-size",
+        [](common_params & params, int value) {
+            if (value < 16 || value > 4096) {
+                throw std::invalid_argument("invalid --sarathi-chunk-size (expected 16..4096)");
+            }
+            params.apu.sarathi_chunk_size = (uint32_t) value;
+        }
+    ).set_examples({LLAMA_EXAMPLE_SERVER, LLAMA_EXAMPLE_CLI}).set_env("LLAMA_ARG_SARATHI_CHUNK_SIZE"));
+    add_opt(common_arg(
+        {"--tbt-slo-ms"}, "FLOAT",
+        "APU Sarathi-Serve target P99 time-between-tokens in ms (default: 100.0, auto-tunes tau)",
+        [](common_params & params, const std::string & value) {
+            float v = std::stof(value);
+            if (v < 1.0f || v > 10000.0f) {
+                throw std::invalid_argument("invalid --tbt-slo-ms (expected 1..10000)");
+            }
+            params.apu.sarathi_tbt_slo_ms = v;
+        }
+    ).set_examples({LLAMA_EXAMPLE_SERVER, LLAMA_EXAMPLE_CLI}).set_env("LLAMA_ARG_TBT_SLO_MS"));
+    add_opt(common_arg(
+        {"--min-prefill-reserve"}, "N",
+        "APU Sarathi-Serve minimum token budget reserved for prefill chunks (default: 64)",
+        [](common_params & params, int value) {
+            if (value < 16 || value > 1024) {
+                throw std::invalid_argument("invalid --min-prefill-reserve (expected 16..1024)");
+            }
+            params.apu.sarathi_min_prefill = (uint32_t) value;
+        }
+    ).set_examples({LLAMA_EXAMPLE_SERVER, LLAMA_EXAMPLE_CLI}).set_env("LLAMA_ARG_MIN_PREFILL_RESERVE"));
+    add_opt(common_arg(
+        {"--enable-stall-free"},
+        "enable APU Sarathi-Serve coalesced hybrid micro-batching (default: on)",
+        [](common_params & params) {
+            params.apu.sarathi_stall_free = true;
+        }
+    ).set_examples({LLAMA_EXAMPLE_SERVER, LLAMA_EXAMPLE_CLI}).set_env("LLAMA_ARG_ENABLE_STALL_FREE"));
+    add_opt(common_arg(
+        {"--no-stall-free"},
+        "fallback to standard greedy batching (disables Sarathi-Serve)",
+        [](common_params & params) {
+            params.apu.sarathi_stall_free = false;
+        }
+    ).set_examples({LLAMA_EXAMPLE_SERVER, LLAMA_EXAMPLE_CLI}).set_env("LLAMA_ARG_NO_STALL_FREE"));
+    add_opt(common_arg(
         {"--numa"}, "TYPE",
         "attempt optimizations that help on some NUMA systems\n"
         "- distribute: spread execution evenly over all nodes\n"
