@@ -335,3 +335,75 @@ void ggml_compute_forward_xielu(const ggml_compute_params * params, ggml_tensor 
     unary_op_functor(params, dst, xielu_op_params);
 }
 
+// In-place Fast Walsh-Hadamard Transform (FWHT) along the inner dimension
+static void fwht_block_f32(float * x, int64_t n) {
+    for (int64_t len = 1; 2 * len <= n; len <<= 1) {
+        for (int64_t i = 0; i < n; i += 2 * len) {
+            for (int64_t j = 0; i + j + len < i + 2 * len; ++j) {
+                float u = x[i + j];
+                float v = x[i + j + len];
+                x[i + j]       = u + v;
+                x[i + j + len] = u - v;
+            }
+        }
+    }
+    const float scale = 1.0f / sqrtf((float) n);
+    for (int64_t i = 0; i < n; ++i) {
+        x[i] *= scale;
+    }
+}
+
+void ggml_compute_forward_hadamard(const ggml_compute_params * params, ggml_tensor * dst) {
+    const ggml_tensor * src0 = dst->src[0];
+
+    GGML_ASSERT(ggml_is_contiguous_rows(src0) && ggml_is_contiguous_rows(dst) && ggml_are_same_shape(src0, dst));
+
+    GGML_TENSOR_UNARY_OP_LOCALS
+
+    const auto [ir0, ir1] = get_thread_range(params, src0);
+
+    for (int64_t ir = ir0; ir < ir1; ++ir) {
+        const int64_t i03 = ir / (ne02 * ne01);
+        const int64_t i02 = (ir - i03 * ne02 * ne01) / ne01;
+        const int64_t i01 = (ir - i03 * ne02 * ne01 - i02 * ne01);
+
+        char * dst_ptr = (char *) dst->data + i03 * nb3 + i02 * nb2 + i01 * nb1;
+        const char * src0_ptr = (const char *) src0->data + i03 * nb03 + i02 * nb02 + i01 * nb01;
+
+        if (src0->type == GGML_TYPE_F32 && dst->type == GGML_TYPE_F32) {
+            float * d_f32 = (float *) dst_ptr;
+            if (dst_ptr != src0_ptr) {
+                memcpy(d_f32, src0_ptr, ne0 * sizeof(float));
+            }
+            // Apply FWHT in blocks of 256
+            for (int64_t b = 0; b < ne0; b += 256) {
+                int64_t b_len = (b + 256 <= ne0) ? 256 : (ne0 - b);
+                if ((b_len & (b_len - 1)) == 0) { // power of 2
+                    fwht_block_f32(d_f32 + b, b_len);
+                }
+            }
+        } else if (src0->type == GGML_TYPE_F16 && dst->type == GGML_TYPE_F16) {
+            ggml_fp16_t * d_f16 = (ggml_fp16_t *) dst_ptr;
+            const ggml_fp16_t * s_f16 = (const ggml_fp16_t *) src0_ptr;
+            // Convert to F32, run FWHT, convert back
+            std::vector<float> tmp(ne0);
+            for (int64_t i = 0; i < ne0; ++i) {
+                tmp[i] = ggml_fp16_to_fp32(s_f16[i]);
+            }
+            for (int64_t b = 0; b < ne0; b += 256) {
+                int64_t b_len = (b + 256 <= ne0) ? 256 : (ne0 - b);
+                if ((b_len & (b_len - 1)) == 0) {
+                    fwht_block_f32(tmp.data() + b, b_len);
+                }
+            }
+            for (int64_t i = 0; i < ne0; ++i) {
+                d_f16[i] = ggml_fp32_to_fp16(tmp[i]);
+            }
+        } else {
+            GGML_ABORT("unsupported types for hadamard: src0=%s dst=%s",
+                ggml_type_name(src0->type), ggml_type_name(dst->type));
+        }
+    }
+}
+
+

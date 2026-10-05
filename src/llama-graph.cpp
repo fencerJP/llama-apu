@@ -1923,6 +1923,10 @@ ggml_tensor * llm_graph_context::build_ffn(
     }
 
     if (down) {
+        if (hparams.is_quarot) {
+            cur = ggml_hadamard(ctx0, cur);
+            cb(cur, "ffn_hadamard", il);
+        }
         cur = build_lora_mm(down, cur);
         if (arch == LLM_ARCH_GLM4 || arch == LLM_ARCH_GLM4_MOE || arch == LLM_ARCH_JAIS2) {
             // GLM4, GLM4_MOE, and JAIS2 seem to have numerical issues with half-precision accumulators
@@ -2299,6 +2303,11 @@ ggml_tensor * llm_graph_context::build_moe_ffn(
             } break;
         default:
             GGML_ABORT("fatal error");
+    }
+
+    if (hparams.is_quarot) {
+        cur = ggml_hadamard(ctx0, cur);
+        cb(cur, "ffn_moe_hadamard", il);
     }
 
     experts = build_lora_mm_id(down_exps, cur, selected_experts, down_exps_s); // [n_embd, n_expert_used, n_tokens]

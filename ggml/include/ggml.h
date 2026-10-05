@@ -627,6 +627,7 @@ extern "C" {
         GGML_UNARY_OP_CEIL,
         GGML_UNARY_OP_ROUND,
         GGML_UNARY_OP_TRUNC,
+        GGML_UNARY_OP_HADAMARD,
 
         GGML_UNARY_OP_COUNT,
     };
@@ -2566,6 +2567,14 @@ extern "C" {
         struct ggml_context * ctx,
         struct ggml_tensor  * a,
         enum ggml_unary_op op);
+
+    GGML_API struct ggml_tensor * ggml_hadamard(
+            struct ggml_context * ctx,
+            struct ggml_tensor  * a);
+
+    GGML_API struct ggml_tensor * ggml_hadamard_inplace(
+            struct ggml_context * ctx,
+            struct ggml_tensor  * a);
 
     // used in sam
     GGML_API struct ggml_tensor * ggml_get_rel_pos(

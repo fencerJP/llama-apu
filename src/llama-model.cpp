@@ -1423,6 +1423,12 @@ void llama_model_base::load_hparams(llama_model_loader & ml) {
         hparams.use_alibi = true;
     }
 
+    hparams.is_quarot = false;
+    ml.get_key("quarot.enabled", hparams.is_quarot, false);
+    if (hparams.is_quarot) {
+        LLAMA_LOG_INFO("%s: QuaRot model detected (quarot.enabled=true) - activating online Fast Walsh-Hadamard Transform nodes\n", __func__);
+    }
+
     hparams.rope_type = llama_model_rope_type(this);
 }
 

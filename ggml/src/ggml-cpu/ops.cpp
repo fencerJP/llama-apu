@@ -10229,6 +10229,10 @@ void ggml_compute_forward_unary(
             {
                 ggml_compute_forward_softplus(params, dst);
             } break;
+        case GGML_UNARY_OP_HADAMARD:
+            {
+                ggml_compute_forward_hadamard(params, dst);
+            } break;
         default:
             {
                 GGML_ABORT("fatal error");
