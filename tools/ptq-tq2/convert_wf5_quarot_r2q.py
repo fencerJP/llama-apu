@@ -469,13 +469,15 @@ def convert_to_wf5_gguf(
                 else:
                     w_np = np.frombuffer(raw_bytes, dtype=np.float32).copy()
 
+                is_down_proj = any(k in t_name for k in ["ffn_down", "down_exps", "down_shexp"])
+
                 if n_slices == 1:
                     w_mat = w_np.reshape(n_rows, n_cols)
-                    w_mat_rot = apply_rht_exact(w_mat, block_size=block_size)
-                    X_calib = generate_activations(texts, dim=w_mat_rot.shape[1]) if adamw_steps > 0 else None
+                    w_mat_to_quant = apply_rht_exact(w_mat, block_size=block_size) if is_down_proj else w_mat
+                    X_calib = generate_activations(texts, dim=w_mat_to_quant.shape[1]) if adamw_steps > 0 else None
 
                     tq2_buf = quantize_matrix_to_tq2_0_wf5(
-                        W=w_mat_rot,
+                        W=w_mat_to_quant,
                         X_calib=X_calib,
                         adamw_steps=adamw_steps,
                         adamw_lr=adamw_lr,
@@ -486,9 +488,9 @@ def convert_to_wf5_gguf(
                     w_3d = w_np.reshape(n_slices, n_rows, n_cols)
                     for slice_idx in range(n_slices):
                         w_slice = w_3d[slice_idx]
-                        w_slice_rot = apply_rht_exact(w_slice, block_size=block_size)
+                        w_slice_to_quant = apply_rht_exact(w_slice, block_size=block_size) if is_down_proj else w_slice
                         slice_buf = quantize_matrix_to_tq2_0_wf5(
-                            W=w_slice_rot,
+                            W=w_slice_to_quant,
                             X_calib=None,
                             adamw_steps=0,
                             adamw_lr=adamw_lr,
