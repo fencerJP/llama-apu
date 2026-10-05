@@ -1,0 +1,83 @@
+{
+  "workflow_id": "WF5_QuaRot_R2Q_GraphMod",
+  "model_name": "Gemma-4-31B-it-WF5-QuaRot-R2Q.gguf",
+  "source_path": "/mnt/Scratch/model_testing/Gemma-4-31B-it/Gemma-4-31B-it-WF5-QuaRot-R2Q.gguf",
+  "evaluated_at": "2026-10-05 21:58:20",
+  "questions": {
+    "Q1_EASY": {
+      "success": false,
+      "response": "L que que que que que que que que que que queL que que que que que que que que que que queL que queL queL que que que que que que que que que que queL que que queL queL que que que que queL que que que queL que que que que que que queL queL queLL que que que que queLL que que que que que que queL que que que que que queLLL que que que queL que que que queL queL que que que que que que queL que queL queL que que que que que queL",
+      "raw_output": "\n\nLoading model... \n\n\u2584\u2584 \u2584\u2584\n\u2588\u2588 \u2588\u2588\n\u2588\u2588 \u2588\u2588  \u2580\u2580\u2588\u2584 \u2588\u2588\u2588\u2584\u2588\u2588\u2588\u2584  \u2580\u2580\u2588\u2584    \u2584\u2588\u2588\u2588\u2588 \u2588\u2588\u2588\u2588\u2584 \u2588\u2588\u2588\u2588\u2584\n\u2588\u2588 \u2588\u2588 \u2584\u2588\u2580\u2588\u2588 \u2588\u2588 \u2588\u2588 \u2588\u2588 \u2584\u2588\u2580\u2588\u2588    \u2588\u2588    \u2588\u2588 \u2588\u2588 \u2588\u2588 \u2588\u2588\n\u2588\u2588 \u2588\u2588 \u2580\u2588\u2584\u2588\u2588 \u2588\u2588 \u2588\u2588 \u2588\u2588 \u2580\u2588\u2584\u2588\u2588 \u2588\u2588 \u2580\u2588\u2588\u2588\u2588 \u2588\u2588\u2588\u2588\u2580 \u2588\u2588\u2588\u2588\u2580\n                                    \u2588\u2588    \u2588\u2588\n                                    \u2580\u2580    \u2580\u2580\n\nbuild      : b11189-98394a231\nmodel      : /mnt/Scratch/model_testing/Gemma-4-31B-it/Gemma-4-31B-it-WF5-QuaRot-R2Q.gguf\nftype      : BF16\nmodalities : text\n\navailable commands:\n  /exit or Ctrl+C     stop or exit\n  /regen              regenerate the last response\n  /clear              clear the chat history\n  /read <file>        add a text file\n  /glob <pattern>     add text files using globbing pattern\n\n\n\n> What is the capital of France, and what river runs through it?\nL que que que que que que que que que que queL que que que que que que que que que que queL que queL queL que que que que que que que que que que queL que que queL queL que que que que queL que que que queL que que que que que que queL queL queLL que que que que queLL que que que que que que queL que que que que que queLLL que que que queL que que que queL queL que que que que que que queL que queL queL que que que que que queL\n\n[ Prompt: 15.5 t/s | Generation: 2.2 t/s | Zero-copy handoff: PASS (host memcpy: 0) ]\n\n\nExiting...\n",
+      "latency_sec": 62.02,
+      "prompt_speed_tps": 15.5,
+      "gen_speed_tps": 2.2,
+      "coherent": false,
+      "coherence_reason": "Degenerate repetition loop: 'quel que que'",
+      "keyword_matched": false
+    },
+    "Q2_EASY_MED": {
+      "success": false,
+      "response": "que que que que que que que que que que que que que queL que que que que que que que que queL que que que que que que que queL que que que que que que que que que que que que que que que que que que que que que que que que queL que que que que que que que queL que que que que que queLL que que queL que queLL que que queLL que que queLL que que que que queL que que queLL que queL que que que queL que que que que que que que que que queL que que que",
+      "raw_output": "\n\nLoading model... \n\n\u2584\u2584 \u2584\u2584\n\u2588\u2588 \u2588\u2588\n\u2588\u2588 \u2588\u2588  \u2580\u2580\u2588\u2584 \u2588\u2588\u2588\u2584\u2588\u2588\u2588\u2584  \u2580\u2580\u2588\u2584    \u2584\u2588\u2588\u2588\u2588 \u2588\u2588\u2588\u2588\u2584 \u2588\u2588\u2588\u2588\u2584\n\u2588\u2588 \u2588\u2588 \u2584\u2588\u2580\u2588\u2588 \u2588\u2588 \u2588\u2588 \u2588\u2588 \u2584\u2588\u2580\u2588\u2588    \u2588\u2588    \u2588\u2588 \u2588\u2588 \u2588\u2588 \u2588\u2588\n\u2588\u2588 \u2588\u2588 \u2580\u2588\u2584\u2588\u2588 \u2588\u2588 \u2588\u2588 \u2588\u2588 \u2580\u2588\u2584\u2588\u2588 \u2588\u2588 \u2580\u2588\u2588\u2588\u2588 \u2588\u2588\u2588\u2588\u2580 \u2588\u2588\u2588\u2588\u2580\n                                    \u2588\u2588    \u2588\u2588\n                                    \u2580\u2580    \u2580\u2580\n\nbuild      : b11189-98394a231\nmodel      : /mnt/Scratch/model_testing/Gemma-4-31B-it/Gemma-4-31B-it-WF5-QuaRot-R2Q.gguf\nftype      : BF16\nmodalities : text\n\navailable commands:\n  /exit or Ctrl+C     stop or exit\n  /regen              regenerate the last response\n  /clear              clear the chat history\n  /read <file>        add a text file\n  /glob <pattern>     add text files using globbing pattern\n\n\n\n> If you have 15 pencils and give 4 to your friend and 3 to your sister, how many pencils do you have left?\n que que que que que que que que que que que que que queL que que que que que que que que queL que que que que que que que queL que que que que que que que que que que que que que que que que que que que que que que que que queL que que que que que que que queL que que que que que queLL que que queL que queLL que que queLL que que queLL que que que que queL que que queLL que queL que que que queL que que que que que que que que que queL que que que\n\n[ Prompt: 16.5 t/s | Generation: 2.1 t/s | Zero-copy handoff: PASS (host memcpy: 0) ]\n\n\nExiting...\n",
+      "latency_sec": 66.35,
+      "prompt_speed_tps": 16.5,
+      "gen_speed_tps": 2.1,
+      "coherent": false,
+      "coherence_reason": "Degenerate repetition loop: 'que que quell'",
+      "keyword_matched": false
+    },
+    "Q3_MEDIUM": {
+      "success": false,
+      "response": "que queL que queL que queL que queL que que que que que que queL queL que queL queL que queL que que que queL que que que que que que que que que que que que que que que queLL queL queL que que que que que que que que queL que que que que que que que que queLL queL que queL que que que que queL que que que que queL queL que que que que que queL queL que que que queL que que queL que que que que que que que que que que que que que",
+      "raw_output": "\n\nLoading model... \n\n\u2584\u2584 \u2584\u2584\n\u2588\u2588 \u2588\u2588\n\u2588\u2588 \u2588\u2588  \u2580\u2580\u2588\u2584 \u2588\u2588\u2588\u2584\u2588\u2588\u2588\u2584  \u2580\u2580\u2588\u2584    \u2584\u2588\u2588\u2588\u2588 \u2588\u2588\u2588\u2588\u2584 \u2588\u2588\u2588\u2588\u2584\n\u2588\u2588 \u2588\u2588 \u2584\u2588\u2580\u2588\u2588 \u2588\u2588 \u2588\u2588 \u2588\u2588 \u2584\u2588\u2580\u2588\u2588    \u2588\u2588    \u2588\u2588 \u2588\u2588 \u2588\u2588 \u2588\u2588\n\u2588\u2588 \u2588\u2588 \u2580\u2588\u2584\u2588\u2588 \u2588\u2588 \u2588\u2588 \u2588\u2588 \u2580\u2588\u2584\u2588\u2588 \u2588\u2588 \u2580\u2588\u2588\u2588\u2588 \u2588\u2588\u2588\u2588\u2580 \u2588\u2588\u2588\u2588\u2580\n                                    \u2588\u2588    \u2588\u2588\n                                    \u2580\u2580    \u2580\u2580\n\nbuild      : b11189-98394a231\nmodel      : /mnt/Scratch/model_testing/Gemma-4-31B-it/Gemma-4-31B-it-WF5-QuaRot-R2Q.gguf\nftype      : BF16\nmodalities : text\n\navailable commands:\n  /exit or Ctrl+C     stop or exit\n  /regen              regenerate the last response\n  /clear              clear the chat history\n  /read <file>        add a text file\n  /glob <pattern>     add text files using globbing pattern\n\n\n\n> Write a Python function is_even(n) that returns True if n is an even integer, and False otherwise.\n que queL que queL que queL que queL que que que que que que queL queL que queL queL que queL que que que queL que que que que que que que que que que que que que que que queLL queL queL que que que que que que que que queL que que que que que que que que queLL queL que queL que que que que queL que que que que queL queL que que que que que queL queL que que que queL que que queL que que que que que que que que que que que que que\n\n[ Prompt: 16.0 t/s | Generation: 2.3 t/s | Zero-copy handoff: PASS (host memcpy: 0) ]\n\n\nExiting...\n",
+      "latency_sec": 62.68,
+      "prompt_speed_tps": 16.0,
+      "gen_speed_tps": 2.3,
+      "coherent": false,
+      "coherence_reason": "Degenerate repetition loop: 'quel que que'",
+      "keyword_matched": false
+    },
+    "Q4_MED_HARD": {
+      "success": false,
+      "response": "queL que que que que queL que queL que que que que que que que que que que que queL que que queL que que que que que queL que que que queL que queL que que que que que que que que que que queL que que que queL que queL que que que que que que que queL que que que que que que que que que que queL que que que que que queL que queL que que que que queL que que que queL que que que que que que que queL que que que que que que que queLL queLL que",
+      "raw_output": "\n\nLoading model... \n\n\u2584\u2584 \u2584\u2584\n\u2588\u2588 \u2588\u2588\n\u2588\u2588 \u2588\u2588  \u2580\u2580\u2588\u2584 \u2588\u2588\u2588\u2584\u2588\u2588\u2588\u2584  \u2580\u2580\u2588\u2584    \u2584\u2588\u2588\u2588\u2588 \u2588\u2588\u2588\u2588\u2584 \u2588\u2588\u2588\u2588\u2584\n\u2588\u2588 \u2588\u2588 \u2584\u2588\u2580\u2588\u2588 \u2588\u2588 \u2588\u2588 \u2588\u2588 \u2584\u2588\u2580\u2588\u2588    \u2588\u2588    \u2588\u2588 \u2588\u2588 \u2588\u2588 \u2588\u2588\n\u2588\u2588 \u2588\u2588 \u2580\u2588\u2584\u2588\u2588 \u2588\u2588 \u2588\u2588 \u2588\u2588 \u2580\u2588\u2584\u2588\u2588 \u2588\u2588 \u2580\u2588\u2588\u2588\u2588 \u2588\u2588\u2588\u2588\u2580 \u2588\u2588\u2588\u2588\u2580\n                                    \u2588\u2588    \u2588\u2588\n                                    \u2580\u2580    \u2580\u2580\n\nbuild      : b11189-98394a231\nmodel      : /mnt/Scratch/model_testing/Gemma-4-31B-it/Gemma-4-31B-it-WF5-QuaRot-R2Q.gguf\nftype      : BF16\nmodalities : text\n\navailable commands:\n  /exit or Ctrl+C     stop or exit\n  /regen              regenerate the last response\n  /clear              clear the chat history\n  /read <file>        add a text file\n  /glob <pattern>     add text files using globbing pattern\n\n\n\n> No reptiles have fur. All snakes are reptiles. Can a snake have fur? Answer with YES or NO and a brief explanation.\n queL que que que que queL que queL que que que que que que que que que que que queL que que queL que que que que que queL que que que queL que queL que que que que que que que que que que queL que que que queL que queL que que que que que que que queL que que que que que que que que que que queL que que que que que queL que queL que que que que queL que que que queL que que que que que que que queL que que que que que que que queLL queLL que\n\n[ Prompt: 17.7 t/s | Generation: 2.3 t/s | Zero-copy handoff: PASS (host memcpy: 0) ]\n\n\nExiting...\n",
+      "latency_sec": 60.87,
+      "prompt_speed_tps": 17.7,
+      "gen_speed_tps": 2.3,
+      "coherent": false,
+      "coherence_reason": "Degenerate repetition loop: 'quel que que'",
+      "keyword_matched": false
+    },
+    "Q5_HARD": {
+      "success": false,
+      "response": "que que que que que queL queL que queL que queL que que que que que queLL que que que queL queL que que queL que que que que que queL que queL que queLL queL que queL queL que que que que queL que que que queL que que que que que que que que que que que que que que que que que que que queLLL que que que que que que que queLLL queL que que que que que que que que que que que queL que que que que queLLL que que queL que",
+      "raw_output": "\n\nLoading model... \n\n\u2584\u2584 \u2584\u2584\n\u2588\u2588 \u2588\u2588\n\u2588\u2588 \u2588\u2588  \u2580\u2580\u2588\u2584 \u2588\u2588\u2588\u2584\u2588\u2588\u2588\u2584  \u2580\u2580\u2588\u2584    \u2584\u2588\u2588\u2588\u2588 \u2588\u2588\u2588\u2588\u2584 \u2588\u2588\u2588\u2588\u2584\n\u2588\u2588 \u2588\u2588 \u2584\u2588\u2580\u2588\u2588 \u2588\u2588 \u2588\u2588 \u2588\u2588 \u2584\u2588\u2580\u2588\u2588    \u2588\u2588    \u2588\u2588 \u2588\u2588 \u2588\u2588 \u2588\u2588\n\u2588\u2588 \u2588\u2588 \u2580\u2588\u2584\u2588\u2588 \u2588\u2588 \u2588\u2588 \u2588\u2588 \u2580\u2588\u2584\u2588\u2588 \u2588\u2588 \u2580\u2588\u2588\u2588\u2588 \u2588\u2588\u2588\u2588\u2580 \u2588\u2588\u2588\u2588\u2580\n                                    \u2588\u2588    \u2588\u2588\n                                    \u2580\u2580    \u2580\u2580\n\nbuild      : b11189-98394a231\nmodel      : /mnt/Scratch/model_testing/Gemma-4-31B-it/Gemma-4-31B-it-WF5-QuaRot-R2Q.gguf\nftype      : BF16\nmodalities : text\n\navailable commands:\n  /exit or Ctrl+C     stop or exit\n  /regen              regenerate the last response\n  /clear              clear the chat history\n  /read <file>        add a text file\n  /glob <pattern>     add text files using globbing pattern\n\n\n\n> What is the derivative of f(x) = 3*x^2 + 5*x - 7 with respect to x?\n que que que que que queL queL que queL que queL que que que que que queLL que que que queL queL que que queL que que que que que queL que queL que queLL queL que queL queL que que que que queL que que que queL que que que que que que que que que que que que que que que que que que que queLLL que que que que que que que queLLL queL que que que que que que que que que que que queL que que que que queLLL que que queL que\n\n[ Prompt: 17.8 t/s | Generation: 2.3 t/s | Zero-copy handoff: PASS (host memcpy: 0) ]\n\n\nExiting...\n",
+      "latency_sec": 61.55,
+      "prompt_speed_tps": 17.8,
+      "gen_speed_tps": 2.3,
+      "coherent": false,
+      "coherence_reason": "Degenerate repetition loop: 'quel que que'",
+      "keyword_matched": false
+    },
+    "Q6_FRONTIER": {
+      "success": false,
+      "response": "LL queL que que que que que que que que queLLLL que que que que que queL que que que que que que que que que que que queL que queL que que que queL que queL que que queL que que que que que queL queL que queL queLLL que que queL que que que que queLL que queL que que que que queL que que queLL que que que que que queLL queL que que que que que que que que queL que queL que que que que que queL que que que que que",
+      "raw_output": "\n\nLoading model... \n\n\u2584\u2584 \u2584\u2584\n\u2588\u2588 \u2588\u2588\n\u2588\u2588 \u2588\u2588  \u2580\u2580\u2588\u2584 \u2588\u2588\u2588\u2584\u2588\u2588\u2588\u2584  \u2580\u2580\u2588\u2584    \u2584\u2588\u2588\u2588\u2588 \u2588\u2588\u2588\u2588\u2584 \u2588\u2588\u2588\u2588\u2584\n\u2588\u2588 \u2588\u2588 \u2584\u2588\u2580\u2588\u2588 \u2588\u2588 \u2588\u2588 \u2588\u2588 \u2584\u2588\u2580\u2588\u2588    \u2588\u2588    \u2588\u2588 \u2588\u2588 \u2588\u2588 \u2588\u2588\n\u2588\u2588 \u2588\u2588 \u2580\u2588\u2584\u2588\u2588 \u2588\u2588 \u2588\u2588 \u2588\u2588 \u2580\u2588\u2584\u2588\u2588 \u2588\u2588 \u2580\u2588\u2588\u2588\u2588 \u2588\u2588\u2588\u2588\u2580 \u2588\u2588\u2588\u2588\u2580\n                                    \u2588\u2588    \u2588\u2588\n                                    \u2580\u2580    \u2580\u2580\n\nbuild      : b11189-98394a231\nmodel      : /mnt/Scratch/model_testing/Gemma-4-31B-it/Gemma-4-31B-it-WF5-QuaRot-R2Q.gguf\nftype      : BF16\nmodalities : text\n\navailable commands:\n  /exit or Ctrl+C     stop or exit\n  /regen              regenerate the last response\n  /clear              clear the chat history\n  /read <file>        add a text file\n  /glob <pattern>     add text files using globbing pattern\n\n\n\n> Explain what the Byzantine Generals Problem is in distributed consensus and how many faulty nodes a system of N nodes can tolerate.\nLL queL que que que que que que que que queLLLL que que que que que queL que que que que que que que que que que que queL que queL que que que queL que queL que que queL que que que que que queL queL que queL queLLL que que queL que que que que queLL que queL que que que que queL que que queLL que que que que que queLL queL que que que que que que que que queL que queL que que que que que queL que que que que que\n\n[ Prompt: 17.2 t/s | Generation: 2.3 t/s | Zero-copy handoff: PASS (host memcpy: 0) ]\n\n\nExiting...\n",
+      "latency_sec": 60.95,
+      "prompt_speed_tps": 17.2,
+      "gen_speed_tps": 2.3,
+      "coherent": false,
+      "coherence_reason": "Degenerate repetition loop: 'que quel que'",
+      "keyword_matched": false
+    }
+  },
+  "summary": {
+    "total_questions": 6,
+    "passed_questions": 0,
+    "pass_rate_pct": 0.0,
+    "avg_gen_speed_tps": 2.25,
+    "avg_prompt_speed_tps": 16.78,
+    "ppl_score": null,
+    "overall_status": "COLLAPSED_FAIL"
+  }
+}
