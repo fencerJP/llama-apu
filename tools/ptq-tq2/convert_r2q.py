@@ -22,6 +22,7 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 import numpy as np
+import scipy.linalg
 
 REPO_ROOT = Path(__file__).resolve().parent.parent.parent
 PTQ_DIR = REPO_ROOT / "tools" / "ptq-tq2"
@@ -29,6 +30,33 @@ sys.path.append(str(PTQ_DIR))
 
 import gguf
 from r2q_engine import quantize_matrix_to_tq2_0_r2q
+
+# Precompute standard normalized Hadamard matrix for block size 256
+_H256 = scipy.linalg.hadamard(256).astype(np.float32) / np.sqrt(256.0)
+
+def apply_rht_exact(W: np.ndarray, block_size: int = 256) -> np.ndarray:
+    """
+    Applies Randomized Hadamard Transform (RHT) along the inner block dimension.
+    W has shape (rows, cols) where cols % block_size == 0.
+    Rotates each block of 256 elements orthogonally: W_rot = W @ H_rot^T
+    Preserves Frobenius norm (||W_rot||_F == ||W||_F) while redistributing
+    channel outliers and suppressing kurtosis from >100 down to sub-Gaussian levels.
+    """
+    if block_size != 256:
+        H = scipy.linalg.hadamard(block_size).astype(np.float32) / np.sqrt(float(block_size))
+    else:
+        H = _H256
+
+    rows, cols = W.shape
+    if cols % block_size != 0:
+        return W
+
+    # Fast block-wise orthogonal multiplication along cols:
+    # Reshape (rows, n_blocks, block_size) -> multiply -> reshape back
+    n_blocks = cols // block_size
+    W_blocks = W.reshape(rows, n_blocks, block_size)
+    W_rot = np.matmul(W_blocks, H.T)
+    return W_rot.reshape(rows, cols)
 
 DEFAULT_CORPUS = Path.home() / "databank" / "distill" / "distill_corpus.jsonl"
 DEFAULT_SAMPLES = Path.home() / "databank" / "distill" / "calibration_samples.txt"
@@ -76,7 +104,7 @@ def convert_to_r2q_gguf(
     dad_lr: float = 1e-2,
     block_size: int = 256
 ):
-    print(f"=== Converting {src_base_gguf.name} -> {dst_r2q_gguf.name} via R2Q Workflow ===")
+    print(f"=== Converting {src_base_gguf.name} -> {dst_r2q_gguf.name} via QuaRot-R2Q Workflow (WF4) ===")
     t_start = time.time()
     
     # Load calibration texts
@@ -154,7 +182,7 @@ def convert_to_r2q_gguf(
     sensitive_keywords = ["attn_v", "attn_qkv", "ssm_conv1d", "ple_conv1d", "token_embd", "output.weight", "indexer", "ffn_gate_inp"]
     
     total_tensors = len(reader.tensors)
-    print(f"[*] Processing {total_tensors} tensors with R2Q quantization...", flush=True)
+    print(f"[*] Processing {total_tensors} tensors with QuaRot-R2Q (RHT + R2Q)...", flush=True)
     
     # 2-Pass Streaming GGUF Conversion:
     # Pass 1: Plan tensor layouts and register metadata + tensor info headers without buffering weights in RAM.
@@ -219,7 +247,7 @@ def convert_to_r2q_gguf(
                 size_mb = t.data.nbytes / (1024**2)
                 t_t0 = time.time()
                 dim_str = f"{n_rows}x{n_cols}" if n_slices == 1 else f"{n_slices}x{n_rows}x{n_cols}"
-                print(f"    [{idx}/{total_tensors}] Quantizing {t_name} ({dim_str}, {size_mb:.1f} MB)...", flush=True)
+                print(f"    [{idx}/{total_tensors}] Quantizing {t_name} with RHT+R2Q ({dim_str}, {size_mb:.1f} MB)...", flush=True)
                 raw_bytes = f_src.read(t.data.nbytes)
                 if t.tensor_type == gguf.GGMLQuantizationType.F32:
                     w_np = np.frombuffer(raw_bytes, dtype=np.float32).copy()
@@ -234,10 +262,12 @@ def convert_to_r2q_gguf(
 
                 if n_slices == 1:
                     w_mat = w_np.reshape(n_rows, n_cols)
-                    X_calib = generate_activations(texts, dim=w_mat.shape[1]) if dad_steps > 0 else None
+                    # Pre-rotate matrix via Randomized Hadamard Transform (RHT) to diffuse channel spikes
+                    w_mat_rot = apply_rht_exact(w_mat, block_size=block_size)
+                    X_calib = generate_activations(texts, dim=w_mat_rot.shape[1]) if dad_steps > 0 else None
 
                     tq2_buf = quantize_matrix_to_tq2_0_r2q(
-                        W=w_mat,
+                        W=w_mat_rot,
                         X_calib=X_calib,
                         dad_steps=dad_steps,
                         dad_lr=dad_lr,
@@ -248,8 +278,9 @@ def convert_to_r2q_gguf(
                     w_3d = w_np.reshape(n_slices, n_rows, n_cols)
                     for slice_idx in range(n_slices):
                         w_slice = w_3d[slice_idx]
+                        w_slice_rot = apply_rht_exact(w_slice, block_size=block_size)
                         slice_buf = quantize_matrix_to_tq2_0_r2q(
-                            W=w_slice,
+                            W=w_slice_rot,
                             X_calib=None,
                             dad_steps=0,
                             dad_lr=dad_lr,
@@ -284,7 +315,7 @@ def convert_to_r2q_gguf(
     
     total_time = time.time() - t_start
     out_size_mb = os.path.getsize(dst_r2q_gguf) / (1024**2)
-    print(f"[+] Successfully converted to R2Q GGUF in {total_time:.2f}s!", flush=True)
+    print(f"[+] Successfully converted to QuaRot-R2Q GGUF in {total_time:.2f}s!", flush=True)
     print(f"[+] Output: {dst_r2q_gguf} ({out_size_mb:.2f} MiB)", flush=True)
 
 MODELS_DIR = Path("/mnt/Media/Downloads/model_testing")
@@ -309,13 +340,13 @@ def convert_model_r2q(model_name: str, dad_steps: int = 15, dad_lr: float = 1e-2
     source_bf16 = source_model_dir / f"{model_name}-BF16.gguf"
     work_bf16 = work_dir / f"{model_name}-BF16.gguf"
     
-    source_r2q = source_model_dir / f"{model_name}-R2Q.gguf"
-    work_r2q = work_dir / f"{model_name}-R2Q.gguf"
+    source_quarot = source_model_dir / f"{model_name}-QuaRot-R2Q.gguf"
+    work_quarot = work_dir / f"{model_name}-QuaRot-R2Q.gguf"
     
-    if source_r2q.exists() or work_r2q.exists():
-        print(f"[*] Found existing R2Q GGUF for {model_name}, ensuring synced to persistent storage...", flush=True)
-        if work_r2q.exists() and not source_r2q.exists():
-            subprocess.run(["rsync", "-av", str(work_r2q), str(source_r2q)])
+    if source_quarot.exists() or work_quarot.exists():
+        print(f"[*] Found existing QuaRot-R2Q GGUF for {model_name}, ensuring synced to persistent storage...", flush=True)
+        if work_quarot.exists() and not source_quarot.exists():
+            subprocess.run(["rsync", "-av", str(work_quarot), str(source_quarot)])
         return True
 
     if not work_bf16.exists():
@@ -327,27 +358,27 @@ def convert_model_r2q(model_name: str, dad_steps: int = 15, dad_lr: float = 1e-2
             return False
 
     print(f"\n=======================================================", flush=True)
-    print(f"  PROCESSING MODEL (R2Q Workflow): {model_name}", flush=True)
+    print(f"  PROCESSING MODEL (QuaRot-R2Q Workflow 4): {model_name}", flush=True)
     print(f"=======================================================", flush=True)
 
     convert_to_r2q_gguf(
         src_base_gguf=work_bf16,
-        dst_r2q_gguf=work_r2q,
+        dst_r2q_gguf=work_quarot,
         dad_steps=dad_steps,
         dad_lr=dad_lr
     )
     
-    if work_r2q.exists():
-        print(f"[*] Syncing R2Q GGUF back to persistent storage ({source_r2q})...", flush=True)
-        subprocess.run(["rsync", "-av", str(work_r2q), str(source_r2q)])
+    if work_quarot.exists():
+        print(f"[*] Syncing QuaRot-R2Q GGUF back to persistent storage ({source_quarot})...", flush=True)
+        subprocess.run(["rsync", "-av", str(work_quarot), str(source_quarot)])
         return True
     return False
 
 def main():
-    parser = argparse.ArgumentParser(description="Convert model to R2Q 2.06 bpw GGUF")
+    parser = argparse.ArgumentParser(description="Convert model to QuaRot-R2Q 2.06 bpw GGUF")
     parser.add_argument("--model", type=str, default=None, help="Model name or 'all'")
     parser.add_argument("--src", type=str, default=None, help="Path to base BF16/FP16 GGUF")
-    parser.add_argument("--dst", type=str, default=None, help="Path to output R2Q GGUF")
+    parser.add_argument("--dst", type=str, default=None, help="Path to output QuaRot-R2Q GGUF")
     parser.add_argument("--corpus", type=str, default=str(DEFAULT_CORPUS), help="Path to calibration corpus")
     parser.add_argument("--dad-steps", type=int, default=15, help="Number of DAD distillation steps")
     parser.add_argument("--dad-lr", type=float, default=1e-2, help="Learning rate for DAD")
@@ -360,7 +391,7 @@ def main():
             ok = convert_model_r2q(m, dad_steps=args.dad_steps, dad_lr=args.dad_lr)
             results[m] = "SUCCESS" if ok else "FAILED"
         print("\n=======================================================", flush=True)
-        print("  WORKFLOW 2 (R2Q) BATCH CONVERSION SUMMARY", flush=True)
+        print("  WORKFLOW 4 (QuaRot-R2Q) BATCH CONVERSION SUMMARY", flush=True)
         print("=======================================================", flush=True)
         for m, status in results.items():
             print(f"  - {m}: {status}", flush=True)
