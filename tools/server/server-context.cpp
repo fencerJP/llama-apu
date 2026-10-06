@@ -3180,6 +3180,16 @@ private:
         int32_t n_batch  = llama_n_batch(ctx_tgt);
         int32_t n_ubatch = llama_n_ubatch(ctx_tgt);
 
+        // Phase 9 Microsoft-method enforcement (microsoft/sarathi-serve, OSDI'24):
+        // "Sarathi never schedules more than chunk_size tokens in one iteration."
+        // When stall-free is enabled, one iteration's total token budget is
+        // sarathi_token_budget (tau). Decode tokens were charged to the batch
+        // above (decodes-first); the prompt-fill loop below only consumes the
+        // remainder, so no unchunked prefill can leak past the scheduler.
+        const int32_t n_batch_eff = params_base.apu.sarathi_stall_free
+            ? std::min<int32_t>(n_batch, (int32_t) params_base.apu.sarathi_token_budget)
+            : n_batch;
+
         auto & alora_scale       = batch.alora_scale;
         auto & alora_disabled_id = batch.alora_disabled_id;
 
@@ -3188,7 +3198,7 @@ private:
             bool add_ok = true; // false means the batch is full, skip remaining slots
 
             iterate(slots, [&](server_slot & slot) {
-                if (!add_ok || batch.size() >= n_batch) {
+                if (!add_ok || batch.size() >= n_batch_eff) {
                     return; // batch is full, skip remaining slots
                 }
 
@@ -3597,7 +3607,7 @@ private:
                     const auto last_user_pos = spans.last_user_message_pos();
 
                     // add prompt tokens for processing in the current batch
-                    while (slot.prompt.n_tokens() < slot.task->n_tokens() && batch.size() < n_batch) {
+                    while (slot.prompt.n_tokens() < slot.task->n_tokens() && batch.size() < n_batch_eff) {
                         // get next token to process
                         llama_token cur_tok = input_tokens[slot.prompt.n_tokens()];
                         if (cur_tok == LLAMA_TOKEN_NULL) {
