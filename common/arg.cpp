@@ -2977,7 +2977,7 @@ common_params_context common_params_parser_init(common_params & params, llama_ex
     ).set_spec().set_examples({LLAMA_EXAMPLE_SPECULATIVE, LLAMA_EXAMPLE_SERVER, LLAMA_EXAMPLE_CLI}).set_env("LLAMA_ARG_SPEC_TIMELINE_SYNC"));
     add_opt(common_arg(
         {"--token-budget"}, "N",
-        "APU Sarathi-Serve max tokens per hybrid batch iteration tau (default: 512)\n"
+        "APU Sarathi-Serve max tokens per hybrid batch iteration tau (default: 256)\n"
         "caps prefill chunk + decode coalescing per iteration",
         [](common_params & params, int value) {
             if (value < 64 || value > 8192) {
@@ -2988,7 +2988,7 @@ common_params_context common_params_parser_init(common_params & params, llama_ex
     ).set_examples({LLAMA_EXAMPLE_SERVER, LLAMA_EXAMPLE_CLI}).set_env("LLAMA_ARG_TOKEN_BUDGET"));
     add_opt(common_arg(
         {"--sarathi-chunk-size"}, "N",
-        "APU Sarathi-Serve target prefill chunk size in tokens (default: 256, auto-aligned to 64/128)\n"
+        "APU Sarathi-Serve target prefill chunk size in tokens (default: 64, auto-aligned to 64/128)\n"
         "note: named --sarathi-chunk-size to avoid collision with retrieval --chunk-size",
         [](common_params & params, int value) {
             if (value < 16 || value > 4096) {
@@ -3019,19 +3019,14 @@ common_params_context common_params_parser_init(common_params & params, llama_ex
         }
     ).set_examples({LLAMA_EXAMPLE_SERVER, LLAMA_EXAMPLE_CLI}).set_env("LLAMA_ARG_MIN_PREFILL_RESERVE"));
     add_opt(common_arg(
-        {"--enable-stall-free"},
-        "enable APU Sarathi-Serve coalesced hybrid micro-batching (default: on)",
-        [](common_params & params) {
-            params.apu.sarathi_stall_free = true;
-        }
-    ).set_examples({LLAMA_EXAMPLE_SERVER, LLAMA_EXAMPLE_CLI}).set_env("LLAMA_ARG_ENABLE_STALL_FREE"));
-    add_opt(common_arg(
+        {"--stall-free"},
         {"--no-stall-free"},
-        "fallback to standard greedy batching (disables Sarathi-Serve)",
-        [](common_params & params) {
-            params.apu.sarathi_stall_free = false;
+        string_format("APU Sarathi-Serve coalesced hybrid micro-batching (default: %s)\n"
+                      "--no-stall-free falls back to standard greedy batching", params.apu.sarathi_stall_free ? "on" : "off"),
+        [](common_params & params, bool value) {
+            params.apu.sarathi_stall_free = value;
         }
-    ).set_examples({LLAMA_EXAMPLE_SERVER, LLAMA_EXAMPLE_CLI}).set_env("LLAMA_ARG_NO_STALL_FREE"));
+    ).set_examples({LLAMA_EXAMPLE_SERVER, LLAMA_EXAMPLE_CLI}).set_env("LLAMA_ARG_STALL_FREE"));
     add_opt(common_arg(
         {"--numa"}, "TYPE",
         "attempt optimizations that help on some NUMA systems\n"
