@@ -10,6 +10,9 @@
 #include <stdbool.h>
 
 #define LLAMA_APU_MAX_BATCH_SLOTS 64
+// Slot pool tracked by the scheduler context (may exceed one batch's slots,
+// since pending IDLE/queued requests must be tracked for admission too).
+#define LLAMA_APU_MAX_SCHED_SLOTS  256
 
 // Explicit Slot Lifecycle States
 typedef enum {

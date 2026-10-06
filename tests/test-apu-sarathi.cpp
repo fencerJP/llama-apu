@@ -1,5 +1,9 @@
 // SPDX-License-Identifier: Apache-2.0
 // llama-apu: Phase 9 Sarathi-Serve scheduler unit tests
+#ifdef NDEBUG
+#undef NDEBUG
+#endif
+
 #include "llama-apu-scheduler.h"
 
 #include <cassert>

@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
 // llama-apu: Phase 9 Sarathi-Serve scheduler core (4-tier, LIFP, EMA)
 #include "llama-apu-scheduler.h"
+#include "llama-apu-dispatch.h"
 
 #include <algorithm>
 #include <cstdlib>
@@ -108,7 +109,7 @@ int llama_apu_sched_upsert_slot(llama_apu_sched_ctx_t * ctx, const llama_apu_slo
     std::lock_guard<std::mutex> lock(ctx->mutex_);
     auto it = ctx->slots.find(slot->slot_id);
     if (it == ctx->slots.end()) {
-        if (ctx->slots.size() >= LLAMA_APU_MAX_BATCH_SLOTS) return LLAMA_APU_ERR_OOM;
+        if (ctx->slots.size() >= LLAMA_APU_MAX_SCHED_SLOTS) return LLAMA_APU_ERR_OOM;
         llama_apu_sched_entry e;
         e.slot = *slot;
         e.seq = ctx->next_seq++;
@@ -275,14 +276,15 @@ int llama_apu_submit_hybrid_batch(
     struct llama_apu_gpu_ctx_t * /*gpu_ctx*/,
     struct llama_apu_npu_ctx_t * /*npu_ctx*/,
     const llama_apu_batch_t * batch,
-    uint64_t /*signal_point*/,
-    uint64_t /*wait_point*/) {
+    uint64_t signal_point,
+    uint64_t wait_point) {
     if (!batch) return LLAMA_APU_ERR_INVALID_SLOT;
     if (batch->num_decode_slots > LLAMA_APU_MAX_BATCH_SLOTS) return LLAMA_APU_ERR_INVALID_SLOT;
     if (batch->num_prefill_chunks > LLAMA_APU_MAX_BATCH_SLOTS) return LLAMA_APU_ERR_INVALID_SLOT;
-    // Graceful CPU fallback: validate only. Real iGPU/NPU dispatch lands with
-    // DRM syncobj timeline integration once §9.2 dispatch thread is wired.
-    return LLAMA_APU_SUCCESS;
+    // §9.2: route through the single-producer dispatch sequencer. On hosts
+    // without /dev/dri the shared context degrades to validated CPU fallback.
+    if (signal_point == 0) return LLAMA_APU_ERR_INVALID_SLOT;
+    return llama_apu_dispatch_submit_shared(batch, signal_point, wait_point);
 }
 
 uint32_t llama_apu_suggest_budget_for_tbt(float tbt_slo_ms, uint32_t active_experts) {

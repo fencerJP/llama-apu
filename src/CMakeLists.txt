@@ -49,6 +49,7 @@ set(LLAMA_CORE_SOURCES
     ggml-apu-xclbin.cpp
     ggml-apu-convert.cpp
     llama-apu-scheduler.cpp
+    llama-apu-dispatch.cpp
 )
 
 add_library(llama
