@@ -502,6 +502,12 @@ struct common_params {
         bool        no_router_sram       = false;  // --no-router-sram
         std::string spec_draft_apu       = "auto"; // --spec-draft-apu {auto,on,off}
         bool        spec_timeline_sync   = true;   // --spec-timeline-sync {on,off}
+        // Phase 9 Sarathi-Serve stall-free scheduling (§9.5 CLI controls)
+        uint32_t    sarathi_token_budget = 256;   // --token-budget <N> (tau)
+        uint32_t    sarathi_chunk_size   = 64;    // --sarathi-chunk-size <N> (auto-aligned 64/128)
+        float       sarathi_tbt_slo_ms   = 100.0f; // --tbt-slo-ms <float>
+        uint32_t    sarathi_min_prefill  = 64;    // --min-prefill-reserve <N>
+        bool        sarathi_stall_free   = true;   // --stall-free / --no-stall-free (default: on)
     } apu;
 
     common_cpu_params cpuparams;

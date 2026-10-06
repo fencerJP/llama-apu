@@ -17,6 +17,8 @@
 #include "mtmd.h"
 #include "mtmd-helper.h"
 
+#include "llama-apu-scheduler.h"
+
 #include <algorithm>
 #include <cstddef>
 #include <cinttypes>
@@ -885,6 +887,11 @@ private:
 
     server_batch batch;
 
+    // Phase 9 Sarathi-Serve scheduler context (advisory mirror in this milestone;
+    // authoritative batching still flows through pre_decode/update_slots below)
+    llama_apu_sched_ctx_t * sched_ctx = nullptr;
+    uint64_t sched_timeline_point = 0;
+
     llama_model   * model_dft = nullptr;
     llama_context * ctx_dft   = nullptr;
 
@@ -936,6 +943,10 @@ private:
     int64_t t_last_load_progress_ms = 0;
 
     void destroy() {
+        if (sched_ctx) {
+            llama_apu_sched_ctx_free(sched_ctx);
+            sched_ctx = nullptr;
+        }
         spec.reset();
         spec_init.reset();
 
@@ -1416,6 +1427,26 @@ private:
         });
 
         metrics.init();
+
+        // Phase 9 Sarathi-Serve scheduler init (advisory mirror)
+        {
+            llama_apu_scheduler_config_t scfg{};
+            scfg.token_budget      = params_base.apu.sarathi_token_budget;
+            scfg.chunk_size        = params_base.apu.sarathi_chunk_size;
+            scfg.chunk_alignment   = 64;
+            scfg.min_prefill_reserve = params_base.apu.sarathi_min_prefill;
+            scfg.tbt_slo_ms        = params_base.apu.sarathi_tbt_slo_ms;
+            scfg.enable_stall_free = params_base.apu.sarathi_stall_free;
+            if (sched_ctx) {
+                llama_apu_sched_ctx_free(sched_ctx);
+            }
+            sched_ctx = llama_apu_sched_ctx_init(&scfg);
+            sched_timeline_point = 0;
+            if (sched_ctx && params_base.apu.sarathi_stall_free) {
+                SRV_INF("sarathi: stall-free scheduler active (tau=%u, chunk=%u, reserve=%u, tbt_slo=%.1fms)\n",
+                        scfg.token_budget, scfg.chunk_size, scfg.min_prefill_reserve, (double) scfg.tbt_slo_ms);
+            }
+        }
 
         if (params_base.cache_idle_slots) {
             if (params_base.cache_ram_mib == 0) {
@@ -2791,6 +2822,51 @@ private:
 #endif
 
     void update_slots() {
+        // Phase 9 Sarathi-Serve advisory mirror: reflect server slots into the
+        // iteration-level scheduler and validate the hybrid batch (authoritative
+        // batching still flows through pre_decode() below in this milestone).
+        if (sched_ctx && params_base.apu.sarathi_stall_free) {
+            for (auto & slot : slots) {
+                llama_apu_slot_t s{};
+                s.slot_id = (uint32_t) slot.id;
+                s.request_id = (uint32_t) slot.id;
+                uint32_t total = 0;
+                uint32_t done = (uint32_t) slot.prompt.n_tokens();
+                if (slot.task) {
+                    total = (uint32_t) slot.task->n_tokens();
+                }
+                s.prompt_tokens_total = total;
+                s.prompt_tokens_processed = std::min(done, total);
+                s.generated_tokens_count = (uint32_t) slot.generated_tokens.size();
+                switch (slot.state) {
+                    case SLOT_STATE_GENERATING:
+                    case SLOT_STATE_DONE_PROMPT:
+                        s.state = LLAMA_APU_SLOT_STATE_GENERATING;
+                        break;
+                    case SLOT_STATE_PROCESSING_PROMPT:
+                    case SLOT_STATE_STARTED:
+                        s.state = LLAMA_APU_SLOT_STATE_PREFILL_CHUNK;
+                        break;
+                    default:
+                        if (total > s.prompt_tokens_processed) {
+                            s.state = LLAMA_APU_SLOT_STATE_IDLE;
+                        } else {
+                            s.state = LLAMA_APU_SLOT_STATE_FINISHED;
+                        }
+                        break;
+                }
+                llama_apu_sched_upsert_slot(sched_ctx, &s);
+            }
+            llama_apu_batch_t abatch{};
+            if (llama_apu_schedule_next_batch(sched_ctx, &abatch) == LLAMA_APU_SUCCESS) {
+                sched_timeline_point++;
+                llama_apu_submit_hybrid_batch(nullptr, nullptr, &abatch,
+                        sched_timeline_point, sched_timeline_point);
+                SRV_TRC("sarathi advisory batch: dec=%u prefill_chunks=%u tokens=%u (tau_eff=%u)\n",
+                        abatch.num_decode_slots, abatch.num_prefill_chunks, abatch.total_batch_tokens,
+                        0u);
+            }
+        }
 #ifdef DEBUG_TIMINGS
         static int64_t t_prev = 0;
         int64_t t_start = ggml_time_us();
@@ -3104,6 +3180,25 @@ private:
         int32_t n_batch  = llama_n_batch(ctx_tgt);
         int32_t n_ubatch = llama_n_ubatch(ctx_tgt);
 
+        // Phase 9 Microsoft-method enforcement (microsoft/sarathi-serve, OSDI'24):
+        // "Sarathi never schedules more than chunk_size tokens in one iteration."
+        // When stall-free is enabled, one iteration's total token budget is
+        // sarathi_token_budget (tau). Decode tokens were charged to the batch
+        // above (decodes-first); the prompt-fill loop below only consumes the
+        // remainder, so no unchunked prefill can leak past the scheduler.
+        const int32_t n_batch_eff = params_base.apu.sarathi_stall_free
+            ? std::min<int32_t>(n_batch, (int32_t) params_base.apu.sarathi_token_budget)
+            : n_batch;
+        // Prefill share cap: --sarathi-chunk-size bounds the prompt tokens ONE
+        // iteration may add on top of the decodes already charged above
+        // (decodes + <=chunk_size prefill <= tau). Without this, --sarathi-chunk-size
+        // is dead config and every prefill iteration stuffs tau-decodes prompt
+        // tokens in at once (measured p99 TBT scaled linearly with tau).
+        const int32_t n_fill_cap = params_base.apu.sarathi_stall_free
+            ? std::min<int32_t>(n_batch_eff,
+                                (int32_t) batch.size() + (int32_t) params_base.apu.sarathi_chunk_size)
+            : n_batch_eff;
+
         auto & alora_scale       = batch.alora_scale;
         auto & alora_disabled_id = batch.alora_disabled_id;
 
@@ -3112,7 +3207,7 @@ private:
             bool add_ok = true; // false means the batch is full, skip remaining slots
 
             iterate(slots, [&](server_slot & slot) {
-                if (!add_ok || batch.size() >= n_batch) {
+                if (!add_ok || batch.size() >= n_fill_cap) {
                     return; // batch is full, skip remaining slots
                 }
 
@@ -3521,7 +3616,7 @@ private:
                     const auto last_user_pos = spans.last_user_message_pos();
 
                     // add prompt tokens for processing in the current batch
-                    while (slot.prompt.n_tokens() < slot.task->n_tokens() && batch.size() < n_batch) {
+                    while (slot.prompt.n_tokens() < slot.task->n_tokens() && batch.size() < n_fill_cap) {
                         // get next token to process
                         llama_token cur_tok = input_tokens[slot.prompt.n_tokens()];
                         if (cur_tok == LLAMA_TOKEN_NULL) {

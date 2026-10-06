@@ -8,6 +8,11 @@
 #include <cstdio>
 #include <cmath>
 #include <sstream>
+#include <atomic>
+#include <cstdlib>
+#include <mutex>
+#include <new>
+#include <vector>
 
 extern "C" {
 
@@ -178,4 +183,196 @@ const char * apu_kv_mode_to_string(apu_kv_mode_t mode) {
         case APU_KV_MODE_AUTO:
         default:               return "auto";
     }
+}
+
+// ---------------------------------------------------------------------------
+// Phase 9 §9.3: Decoupled Q4_0 KV layout (W_kv / S_kv)
+//
+// Packed block_q4_0 (ggml-common.h): { ggml_half d; uint8_t qs[16]; } = 18B.
+// The 18B stride violates the 16B AIE2P Tile DMA beat, so the nibble and
+// scale streams are split into two independently 16-byte-aligned buffers.
+// ---------------------------------------------------------------------------
+
+static constexpr uint32_t APU_Q4_0_BITS      = 4;
+static constexpr uint32_t APU_Q4_0_BLK       = 32;   // QK4_0
+static constexpr uint32_t APU_Q4_0_W_BYTES   = 16;   // 32 * 4bit
+static constexpr uint32_t APU_Q4_0_S_BYTES   = 2;    // ggml_half
+static constexpr uint32_t APU_Q4_0_PACKED    = 18;   // 2 + 16
+
+uint32_t apu_kv_decoupled_nblocks(uint32_t n_elements) {
+    if (n_elements == 0 || n_elements % APU_Q4_0_BLK != 0) return 0;
+    return n_elements / APU_Q4_0_BLK;
+}
+
+size_t apu_kv_decoupled_w_bytes(uint32_t n_elements) {
+    return (size_t) apu_kv_decoupled_nblocks(n_elements) * APU_Q4_0_W_BYTES;
+}
+
+size_t apu_kv_decoupled_s_bytes(uint32_t n_elements) {
+    return (size_t) apu_kv_decoupled_nblocks(n_elements) * APU_Q4_0_S_BYTES;
+}
+
+bool apu_kv_decoupled_split(const void * packed, uint32_t n_elements,
+                            void * w_kv, void * s_kv) {
+    const uint32_t nb = apu_kv_decoupled_nblocks(n_elements);
+    if (!nb || !packed || !w_kv || !s_kv) return false;
+    if ((uintptr_t) w_kv % 16 != 0 || (uintptr_t) s_kv % 16 != 0) return false;
+
+    const uint8_t * src = (const uint8_t *) packed;
+    uint8_t * w = (uint8_t *) w_kv;
+    uint8_t * s = (uint8_t *) s_kv;
+    for (uint32_t b = 0; b < nb; ++b) {
+        const uint8_t * blk = src + (size_t) b * APU_Q4_0_PACKED;
+        memcpy(s + (size_t) b * APU_Q4_0_S_BYTES, blk,                APU_Q4_0_S_BYTES); // d
+        memcpy(w + (size_t) b * APU_Q4_0_W_BYTES, blk + APU_Q4_0_S_BYTES, APU_Q4_0_W_BYTES); // qs
+    }
+    return true;
+}
+
+bool apu_kv_decoupled_merge(const void * w_kv, const void * s_kv,
+                            uint32_t n_elements, void * packed_out) {
+    const uint32_t nb = apu_kv_decoupled_nblocks(n_elements);
+    if (!nb || !w_kv || !s_kv || !packed_out) return false;
+    if ((uintptr_t) w_kv % 16 != 0 || (uintptr_t) s_kv % 16 != 0) return false;
+
+    const uint8_t * w = (const uint8_t *) w_kv;
+    const uint8_t * s = (const uint8_t *) s_kv;
+    uint8_t * dst = (uint8_t *) packed_out;
+    for (uint32_t b = 0; b < nb; ++b) {
+        uint8_t * blk = dst + (size_t) b * APU_Q4_0_PACKED;
+        memcpy(blk,                s + (size_t) b * APU_Q4_0_S_BYTES, APU_Q4_0_S_BYTES);
+        memcpy(blk + APU_Q4_0_S_BYTES, w + (size_t) b * APU_Q4_0_W_BYTES, APU_Q4_0_W_BYTES);
+    }
+    return true;
+}
+
+bool apu_kv_decoupled_parity(const void * packed, uint32_t n_elements) {
+    const uint32_t nb = apu_kv_decoupled_nblocks(n_elements);
+    if (!nb || !packed) return false;
+
+    const size_t w_bytes = (size_t) nb * APU_Q4_0_W_BYTES;
+    const size_t s_bytes = (size_t) nb * APU_Q4_0_S_BYTES;
+    const size_t packed_bytes = (size_t) nb * APU_Q4_0_PACKED;
+
+    // 16-byte aligned scratch (stack buffers are 16B aligned via alignas)
+    alignas(16) uint8_t w[16];       // grow via heap for large n
+    alignas(16) uint8_t s[16];
+    std::vector<uint8_t> wbuf(w_bytes ? w_bytes : 16, 0);
+    std::vector<uint8_t> sbuf(s_bytes ? s_bytes : 16, 0);
+    std::vector<uint8_t> roundtrip(packed_bytes, 0);
+    (void) w; (void) s;
+    // vector data of size >= 16 is 16B aligned for these small allocations
+    // (malloc guarantees max_align_t = 16B on x86-64 glibc).
+    if (!apu_kv_decoupled_split(packed, n_elements, wbuf.data(), sbuf.data())) return false;
+    if (!apu_kv_decoupled_merge(wbuf.data(), sbuf.data(), n_elements, roundtrip.data())) return false;
+    return memcmp(packed, roundtrip.data(), packed_bytes) == 0;
+}
+
+void apu_kv_decoupled_dequant(const void * w_block, const void * s_scale,
+                              float * out32) {
+    if (!w_block || !s_scale || !out32) return;
+    ggml_fp16_t d16;
+    memcpy(&d16, s_scale, sizeof(d16));
+    const float d = ggml_fp16_to_fp32(d16);
+    const uint8_t * qs = (const uint8_t *) w_block;
+    for (uint32_t i = 0; i < APU_Q4_0_BLK; ++i) {
+        const uint8_t byte = qs[i / 2];
+        const uint8_t q = (i % 2 == 0) ? (byte & 0x0F) : (byte >> 4);
+        out32[i] = ((int32_t) q - 8) * d;   // Q4_0 reference: x = (q - 8) * d
+    }
+}
+
+bool apu_kv_fill_npu_block_table(llama_apu_npu_block_t * out,
+                                 uint32_t num_blocks,
+                                 const void * const * w_ptrs,
+                                 const void * const * s_ptrs) {
+    if (!out || !num_blocks || !w_ptrs || !s_ptrs) return false;
+    for (uint32_t i = 0; i < num_blocks; ++i) {
+        const uintptr_t w = (uintptr_t) w_ptrs[i];
+        const uintptr_t s = (uintptr_t) s_ptrs[i];
+        // §9.3: 16B Tile DMA beat on both streams + 64B host cacheline
+        if (!w || !s) return false;
+        if (w % 16 != 0 || s % 16 != 0) return false;
+        if (w % 64 != 0 || s % 64 != 0) return false;
+        out[i].page_w_phys_addr = (uint64_t) w;
+        out[i].page_s_phys_addr = (uint64_t) s;
+    }
+    return true;
+}
+
+// ---------------------------------------------------------------------------
+// Refcounted decoupled CoW page pair (§9.1): clones W_kv and S_kv together so
+// GPU (block_table_gpu) and NPU (npu_block_table) views never diverge.
+// ---------------------------------------------------------------------------
+
+struct apu_kv_cow_pair {
+    uint32_t n_elements = 0;
+    void *   w = nullptr;   // 64B-aligned host allocation (W_kv)
+    void *   s = nullptr;   // 64B-aligned host allocation (S_kv)
+    llama_apu_npu_block_t npu{};  // host "physical" view for dual-view tables
+    std::atomic<uint32_t> ref{1};
+};
+
+static std::mutex g_cow_mutex;   // guards share/prepare_write/release races
+
+struct apu_kv_cow_pair * apu_kv_cow_alloc(uint32_t n_elements) {
+    const uint32_t nb = apu_kv_decoupled_nblocks(n_elements);
+    if (!nb) return nullptr;
+    auto * p = new (std::nothrow) apu_kv_cow_pair();
+    if (!p) return nullptr;
+    p->n_elements = n_elements;
+    const size_t w_bytes = (size_t) nb * APU_Q4_0_W_BYTES;
+    const size_t s_bytes = (size_t) nb * APU_Q4_0_S_BYTES;
+    // posix_memalign: guaranteed 64B host cacheline + 16B Tile DMA alignment
+    if (posix_memalign(&p->w, 64, w_bytes) != 0 ||
+        posix_memalign(&p->s, 64, s_bytes) != 0) {
+        free(p->w); free(p->s); delete p; return nullptr;
+    }
+    memset(p->w, 0, w_bytes);
+    memset(p->s, 0, s_bytes);
+    p->npu.page_w_phys_addr = (uint64_t)(uintptr_t) p->w;
+    p->npu.page_s_phys_addr = (uint64_t)(uintptr_t) p->s;
+    return p;
+}
+
+struct apu_kv_cow_pair * apu_kv_cow_share(struct apu_kv_cow_pair * p) {
+    if (!p) return nullptr;
+    std::lock_guard<std::mutex> lock(g_cow_mutex);
+    p->ref.fetch_add(1, std::memory_order_acq_rel);
+    return p;
+}
+
+struct apu_kv_cow_pair * apu_kv_cow_prepare_write(struct apu_kv_cow_pair * p) {
+    if (!p) return nullptr;
+    std::lock_guard<std::mutex> lock(g_cow_mutex);
+    if (p->ref.load(std::memory_order_acquire) == 1) {
+        return p;   // exclusive owner: no copy needed
+    }
+    // Shared page: clone BOTH streams atomically (§9.1 dual W/S clone)
+    auto * c = apu_kv_cow_alloc(p->n_elements);
+    if (!c) return nullptr;   // OOM: caller keeps shared ref, must not write
+    memcpy(c->w, p->w, apu_kv_decoupled_w_bytes(p->n_elements));
+    memcpy(c->s, p->s, apu_kv_decoupled_s_bytes(p->n_elements));
+    p->ref.fetch_sub(1, std::memory_order_acq_rel);  // release caller's share
+    return c;   // ref == 1 (fresh)
+}
+
+void apu_kv_cow_release(struct apu_kv_cow_pair * p) {
+    if (!p) return;
+    std::lock_guard<std::mutex> lock(g_cow_mutex);
+    if (p->ref.fetch_sub(1, std::memory_order_acq_rel) == 1) {
+        free(p->w);
+        free(p->s);
+        delete p;
+    }
+}
+
+uint32_t apu_kv_cow_refcount(const struct apu_kv_cow_pair * p) {
+    return p ? p->ref.load(std::memory_order_acquire) : 0;
+}
+
+const void * apu_kv_cow_w(const struct apu_kv_cow_pair * p) { return p ? p->w : nullptr; }
+const void * apu_kv_cow_s(const struct apu_kv_cow_pair * p) { return p ? p->s : nullptr; }
+const llama_apu_npu_block_t * apu_kv_cow_npu_block(const struct apu_kv_cow_pair * p) {
+    return p ? &p->npu : nullptr;
 }
