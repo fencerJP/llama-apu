@@ -7,6 +7,36 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [0.9.0] - 2026-10-07
+
+### Added
+- **Sarathi-Serve Stall-Free Scheduler (§9.1):** Iteration-level hybrid micro-batching under a hard token budget τ with four-tier priority (ongoing decodes → preempted-slot recovery → in-flight prefill chunks → new-request admission), LIFP preemption, anti-starvation prefill reservation, and EMA-smoothed dynamic SLO budgeting.
+- **§9.2 DRM Syncobj Timeline Dispatch:** Single-producer timeline sequencer with dedicated dispatch loop, system-scope iGPU writeback barriers, NPU Tile DMA invalidation, and ERT ring timeout flush with isolated slot teardown.
+- **§9.3 Decoupled Q4_0 KV Layout:** INT4 weight and FP16 scale planes split into separate 16-byte Tile-DMA-aligned buffers with dual-view (GPU virtual / NPU physical scatter-gather) block tables.
+- **`--stall-free` / `--no-stall-free` toggle pair (default: on):** llama.cpp-standard bool flag style replacing `--enable-stall-free`; env `LLAMA_ARG_STALL_FREE`.
+- **Multi-workflow quantization benchmark harness** with NVMe auto-staging, sharded UD-IQ4_XS sanity runner, and large-model progressive-difficulty benchmark runners.
+- **Resource-guided conversion strategy engine** and multi-stage AdamW distillation pipeline with teacher SafeTensors integration and MoE NAS streaming.
+
+### Changed
+- **Stall-free scheduling is ON by default** with the benchmarked sweet-spot configuration `--token-budget 256 --sarathi-chunk-size 64`; greedy batching remains available via `--no-stall-free`.
+- **Authoritative prompt-fill enforces the token budget (Microsoft method):** `n_fill_cap = min(τ, active_decodes + chunk_size)` bounds the prefill share of every iteration, fixing `--sarathi-chunk-size` as a live control instead of dead config.
+- APU sparse MoE chunk loader activated by default with dynamic memory scaling; MoE router auto-engages for large models.
+- Built and verified against ROCm 10.1 (`amdrocm 10.1.0-3`, HIP clang under `/opt/rocm/core-10.1`).
+
+### Fixed
+- KV head adaptation robustness and memory-scaled MoE layer pinning; GPU offload clamped to 75% of the KFD GPU pool to prevent OOM.
+- Tile DMA stride assertion downgraded to a warning for non-16-byte-aligned KV chunks.
+- Partial tensor loading now skips MTP draft layers cleanly in standard mode.
+- UD-IQ4_XS sanity runner adapted to mmap demand paging; strict 3-shard completeness verification.
+
+### Performance (real agentic OpenClaw trace, NeoHorse-1-4B, ROCm 10.1, 0 errors)
+- **τ256/c64 vs greedy: p99 TBT 1107 → 423 ms (−62%), max TBT 1194 → 508 ms (−57%), identical p50 (~148 ms).**
+- ~10% lower elapsed than the pre-ROCm-10.1 baseline across c64/greedy configs; isolated TBT 87 ms.
+- TTFT p50 2.1 s / p99 2.8 s for the 3.1k-token prompt (prefill-dominated).
+- Chunk=16 rejected: uniform ~13 s max-TBT outliers on this APU.
+
+---
+
 ## [0.8.0] - 2026-09-24
 
 ### Added
