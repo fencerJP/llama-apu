@@ -17,6 +17,21 @@
 
 **llama-apu** is an open-source, high-performance heterogeneous inference engine specifically co-designed for AMD Ryzen AI Accelerated Processing Units (APUs) featuring **Zen 5 CPU cores**, **RDNA 3.5 integrated graphics (gfx1150 / gfx1151)**, and the **AMD XDNA 2 Neural Processing Unit (AIE2P vector PE array)**.
 
+**Quick start** (inherited from upstream llama.cpp):
+
+```bash
+# curl
+curl -LsSf https://llama.app/install.sh | sh
+
+# powershell
+irm https://llama.app/install.ps1 | iex
+```
+
+- Visit https://llama.app and follow the instructions
+- Run with Docker - see our [Docker documentation](docs/docker.md)
+- Download pre-built binaries from the [releases page](https://github.com/ggml-org/llama.cpp/releases)
+- Build from source by cloning this repository - check out [our build guide](docs/build.md)
+
 By exploiting Unified Memory Architecture (UMA) via kernel-level **PRIME dma-buf buffer sharing** and **DRM timeline sync objects**, `llama-apu` orchestrates inference across all three on-die execution units simultaneously with **0 host memory copies**, delivering server-class LLM execution on consumer laptop and mini-PC APU silicon.
 
 ---
