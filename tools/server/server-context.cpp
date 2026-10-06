@@ -3189,6 +3189,15 @@ private:
         const int32_t n_batch_eff = params_base.apu.sarathi_stall_free
             ? std::min<int32_t>(n_batch, (int32_t) params_base.apu.sarathi_token_budget)
             : n_batch;
+        // Prefill share cap: --sarathi-chunk-size bounds the prompt tokens ONE
+        // iteration may add on top of the decodes already charged above
+        // (decodes + <=chunk_size prefill <= tau). Without this, --sarathi-chunk-size
+        // is dead config and every prefill iteration stuffs tau-decodes prompt
+        // tokens in at once (measured p99 TBT scaled linearly with tau).
+        const int32_t n_fill_cap = params_base.apu.sarathi_stall_free
+            ? std::min<int32_t>(n_batch_eff,
+                                (int32_t) batch.size() + (int32_t) params_base.apu.sarathi_chunk_size)
+            : n_batch_eff;
 
         auto & alora_scale       = batch.alora_scale;
         auto & alora_disabled_id = batch.alora_disabled_id;
@@ -3198,7 +3207,7 @@ private:
             bool add_ok = true; // false means the batch is full, skip remaining slots
 
             iterate(slots, [&](server_slot & slot) {
-                if (!add_ok || batch.size() >= n_batch_eff) {
+                if (!add_ok || batch.size() >= n_fill_cap) {
                     return; // batch is full, skip remaining slots
                 }
 
@@ -3607,7 +3616,7 @@ private:
                     const auto last_user_pos = spans.last_user_message_pos();
 
                     // add prompt tokens for processing in the current batch
-                    while (slot.prompt.n_tokens() < slot.task->n_tokens() && batch.size() < n_batch_eff) {
+                    while (slot.prompt.n_tokens() < slot.task->n_tokens() && batch.size() < n_fill_cap) {
                         // get next token to process
                         llama_token cur_tok = input_tokens[slot.prompt.n_tokens()];
                         if (cur_tok == LLAMA_TOKEN_NULL) {
