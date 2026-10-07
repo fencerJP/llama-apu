@@ -7,6 +7,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [0.10.0] - 2026-10-07
+
+**ROCm 10.1 Integration release.**
+
+### Added
+- **ROCm 10.1 stack** (Phase 10.0): upgrade from the distro ROCm 7.1 build to **10.1.0** (`/opt/rocm/core-10.1`, HIP clang LLVM 24), validated on gfx1150. Controlled A/B vs the old stack: **+7.9% prefill, decode parity.**
+- **Upstream sync** (Phase 10.05): merged `ggml-org/llama.cpp` master (319 upstream commits) preserving every llama-apu modification — 9/9 APU tests pass, perplexity bit-identical.
+- **`tools/apu-ab/apu_ab.py`** (Phase 10.6): local A/B harness — interleaved benchmark with medians/verdicts, `rocprofv3` profiling pass, and run diffing.
+- **hipBLASLt GEMM support** (Phase 10.1): `-DGGML_HIP_USE_HIPBLASLT` (build, default ON). Runtime-disabled; enable via `LLAMA_APU_GEMM_BACKEND=hipblaslt` (+`LLAMA_APU_HIPBLASLT_PREFILL=1`). Measured **−41%** on quantized prefill (UMA) → not advantageous.
+- **a8w8 int8 GEMM probe** (Phase 10.2b, `tools/apu-a8w8/`): gfx1150 int8 hipBLASLt kernels validated bit-exact (6.5–7.7 TOPS prefill); no model-level benefit on UMA.
+- `docs/release-notes-0.10.0.md` and `dist/release_notes_v0.10.0.md`.
+### Changed
+- **TQ2_0 retired from the active path** (Phase 10.2a): default conversion target is now `Q4_K_M`; TQ2_0/T-ACE lowering requires `LLAMA_APU_LOWBIT_TQ2_0=1`. Substrate kept for future repair.
+- **ROCm/HIP build-options table** documented in `README.md`.
+- **`GGML_HIP_NO_VMM` re-evaluated** (Phase 10.5): default `ON` retained; enabling VMM (`-DGGML_HIP_NO_VMM=OFF`) measured ≈−9% prefill / ≈−11% decode on gfx1150 UMA.
+
+### Notes
+- On gfx1150 **UMA**, quantized models route through ggml's MMQ/MMVQ and never BLAS; the GPU-side ROCm features (hipBLASLt, rocBLAS decode gemv, a8w8, VMM, ROCm/CK FMHA) were each evaluated and **not adopted** (neutral→negative or unreachable). The only default-on performance change is the ROCm 10.1 stack itself.
+- Full 60-min memory soak was cancelled early; a ~7-min capture showed stable RSS (~1.03 GB, no leak).
+
+---
+
 ## [0.9.0] - 2026-10-07
 
 ### Added
@@ -22,6 +44,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Authoritative prompt-fill enforces the token budget (Microsoft method):** `n_fill_cap = min(τ, active_decodes + chunk_size)` bounds the prefill share of every iteration, fixing `--sarathi-chunk-size` as a live control instead of dead config.
 - APU sparse MoE chunk loader activated by default with dynamic memory scaling; MoE router auto-engages for large models.
 - Built and verified against ROCm 10.1 (`amdrocm 10.1.0-3`, HIP clang under `/opt/rocm/core-10.1`).
+- **ROCm VMM (`GGML_HIP_NO_VMM`) re-evaluated against 10.1's VMM/NUMA path (Phase 10.5):** the default **`ON` (VMM disabled) is faster** — flipping to VMM cost ≈−9% prefill / ≈−11% decode on gfx1150 (Radeon 890M, UMA). **Default unchanged**; `-DGGML_HIP_NO_VMM=OFF` stays available as an opt-in build parameter.
 
 ### Fixed
 - KV head adaptation robustness and memory-scaled MoE layer pinning; GPU offload clamped to 75% of the KFD GPU pool to prevent OOM.

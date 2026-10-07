@@ -3,6 +3,7 @@
 
 #include "ggml-apu-convert.h"
 #include "ggml-apu-xclbin.h"
+#include "ggml-apu-lowquant.h"
 
 #include <cstdio>
 #include <cstdlib>
@@ -36,10 +37,19 @@ bool apu_run_conversion_pipeline(const apu_convert_options & opts, apu_convert_r
         }
     }
 
+    // Phase 10.2a: TQ2_0 is retired from the active path by default. If it is
+    // requested without the opt-in switch, downgrade to the fallback quant.
+    std::string target_quant = opts.target_quant;
+    if (target_quant == "TQ2_0" && !apu_lowbit_tq2_0_enabled()) {
+        fprintf(stderr, "[llama-apu] TQ2_0 is disabled by default (LLAMA_APU_LOWBIT_TQ2_0=0); using fallback '%s' instead\n",
+                opts.fallback_quant.c_str());
+        target_quant = opts.fallback_quant;
+    }
+
     std::ostringstream cmd;
     cmd << "python3 " << script_path << " \"" << opts.source_path << "\" \"" << opts.output_dir << "\"";
-    if (!opts.target_quant.empty()) {
-        cmd << " --quant " << opts.target_quant;
+    if (!target_quant.empty()) {
+        cmd << " --quant " << target_quant;
     }
     if (!opts.fallback_quant.empty()) {
         cmd << " --fallback-quant " << opts.fallback_quant;
@@ -70,11 +80,11 @@ bool apu_run_conversion_pipeline(const apu_convert_options & opts, apu_convert_r
         }
     }
 
-    std::string expected_gguf = opts.output_dir + "/" + stem + "-" + opts.target_quant + ".gguf";
+    std::string expected_gguf = opts.output_dir + "/" + stem + "-" + target_quant + ".gguf";
     if (stat(expected_gguf.c_str(), &st) == 0) {
         result.gguf_path = expected_gguf;
         result.gguf_size_bytes = st.st_size;
-        result.selected_quant = opts.target_quant;
+        result.selected_quant = target_quant;
     } else {
         // Fallback check
         std::string fallback_gguf = opts.output_dir + "/" + stem + "-" + opts.fallback_quant + ".gguf";

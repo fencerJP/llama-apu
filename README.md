@@ -154,6 +154,16 @@ cmake --build build -j$(nproc)
 sudo ./packaging/install.sh
 ```
 
+### Optional ROCm/HIP build parameters
+The defaults below preserve the upstream/validated behavior; each is opt-in.
+
+| Parameter | Default | Effect |
+| :--- | :--- | :--- |
+| `-DGGML_HIP_NO_VMM` | `ON` | Disable the HIP VMM pool path. Set `OFF` to enable VMM/NUMA — **measured slower on gfx1150 UMA** (≈−9% prefill / ≈−11% decode), so `ON` is the recommended default. |
+| `-DGGML_HIP_USE_HIPBLASLT` | `ON` | Compile hipBLASLt support for large prefill GEMMs. **Runtime-disabled** — enable with `LLAMA_APU_GEMM_BACKEND=hipblaslt` (+ `LLAMA_APU_HIPBLASLT_PREFILL=1` to route quantized prefill). Not beneficial for quantized models on gfx1150 (see Phase 10 plan). |
+| `-DGGML_HIP_GRAPHS` | `ON` | HIP graph capture. |
+| `-DGGML_HIP_MMQ_MFMA` | `ON` | MFMA MMA in MMQ (CDNA). |
+
 ---
 
 ## 💻 Usage

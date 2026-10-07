@@ -10,6 +10,7 @@ endif()
 
 list(APPEND CMAKE_PREFIX_PATH  ${ROCM_PATH})
 list(APPEND CMAKE_PREFIX_PATH "${ROCM_PATH}/lib64/cmake")
+list(APPEND CMAKE_PREFIX_PATH "${ROCM_PATH}/lib/cmake")
 
 if (NOT DEFINED CMAKE_HIP_FLAGS_DEBUG)
     set(CMAKE_HIP_FLAGS_DEBUG "-g -O2")
@@ -46,6 +47,13 @@ endif()
 find_package(hip     REQUIRED)
 find_package(hipblas REQUIRED)
 find_package(rocblas REQUIRED)
+
+if (GGML_HIP_USE_HIPBLASLT)
+    find_package(hipblaslt QUIET)
+    if (NOT hipblaslt_FOUND)
+        message(WARNING "GGML_HIP_USE_HIPBLASLT=ON but hipblaslt was not found; hipBLASLt routing will be unavailable (rocBLAS/hipBLAS still used)")
+    endif()
+endif()
 
 if (GGML_HIP_RCCL)
     find_package(rccl REQUIRED)
@@ -101,6 +109,10 @@ if (GGML_HIP_GRAPHS)
     add_compile_definitions(GGML_HIP_GRAPHS)
 endif()
 
+if (GGML_HIP_USE_HIPBLASLT AND hipblaslt_FOUND)
+    add_compile_definitions(GGML_HIP_USE_HIPBLASLT)
+endif()
+
 if (GGML_HIP_NO_VMM)
     add_compile_definitions(GGML_HIP_NO_VMM)
 endif()
@@ -142,3 +154,7 @@ if (GGML_HIP_RCCL)
 endif()
 
 target_link_libraries(ggml-hip PRIVATE ggml-base hip::host roc::rocblas roc::hipblas)
+
+if (GGML_HIP_USE_HIPBLASLT AND hipblaslt_FOUND)
+    target_link_libraries(ggml-hip PRIVATE roc::hipblaslt)
+endif()

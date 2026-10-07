@@ -55,6 +55,10 @@ void apu_sync_cache_coherency(const void * host_ptr, size_t size);
 #ifdef __cplusplus
 }
 
+// llama-apu Phase 10.2a: master switch for the TQ2_0 / T-ACE low-bit path.
+// Disabled by default; enable with LLAMA_APU_LOWBIT_TQ2_0=1.
+bool apu_lowbit_tq2_0_enabled();
+
 // C++ API and Engine
 struct apu_memory_governor_status {
     uint64_t total_ram_bytes = 0;

@@ -1404,6 +1404,10 @@ struct batched_mul_mat_traits<GGML_TYPE_F16> {
     static inline auto convert_nc(ggml_type src_type) { return ggml_get_to_fp16_nc_cuda(src_type); }
 };
 
+#ifdef GGML_HIP_USE_HIPBLASLT
+#include "hipblaslt-gemm.cuh"
+#endif
+
 template<ggml_type compute_type>
 static void ggml_cuda_mul_mat_cublas_impl(ggml_backend_cuda_context & ctx, const ggml_tensor * src0, const ggml_tensor * src1, ggml_tensor * dst) {
     using traits = batched_mul_mat_traits<compute_type>;
@@ -1536,6 +1540,17 @@ static void ggml_cuda_mul_mat_cublas_impl(ggml_backend_cuda_context & ctx, const
     const int64_t r2 = ne12/ne02;
     const int64_t r3 = ne13/ne03;
 
+#ifdef GGML_HIP_USE_HIPBLASLT
+    // llama-apu Phase 10.1: route large prefill GEMMs through hipBLASLt; on any
+    // failure or for non-prefill shapes this falls through to rocBLAS/hipBLAS.
+    if (ne12 == 1 && ne13 == 1 &&
+        ggml_hipblaslt::try_matmul(src0_ptr, src1_ptr, dst_ptr,
+                ne01, ne11, ne10, s01, s11, ne0,
+                (hipDataType) cu_data_type_a, (hipDataType) cu_data_type_b, (hipDataType) cu_data_type,
+                main_stream)) {
+        // handled by hipBLASLt; the F32 output conversion below still applies
+    } else
+#endif
     // Theoretically cublasGemmStridedBatchedEx would always work, even for a single matrix.
     // However, for some old NVIDIA and AMD GPUs the strided/Ex GEMM is much slower,
     //     probably because the internal kernel selection logic is suboptimal.
@@ -1892,6 +1907,28 @@ static void ggml_cuda_mul_mat(ggml_backend_cuda_context & ctx, const ggml_tensor
         ggml_cuda_mul_mat_cublas(ctx, src0, src1, dst);
         return;
     }
+
+#ifdef GGML_HIP_USE_HIPBLASLT
+    // llama-apu Phase 10.1: optionally route large (prefill) GEMMs through the
+    // dequant + hipBLASLt path instead of MMQ. Env-gated; default keeps MMQ.
+    if (ne2 == 1 && ne3 == 1 && ne11 >= ggml_hipblaslt::min_tokens() && ggml_hipblaslt::prefill_override()) {
+        ggml_cuda_mul_mat_cublas(ctx, src0, src1, dst);
+        return;
+    }
+#endif
+
+#ifdef GGML_USE_HIP
+    // llama-apu Phase 10.3: optionally route decode-shaped GEMMs (small token
+    // count) through rocBLAS (10.1 m==1/n==1 gemv fast path) instead of MMVQ.
+    // Env-gated; default keeps MMVQ.
+    {
+        static const bool apu_decode_blas = (getenv("LLAMA_APU_DECODE_BLAS") != nullptr);
+        if (apu_decode_blas && ne2 == 1 && ne3 == 1 && ne11 <= 8) {
+            ggml_cuda_mul_mat_cublas(ctx, src0, src1, dst);
+            return;
+        }
+    }
+#endif
 
     const int cc        = ggml_cuda_info().devices[ctx.device].cc;
     const int warp_size = ggml_cuda_info().devices[ctx.device].warp_size;

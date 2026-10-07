@@ -8,7 +8,7 @@
 struct apu_convert_options {
     std::string source_path;
     std::string output_dir;
-    std::string target_quant    = "TQ2_0";
+    std::string target_quant    = "Q4_K_M"; // Phase 10.2a: TQ2_0 retired from the default path (needs LLAMA_APU_LOWBIT_TQ2_0=1)
     std::string fallback_quant  = "Q4_K_M";
     bool skip_sidecar           = false;
     bool skip_xclbin            = false;

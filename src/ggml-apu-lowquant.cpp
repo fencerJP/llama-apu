@@ -38,6 +38,15 @@ apu_lowquant_engine & apu_lowquant_engine::get() {
     return instance;
 }
 
+// llama-apu Phase 10.2a: TQ2_0 / T-ACE low-bit routing is off unless explicitly enabled.
+bool apu_lowbit_tq2_0_enabled() {
+    static const bool e = []() {
+        const char * v = getenv("LLAMA_APU_LOWBIT_TQ2_0");
+        return v != nullptr && (strcmp(v, "1") == 0 || strcmp(v, "on") == 0 || strcmp(v, "true") == 0);
+    }();
+    return e;
+}
+
 void apu_lowquant_engine::sync_cache_range(const void * ptr, size_t size) {
     if (!ptr || size == 0) return;
 
