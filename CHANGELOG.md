@@ -7,6 +7,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [0.10.1] - 2026-10-10
+
+**Upstream Master Sync (`b11541`) & Model Architecture Expansion.**
+
+### Added
+- **Upstream Sync (`b11541` / `@2bbca8f20`)**: Merged 107 commits from `ggml-org/llama.cpp` master preserving all AMD APU co-designed extensions (KFD 75% memory governor, Sarathi-Serve stall-free scheduling, PRIME DMA-BUF, DRM syncobj timeline fences, ROCm 10.1).
+- **Official K2 Horizon & MoVA Support**: Native architecture integration (`LLM_ARCH_K2_HORIZON`), routed value experts, and pre-tokenization splitters.
+- **PLaMo-3 Tokenizer Support**: Tokenizer pre-segmentation regexes and FIM token handling.
+- **Upstream Server & UI Models Manager**: Integrated enhanced server UI models manager (`#29583`, `#30228`) and default port 9931 configuration.
+
+### Fixed
+- **ROCm 10.1 Clang Build Path**: Resolved HIP runtime header lookup across standalone and wrapper build paths for `/opt/rocm/core-10.1`.
+- **Hparams Field Deduplication**: Eliminated duplicate `n_value_expert` / `n_value_expert_used` declarations in `llama-hparams.h`.
+- **Imatrix Null Safety**: Reapplied defensive null-pointer verification in `tools/imatrix/imatrix.cpp`.
+
+---
+
 ## [0.10.0] - 2026-10-07
 
 **ROCm 10.1 Integration release.**
