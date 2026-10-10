@@ -95,6 +95,9 @@ private:
 // remove any prefix and suffixes from the name
 // CUDA0#blk.0.attn_k.weight#0 => blk.0.attn_k.weight
 static std::string filter_tensor_name(const char * name) {
+    if (!name) {
+        return "";
+    }
     std::string wname;
     const char * p = strchr(name, '#');
     if (p != NULL) {
@@ -561,8 +564,19 @@ static int32_t rows_to_chunks(int64_t n_rows, int32_t chunk_size) {
 bool IMatrixCollector::collect_imatrix(struct ggml_tensor * t, bool ask, void * user_data) {
     GGML_UNUSED(user_data);
 
+    if (!t || (t->op != GGML_OP_MUL_MAT && t->op != GGML_OP_MUL_MAT_ID)) {
+        return false;
+    }
+
     const struct ggml_tensor * src0 = t->src[0];
     const struct ggml_tensor * src1 = t->src[1];
+    if (!src0 || !src1) {
+        return false;
+    }
+    if (t->op == GGML_OP_MUL_MAT_ID && !t->src[2]) {
+        return false;
+    }
+
     std::string wname = filter_tensor_name(src0->name);
 
     const int32_t chunk_size = m_params.n_ctx / m_params.n_parallel;
