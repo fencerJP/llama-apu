@@ -1,5 +1,7 @@
 if (NOT EXISTS $ENV{ROCM_PATH})
-    if (NOT EXISTS /opt/rocm)
+    if (EXISTS /opt/rocm/core-10.1)
+        set(ROCM_PATH /opt/rocm/core-10.1)
+    elseif (NOT EXISTS /opt/rocm)
         set(ROCM_PATH /usr)
     else()
         set(ROCM_PATH /opt/rocm)
@@ -85,6 +87,8 @@ ggml_add_backend_library(ggml-hip
                          ${GGML_HEADERS_ROCM}
                          ${GGML_SOURCES_ROCM}
                         )
+
+target_include_directories(ggml-hip PRIVATE ${ROCM_PATH}/include)
 
 # TODO: do not use CUDA definitions for HIP
 if (NOT GGML_BACKEND_DL)
