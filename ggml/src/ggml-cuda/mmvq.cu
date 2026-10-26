@@ -99,6 +99,7 @@ enum mmvq_parameter_table_id {
     MMVQ_PARAMETERS_GCN,
     MMVQ_PARAMETERS_RDNA2,
     MMVQ_PARAMETERS_RDNA3_0,
+    MMVQ_PARAMETERS_RDNA3_5,
     MMVQ_PARAMETERS_RDNA4,
     MMVQ_PARAMETERS_GB10
 };
@@ -106,9 +107,11 @@ enum mmvq_parameter_table_id {
 static constexpr __device__ mmvq_parameter_table_id get_device_table_id() {
 #if defined(RDNA4)
     return MMVQ_PARAMETERS_RDNA4;
+#elif defined(RDNA3_5)
+    return MMVQ_PARAMETERS_RDNA3_5;
 #elif defined(RDNA3_0)
     return MMVQ_PARAMETERS_RDNA3_0;
-#elif defined(RDNA2) || defined(RDNA3_5)
+#elif defined(RDNA2)
     return MMVQ_PARAMETERS_RDNA2;
 #elif defined(GCN) || defined(CDNA)
     return MMVQ_PARAMETERS_GCN;
@@ -125,10 +128,13 @@ static __host__ mmvq_parameter_table_id get_device_table_id(int cc) {
     if (GGML_CUDA_CC_IS_RDNA4(cc)) {
         return MMVQ_PARAMETERS_RDNA4;
     }
+    if (GGML_CUDA_CC_IS_RDNA3_5(cc)) {
+        return MMVQ_PARAMETERS_RDNA3_5;
+    }
     if (GGML_CUDA_CC_IS_RDNA3_0(cc)) {
         return MMVQ_PARAMETERS_RDNA3_0;
     }
-    if (GGML_CUDA_CC_IS_RDNA2(cc) || GGML_CUDA_CC_IS_RDNA3_5(cc)) {
+    if (GGML_CUDA_CC_IS_RDNA2(cc)) {
         return MMVQ_PARAMETERS_RDNA2;
     }
     if (GGML_CUDA_CC_IS_GCN(cc) || GGML_CUDA_CC_IS_CDNA(cc)) {
@@ -527,6 +533,28 @@ static constexpr __host__ __device__ int calc_nwarps(ggml_type type, int ncols_d
         }
         return 1;
     }
+    if (table_id == MMVQ_PARAMETERS_RDNA3_5) {
+        // RDNA 3.5 APUs (gfx1150 / gfx1151):
+        // 8 warps causes severe LDS bank contention and register pressure on APU CUs.
+        // 2 warps for small ncols (<= 2) provides ideal latency without thrashing memory bus.
+        if (ncols_dst < 1) {
+            return 1;
+        }
+        if (ncols_dst <= 2) {
+            switch (type) {
+                case GGML_TYPE_Q4_0:
+                case GGML_TYPE_Q4_1:
+                case GGML_TYPE_Q5_0:
+                case GGML_TYPE_Q5_1:
+                case GGML_TYPE_Q8_0:
+                case GGML_TYPE_IQ4_NL:
+                    return 2;
+                default:
+                    return 1;
+            }
+        }
+        return 1;
+    }
     if (table_id == MMVQ_PARAMETERS_TURING) {
         if (ncols_dst == 1) {
             switch (type) {
@@ -614,6 +642,12 @@ static constexpr __host__ __device__ int calc_rows_per_block(ggml_type type, int
             default:
                 return 1;
         }
+    }
+    if (table_id == MMVQ_PARAMETERS_RDNA3_5) {
+        if (ncols_dst >= 2 && ncols_dst <= 8) {
+            return 2;
+        }
+        return 1;
     }
     return 1;
 }

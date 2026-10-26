@@ -1,13 +1,13 @@
-if (NOT EXISTS $ENV{ROCM_PATH})
-    if (EXISTS /opt/rocm/core-10.1)
-        set(ROCM_PATH /opt/rocm/core-10.1)
-    elseif (NOT EXISTS /opt/rocm)
-        set(ROCM_PATH /usr)
-    else()
-        set(ROCM_PATH /opt/rocm)
-    endif()
+if (EXISTS /opt/rocm/core-10.1)
+    set(ROCM_PATH /opt/rocm/core-10.1 CACHE PATH "Path to ROCm" FORCE)
+    set(ENV{ROCM_PATH} "/opt/rocm/core-10.1")
+    set(ENV{HIP_PATH}  "/opt/rocm/core-10.1")
+elseif (DEFINED ENV{ROCM_PATH} AND NOT "$ENV{ROCM_PATH}" STREQUAL "")
+    set(ROCM_PATH "$ENV{ROCM_PATH}")
+elseif (EXISTS /opt/rocm)
+    set(ROCM_PATH /opt/rocm)
 else()
-    set(ROCM_PATH $ENV{ROCM_PATH})
+    set(ROCM_PATH /usr)
 endif()
 
 list(APPEND CMAKE_PREFIX_PATH  ${ROCM_PATH})
@@ -88,7 +88,11 @@ ggml_add_backend_library(ggml-hip
                          ${GGML_SOURCES_ROCM}
                         )
 
-target_include_directories(ggml-hip PRIVATE ${ROCM_PATH}/include)
+if (EXISTS /opt/rocm/core-10.1/include)
+    target_include_directories(ggml-hip SYSTEM PRIVATE /opt/rocm/core-10.1/include)
+elseif (EXISTS ${ROCM_PATH}/include)
+    target_include_directories(ggml-hip SYSTEM PRIVATE ${ROCM_PATH}/include)
+endif()
 
 # TODO: do not use CUDA definitions for HIP
 if (NOT GGML_BACKEND_DL)

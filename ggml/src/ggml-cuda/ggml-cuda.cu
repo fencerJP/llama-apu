@@ -695,14 +695,35 @@ struct ggml_cuda_pool_vmm : public ggml_cuda_pool {
                     access.flags = CU_MEM_ACCESS_FLAGS_PROT_READWRITE;
                     access_descs.push_back(access);
                 }
+#if defined(GGML_USE_HIP)
+                // WORKAROUND for ROCm gfx1150/gfx1151 (RDNA 3.5 APU): cuMemSetAccess only
+                // works on the first mapping in a VMM pool. Subsequent calls with
+                // different offsets return hipErrorInvalidValue. Fix: apply access
+                // to the ENTIRE pool range (from pool_addr base) instead of just
+                // the new mapping.
+                if (GGML_CUDA_CC_IS_RDNA3_5(ggml_cuda_info().devices[physical_device].cc)) {
+                    CU_CHECK(cuMemSetAccess(pool_addr, pool_size + reserve_size, access_descs.data(), access_descs.size()));
+                } else {
+                    CU_CHECK(cuMemSetAccess(start_ptr, reserve_size, access_descs.data(), access_descs.size()));
+                }
+#else
                 CU_CHECK(cuMemSetAccess(start_ptr, reserve_size, access_descs.data(), access_descs.size()));
+#endif
             } else {
                 // set access for non P2P
                 CUmemAccessDesc access = {};
                 access.location.type = CU_MEM_LOCATION_TYPE_DEVICE;
                 access.location.id = physical_device;
                 access.flags = CU_MEM_ACCESS_FLAGS_PROT_READWRITE;
+#if defined(GGML_USE_HIP)
+                if (GGML_CUDA_CC_IS_RDNA3_5(ggml_cuda_info().devices[physical_device].cc)) {
+                    CU_CHECK(cuMemSetAccess(pool_addr, pool_size + reserve_size, &access, 1));
+                } else {
+                    CU_CHECK(cuMemSetAccess(start_ptr, reserve_size, &access, 1));
+                }
+#else
                 CU_CHECK(cuMemSetAccess(start_ptr, reserve_size, &access, 1));
+#endif
             }
 
             // add to the pool
@@ -841,10 +862,55 @@ static void ggml_backend_cuda_buffer_memset_tensor(ggml_backend_buffer_t buffer,
     CUDA_CHECK(cudaStreamSynchronize(cudaStreamPerThread));
 }
 
+#if defined(GGML_USE_HIP)
+// A host->device copy that sources pageable, file-backed pages (an mmap'ed GGUF) can wedge
+// the ROCm SDMA path on APUs: the copy is queued but never signals completion, so the runtime spins
+// in hsa_signal_wait forever with the GPU idle. It shows up when large models (>30 GiB) are streamed
+// into unified memory. Stage such copies through a pinned bounce buffer so the DMA engine
+// only ever sees resident pages.
+#define GGML_CUDA_H2D_STAGE_THRESHOLD (1ull << 20)
+#define GGML_CUDA_H2D_STAGE_CHUNK     (32ull << 20)
+
+static bool ggml_cuda_memcpy_h2d_staged(void * dst, const void * src, size_t size, cudaStream_t stream) {
+    static std::mutex mutex;
+    static void *     staging = nullptr;
+    static bool       unavailable = false;
+
+    std::lock_guard<std::mutex> lock(mutex);
+
+    if (staging == nullptr) {
+        if (unavailable) {
+            return false;
+        }
+        if (cudaMallocHost(&staging, GGML_CUDA_H2D_STAGE_CHUNK) != cudaSuccess) {
+            (void) cudaGetLastError();
+            unavailable = true;
+            return false;
+        }
+    }
+
+    for (size_t off = 0; off < size; off += GGML_CUDA_H2D_STAGE_CHUNK) {
+        const size_t chunk = std::min<size_t>(GGML_CUDA_H2D_STAGE_CHUNK, size - off);
+        memcpy(staging, (const char *) src + off, chunk);
+        CUDA_CHECK(cudaMemcpyAsync((char *) dst + off, staging, chunk, cudaMemcpyHostToDevice, stream));
+        CUDA_CHECK(cudaStreamSynchronize(stream));
+    }
+    return true;
+}
+#endif // defined(GGML_USE_HIP)
+
 static void ggml_backend_cuda_buffer_set_tensor(ggml_backend_buffer_t buffer, ggml_tensor * tensor, const void * data, size_t offset, size_t size) {
     ggml_backend_cuda_buffer_context * ctx = (ggml_backend_cuda_buffer_context *) buffer->context;
 
     ggml_cuda_set_device(ctx->device);
+#if defined(GGML_USE_HIP)
+    if (size >= GGML_CUDA_H2D_STAGE_THRESHOLD &&
+        GGML_CUDA_CC_IS_RDNA3_5(ggml_cuda_info().devices[ctx->device].cc)) {
+        if (ggml_cuda_memcpy_h2d_staged((char *) tensor->data + offset, data, size, cudaStreamPerThread)) {
+            return;
+        }
+    }
+#endif
     CUDA_CHECK(cudaMemcpyAsync((char *) tensor->data + offset, data, size, cudaMemcpyHostToDevice, cudaStreamPerThread));
     CUDA_CHECK(cudaStreamSynchronize(cudaStreamPerThread));
 }
@@ -5658,6 +5724,17 @@ static bool ggml_backend_cuda_device_supports_op(ggml_backend_dev_t dev, const g
                 if (op->op == GGML_OP_MUL_MAT_ID && ggml_get_op_params_i32(op, 3) == GGML_PREC_F32) {
                     return false;
                 }
+#if defined(GGML_USE_HIP)
+                // The generic HIP F16 x F16 -> F32 MUL_MAT path is unstable on
+                // ROCm RDNA 3.5 APUs (gfx1150 / gfx1151). Report it unsupported
+                // so graph placement can use a clean fallback.
+                if (op->op == GGML_OP_MUL_MAT &&
+                        a->type == GGML_TYPE_F16 && b->type == GGML_TYPE_F16 &&
+                        op->type == GGML_TYPE_F32 &&
+                        GGML_CUDA_CC_IS_RDNA3_5(ggml_cuda_info().devices[dev_ctx->device].cc)) {
+                    return false;
+                }
+#endif
 #ifdef GGML_USE_MUSA
                 const int cc = ggml_cuda_info().devices[dev_ctx->device].cc;
                 if (b->ne[2]*b->ne[3] > 1 && !ggml_is_transposed(a) && !ggml_is_transposed(b)) {
