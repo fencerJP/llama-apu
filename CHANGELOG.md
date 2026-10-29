@@ -7,6 +7,30 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [0.12.0] - 2026-10-30
+
+**Dynamic Confidence-Gated Speculative Drafting, MTP Boundary Ring Rollback & Asymmetric KV Cache with Boundary Guard.**
+
+### Added
+- **Dynamic Confidence-Gated Speculative Drafting (`--spec-draft-apu`, `--spec-timeline-sync`)**:
+  - Implemented dynamic EMA-throttled confidence gating in `src/ggml-apu-spec.cpp` and `common/speculative.cpp`.
+  - Default NPU offload with Linux DRM timeline synchronization (`drm_syncobj` on `/dev/dri/renderD128`) and automatic single-stream intra-GPU bypass.
+  - Sub-15 microsecond sync latency (~13 µs) with verified APU zero-copy memory handoff (0 host `memcpy` between draft, verify, and commit passes).
+  - Integrated rich telemetry reporting for acceptance rate ($\alpha$), rollback passes, sync latency, and token throughput.
+- **MTP Boundary Ring Rollback**:
+  - Implemented a decoupled 32-slot circular state ring buffer (`ring_h`, `ring_pos`, `ring_len`, `ring_head`) for Multi-Token Prediction (MTP).
+  - Replaces fragile context-destroying rollbacks with an $O(1)$ ring rollback upon speculative token rejection.
+  - Implemented trailing prompt cache token salvaging in `tools/server/server-context.cpp`.
+  - Achieved **85.7% to 97.3% candidate token acceptance rate ($\alpha$)** and up to **+91.4% (1.91x) generation speedup** on `Qwopus3.6-27B-Coder-Compat-MTP`.
+- **Asymmetric KV Cache with Boundary Layer Guard ($B=2$) (`--kv-cache-type asym`, `--kv-boundary-layers N`)**:
+  - Asymmetric precision quantization: Keys preserved in `GGML_TYPE_Q8_0` (preventing attention routing degradation) and Values quantized to `GGML_TYPE_Q4_0` (halving memory bandwidth during generation).
+  - Boundary layer guard ensures the first and last $B=2$ layers (`il < B || il + B >= n_layer`) remain in `Q8_0` precision.
+  - Delivers **62.5% KV cache footprint reduction** (average 6-bit per token) while boosting prompt ingestion throughput by up to **+7.1%** (`291.33 t/s` vs `272.07 t/s` on 9B).
+- **Comprehensive APU Benchmark Suite**:
+  - Documented realistic baseline benchmarks across 9B, 27B, and 33B models on AMD Ryzen AI 9 HX 470 APU (`gfx1150`) in [`benches/phase1_baseline_results.md`](benches/phase1_baseline_results.md).
+
+---
+
 ## [0.11.0] - 2026-10-29
 
 **Router GPU Execution Gate, CPU Fast-Path & Upstream Master Sync (`b11973`).**
