@@ -21,6 +21,23 @@
 #endif
 #endif
 #include "ggml-common.h"
+#include "../../rocmfp4/rocmfp4.h"
+#include "../../rocmfpx/rocmfpx.h"
+
+#ifndef GGML_ROCMFP6_EXPANDED_DEVICE
+#define GGML_ROCMFP6_EXPANDED_DEVICE 0
+#endif
+
+struct block_rocmfp6_expanded {
+    int8_t  qs[QK_ROCMFP6];
+    uint8_t e[2];
+};
+
+#if GGML_ROCMFP6_EXPANDED_DEVICE
+using block_rocmfp6_device = block_rocmfp6_expanded;
+#else
+using block_rocmfp6_device = block_rocmfp6;
+#endif
 
 #include <array>
 #include <algorithm>
@@ -1051,6 +1068,62 @@ struct ggml_cuda_type_traits<GGML_TYPE_NVFP4> {
     static constexpr int qr = QR_NVFP4;
     static constexpr int qi = QI_NVFP4;
     static constexpr int bs = sizeof(block_nvfp4);
+};
+
+template<>
+struct ggml_cuda_type_traits<GGML_TYPE_Q4_0_ROCMFP4> {
+    static constexpr int qk = QK_ROCMFP4;
+    static constexpr int qr = QR_ROCMFP4;
+    static constexpr int qi = QI_ROCMFP4;
+    static constexpr int bs = sizeof(block_rocmfp4);
+};
+
+template<>
+struct ggml_cuda_type_traits<GGML_TYPE_Q4_0_ROCMFP4_FAST> {
+    static constexpr int qk = QK_ROCMFP4;
+    static constexpr int qr = QR_ROCMFP4;
+    static constexpr int qi = QI_ROCMFP4;
+    static constexpr int bs = sizeof(block_rocmfp4_fast);
+};
+
+template<>
+struct ggml_cuda_type_traits<GGML_TYPE_Q3_0_ROCMFPX> {
+    static constexpr int qk = QK_ROCMFP3;
+    static constexpr int qr = QR_ROCMFP3;
+    static constexpr int qi = QI_ROCMFP3;
+    static constexpr int bs = sizeof(block_rocmfp3);
+};
+
+template<>
+struct ggml_cuda_type_traits<GGML_TYPE_Q2_0_ROCMFPX> {
+    static constexpr int qk = QK_ROCMFP2;
+    static constexpr int qr = QR_ROCMFP2;
+    static constexpr int qi = QI_ROCMFP2;
+    static constexpr int bs = sizeof(block_rocmfp2);
+};
+
+template<>
+struct ggml_cuda_type_traits<GGML_TYPE_Q6_0_ROCMFPX> {
+    static constexpr int qk = QK_ROCMFP6;
+    static constexpr int qr = QR_ROCMFP6;
+    static constexpr int qi = QI_ROCMFP6;
+    static constexpr int bs = sizeof(block_rocmfp6);
+};
+
+template<>
+struct ggml_cuda_type_traits<GGML_TYPE_Q8_0_ROCMFPX> {
+    static constexpr int qk = QK_ROCMFP8;
+    static constexpr int qr = QR_ROCMFP8;
+    static constexpr int qi = QI_ROCMFP8;
+    static constexpr int bs = sizeof(block_rocmfp8);
+};
+
+template<>
+struct ggml_cuda_type_traits<GGML_TYPE_Q4_0_ROCMI4> {
+    static constexpr int qk = QK_ROCMI4;
+    static constexpr int qr = QR_ROCMI4;
+    static constexpr int qi = QI_ROCMI4;
+    static constexpr int bs = sizeof(block_rocmi4);
 };
 
 template<>
