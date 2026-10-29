@@ -399,6 +399,7 @@ server_models::server_models(
               base_env(get_environment()),
               base_preset(ctx_preset.load_from_args(argc, argv)),
               sched(std::make_unique<server_models_sched>(*this)),
+              gpu_gate(std::make_unique<server_gpu_exec_gate>()),
               monitor(std::make_unique<server_monitor>(*this)) {
     // propagate base params to child
     unset_reserved_args(base_preset, true);
@@ -1155,6 +1156,14 @@ void server_models::load(const std::string & name, const load_options & opts) {
         }
     }
 
+    // Acquire exclusive GPU execution access during weight loading and VRAM/GTT allocation.
+    // This prevents MES queue collisions with active inference or other child spawns on AMD APUs.
+    std::shared_ptr<server_gpu_lease> load_gpu_lease = nullptr;
+    auto target_meta = opts.custom_meta.has_value() ? opts.custom_meta : get_meta(name);
+    if (opts.role == SERVER_ROLE_INSTANCE && target_meta.has_value() && target_meta->uses_gpu()) {
+        load_gpu_lease = gpu_gate->acquire(name, "load", nullptr);
+    }
+
     std::unique_lock<std::mutex> lk(mutex);
     // edge case: block until any in-progress reload has finished so we always load
     // against the freshest preset and a consistent mapping state
@@ -1219,6 +1228,7 @@ void server_models::load(const std::string & name, const load_options & opts) {
     inst.meta.status      = SERVER_MODEL_STATUS_LOADING;
     inst.meta.loaded_info = json{};
     inst.meta.last_used   = ggml_time_ms();
+    inst.load_gpu_lease   = std::move(load_gpu_lease);
 
     if (inst.meta.port <= 0) {
         throw std::runtime_error("failed to get a port number");
@@ -1233,6 +1243,24 @@ void server_models::load(const std::string & name, const load_options & opts) {
         std::vector<std::string> child_args = inst.meta.args; // copy
         std::vector<std::string> child_env  = base_env; // copy
         child_env.push_back(std::string(SERVER_ENV_ROUTER_PORT) + "=" + std::to_string(base_params.port));
+
+        if (!inst.meta.uses_gpu()) {
+            // CPU Fast-Path: On ROCm, llama_backend_init opens /dev/kfd during device enumeration even
+            // if n_gpu_layers == 0. Injecting HIP_VISIBLE_DEVICES=-1 and ROCR_VISIBLE_DEVICES=-1 prevents
+            // the child from ever opening /dev/kfd or allocating GPU queues, enabling 100% collision-free
+            // parallel CPU execution (e.g. embeddings on Zen 5 AVX-512) alongside active GPU LLM inference.
+            child_env.push_back("HIP_VISIBLE_DEVICES=-1");
+            child_env.push_back("ROCR_VISIBLE_DEVICES=-1");
+            if (common_log_get_verbosity_thold() > LOG_LEVEL_INFO) {
+                LOG_INF("srv  %12.*s: [GPU-GATE] [CLASSIFY] model=%s uses_gpu=false kfd_isolation=enabled\n",
+                        12, __func__, inst.meta.name.c_str());
+            }
+        } else {
+            if (common_log_get_verbosity_thold() > LOG_LEVEL_INFO) {
+                LOG_INF("srv  %12.*s: [GPU-GATE] [CLASSIFY] model=%s uses_gpu=true kfd_isolation=disabled\n",
+                        12, __func__, inst.meta.name.c_str());
+            }
+        }
 
         if (opts.role == SERVER_ROLE_DOWNLOAD) {
             inst.meta.status = SERVER_MODEL_STATUS_DOWNLOADING;
@@ -1316,6 +1344,7 @@ void server_models::on_child_exit(const std::string & name, const std::shared_pt
         sched->on_measure_exit(name, proc, exit_code);
         return;
     }
+    bool was_gpu = false;
     {
         std::lock_guard<std::mutex> lk(mutex);
         auto it = mapping.find(name);
@@ -1323,6 +1352,15 @@ void server_models::on_child_exit(const std::string & name, const std::shared_pt
             stopping_models.erase(name);
             return; // entry erased, or a newer instance took the name
         }
+        was_gpu = it->second.meta.uses_gpu();
+        if (it->second.load_gpu_lease) {
+            it->second.load_gpu_lease->mark_teardown();
+            it->second.load_gpu_lease.reset();
+        }
+    }
+    if (was_gpu) {
+        // Enforce a 150ms settle cooldown so amdgpu/kfd can safely reclaim VM apertures and queues
+        gpu_gate->apply_cooldown(150, "child_exit");
     }
     if (role == SERVER_ROLE_DOWNLOAD) {
         // instance will be cleaned up on next load_models() call
@@ -1401,6 +1439,10 @@ void server_models::update_status(const std::string & name, const update_status_
         auto & meta = it->second.meta;
         meta.status      = args.status;
         meta.exit_code   = args.exit_code;
+        if (args.status != SERVER_MODEL_STATUS_LOADING && it->second.load_gpu_lease) {
+            // Loading finished (or failed); release the load GPU lease so inference or next load can proceed
+            it->second.load_gpu_lease.reset();
+        }
         if (args.status == SERVER_MODEL_STATUS_UNLOADED) {
             stopping_models.erase(name);
         }
@@ -1683,6 +1725,22 @@ bool server_models::ensure_model_ready(const std::string & name, const std::func
     return true;
 }
 
+static bool is_gpu_compute_request(const std::string & method, const std::string & path) {
+    if (method != "POST") {
+        return false;
+    }
+    std::string base_path = path;
+    size_t qpos = base_path.find('?');
+    if (qpos != std::string::npos) {
+        base_path = base_path.substr(0, qpos);
+    }
+    if (base_path == "/tokenize" || base_path == "/detokenize" ||
+        base_path == "/v1/tokenize" || base_path == "/v1/detokenize") {
+        return false;
+    }
+    return true;
+}
+
 server_http_res_ptr server_models::proxy_request(const server_http_req & req, const std::string & method, const std::string & name, bool update_last_used, bool detached) {
     auto meta = get_meta(name);
     if (!meta.has_value()) {
@@ -1702,6 +1760,33 @@ server_http_res_ptr server_models::proxy_request(const server_http_req & req, co
         // sleep after req_count++, so the model counts as busy while we wait here
         std::this_thread::sleep_for(std::chrono::seconds(2));
     }
+
+    std::shared_ptr<server_gpu_lease> lease = nullptr;
+    const bool is_gpu_req = meta->uses_gpu() && is_gpu_compute_request(method, req.path);
+
+    if (is_gpu_req) {
+        try {
+            lease = gpu_gate->acquire(name, "inference", detached ? nullptr : req.should_stop);
+        } catch (...) {
+            std::unique_lock<std::mutex> lk(mutex);
+            auto it = mapping.find(name);
+            if (it != mapping.end() && it->second.req_count > 0) {
+                it->second.req_count--;
+                if (it->second.req_count == 0) {
+                    sched->tick(lk);
+                }
+            }
+            throw;
+        }
+    } else {
+        if (common_log_get_verbosity_thold() > LOG_LEVEL_INFO) {
+            std::string reason = !meta->uses_gpu() ? "cpu_only_model" : "non_gpu_endpoint";
+            LOG_INF("srv  %12.*s: [GPU-GATE] [BYPASS]   model=%s method=%s path=%s reason=%s active_gpu_holder=%s\n",
+                    12, __func__, name.c_str(), method.c_str(), req.path.c_str(), reason.c_str(),
+                    gpu_gate->get_active_owner().empty() ? "none" : gpu_gate->get_active_owner().c_str());
+        }
+    }
+
     SRV_INF("proxying request to model %s on port %d\n", name.c_str(), meta->port);
     std::string proxy_path = req.path;
     if (!req.query_string.empty()) {
@@ -1724,7 +1809,8 @@ server_http_res_ptr server_models::proxy_request(const server_http_req & req, co
             base_params.timeout_write
             );
 
-    proxy->cleanup = [this, name]() {
+    proxy->cleanup = [this, name, lease = std::move(lease)]() mutable {
+        lease.reset();
         std::unique_lock<std::mutex> lk(mutex);
         auto it = mapping.find(name);
         if (it != mapping.end() && it->second.req_count > 0) {
@@ -1757,6 +1843,31 @@ void server_models::proxy_ws(const server_http_req & req, server_http_context::w
         mapping[name].meta.last_used = ggml_time_ms();
         mapping[name].req_count++;
     }
+
+    std::shared_ptr<server_gpu_lease> lease = nullptr;
+    if (meta->uses_gpu()) {
+        try {
+            lease = gpu_gate->acquire(name, "ws", req.should_stop);
+        } catch (...) {
+            std::unique_lock<std::mutex> lk(mutex);
+            auto it = mapping.find(name);
+            if (it != mapping.end() && it->second.req_count > 0) {
+                it->second.req_count--;
+                if (it->second.req_count == 0) {
+                    sched->tick(lk);
+                }
+            }
+            send_error("cancelled waiting for GPU execution gate");
+            return;
+        }
+    } else {
+        if (common_log_get_verbosity_thold() > LOG_LEVEL_INFO) {
+            LOG_INF("srv  %12.*s: [GPU-GATE] [BYPASS]   model=%s path=%s reason=cpu_only_model active_gpu_holder=%s\n",
+                    12, __func__, name.c_str(), req.path.c_str(),
+                    gpu_gate->get_active_owner().empty() ? "none" : gpu_gate->get_active_owner().c_str());
+        }
+    }
+
     SRV_INF("proxying websocket to model %s on port %d\n", name.c_str(), meta->port);
 
     std::string url = std::string("ws://") + CHILD_ADDR + ":" + std::to_string(meta->port) + req.path;
@@ -1803,6 +1914,7 @@ void server_models::proxy_ws(const server_http_req & req, server_http_context::w
         }
     }
 
+    lease.reset();
     std::unique_lock<std::mutex> lk(mutex);
     auto it = mapping.find(name);
     if (it != mapping.end() && it->second.req_count > 0) {

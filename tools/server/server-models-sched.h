@@ -2,7 +2,11 @@
 
 #include "server-common.h"
 
+#include <chrono>
+#include <cinttypes>
+#include <condition_variable>
 #include <deque>
+#include <functional>
 #include <map>
 #include <memory>
 #include <mutex>
@@ -179,3 +183,121 @@ struct server_models_sched {
     // bytes missing per device to load name at its min, empty if it fits
     std::map<std::string, size_t> deficit(const std::string & name) const;
 };
+
+/**
+ * =====================================================================================
+ * GPU Execution Gate for AMD Strix Point APU (RDNA 3.5 / gfx1150)
+ * =====================================================================================
+ *
+ * ARCHITECTURAL CONTEXT & HARDWARE FAILURE MECHANISM:
+ * On AMD Strix Point APUs (Radeon 880M/890M, gfx1150) running Linux (e.g. Ubuntu 26.04,
+ * Kernel 7.0.0-38-generic) with Compute Wave Save/Restore disabled (amdgpu.cwsr_enable=0),
+ * the GPU Micro Engine Scheduler (MES) cannot preempt or context-switch concurrent
+ * compute waves across multiple independent OS processes holding /dev/kfd queues.
+ *
+ * In llama-apu router mode, multiple child llama-server instances (e.g. 27B LLMs, 14B MoE,
+ * embedding models) are loaded simultaneously into Unified Memory (UMA GTT). When two or
+ * more child processes execute inference kernels or perform model initialization at the
+ * same instant, the concurrent KFD queues collide in the MES ring. This triggers:
+ *   1. HSA_STATUS_ERROR_MEMORY_APERTURE_VIOLATION
+ *   2. HW Exception by GPU node-1 ... reason: GPU Hang
+ *   3. MES failed to respond to msg=REMOVE_QUEUE (MES ring lockup)
+ *   4. Driver initiates a MODE2 reset:
+ *      - Invalidates the Wayland compositor EGL context -> gnome-shell aborts (SIGABRT).
+ *      - Under multi-process contention, VPE and SMU time out (ret = -110), permanently
+ *        wedging DRM/TTM until a hard power cycle.
+ *
+ * DESIGN SOLUTION:
+ * server_gpu_exec_gate serializes GPU execution so that AT MOST ONE GPU-backed child process
+ * is actively executing inference or loading weights at any instant.
+ *
+ * KEY FEATURES:
+ * 1. Strict FIFO ordering with ticket tracking, preventing starvation.
+ * 2. CPU Fast-Path Bypass: Models with n-gpu-layers = 0 (e.g. nomic-embed-text) bypass the
+ *    gate completely and run concurrently on Zen 5 AVX-512 without touching /dev/kfd.
+ * 3. RAII Leases (server_gpu_lease): Automatically releases the gate upon response completion,
+ *    SSE stream termination, client disconnect, or exception.
+ * 4. KFD Settle Cooldown: A 150ms cooldown is enforced after any child abort, teardown,
+ *    or process exit, allowing the amdgpu kernel driver to reclaim VM apertures and
+ *    deregister MES queues before another model touches the GPU.
+ * 5. Verbose Telemetry: Emits structured [GPU-GATE] events only when --verbose is active.
+ *
+ * LOCK HIERARCHY:
+ * server_gpu_exec_gate::mu is strictly LEAF-LEVEL. It must never attempt to acquire
+ * server_models::mutex. Callers must NOT hold server_models::mutex when calling acquire().
+ * =====================================================================================
+ */
+
+class server_gpu_exec_gate;
+
+class server_gpu_lease {
+public:
+    server_gpu_lease(server_gpu_exec_gate & gate, uint64_t ticket, std::string owner, std::string op, int64_t acquire_time_us);
+    ~server_gpu_lease();
+
+    server_gpu_lease(const server_gpu_lease &) = delete;
+    server_gpu_lease & operator=(const server_gpu_lease &) = delete;
+    server_gpu_lease(server_gpu_lease &&) = delete;
+    server_gpu_lease & operator=(server_gpu_lease &&) = delete;
+
+    void mark_abort() { aborted = true; }
+    void mark_teardown() { teardown = true; }
+
+    uint64_t get_ticket() const { return ticket; }
+    const std::string & get_owner() const { return owner; }
+    const std::string & get_op() const { return op; }
+
+private:
+    server_gpu_exec_gate & gate;
+    uint64_t ticket;
+    std::string owner;
+    std::string op;
+    int64_t acquire_time_us;
+    bool aborted = false;
+    bool teardown = false;
+};
+
+class server_gpu_exec_gate {
+    friend class server_gpu_lease;
+
+public:
+    server_gpu_exec_gate() = default;
+    ~server_gpu_exec_gate() = default;
+
+    // Acquire exclusive GPU execution access. Blocks until available or cancelled.
+    // should_stop is checked periodically while waiting (e.g. client disconnect).
+    // Throws std::runtime_error if cancelled by should_stop.
+    std::shared_ptr<server_gpu_lease> acquire(
+        const std::string & owner,
+        const std::string & op,
+        const std::function<bool()> & should_stop = nullptr);
+
+    // Apply an explicit cooldown (e.g. on child process exit/teardown)
+    void apply_cooldown(int ms = 150, const std::string & reason = "teardown");
+
+    // Inspection (thread-safe)
+    size_t get_queue_depth();
+    std::string get_active_owner();
+
+private:
+    struct waiter_t {
+        uint64_t ticket = 0;
+        std::string owner;
+        std::string op;
+        std::condition_variable cv;
+        bool granted = false;
+        bool cancelled = false;
+    };
+
+    void release(uint64_t ticket, const std::string & owner, const std::string & op, int64_t acquire_time_us, bool apply_cooldown);
+
+    std::mutex mu;
+    std::deque<std::shared_ptr<waiter_t>> queue;
+    bool in_use = false;
+    uint64_t next_ticket = 1;
+    std::string active_owner;
+    std::string active_op;
+    int64_t active_since_us = 0;
+    std::chrono::steady_clock::time_point cooldown_until = std::chrono::steady_clock::time_point::min();
+};
+

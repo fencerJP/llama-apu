@@ -277,7 +277,7 @@ llama_kv_cache::llama_kv_cache(
         ggml_backend_buffer_t buf = ctxs_bufs.emplace(std::move(ctx), buft, "kv cache");
 
         bool tile_dma_compatible = true;
-        if (!hparams.no_alloc) {
+        if (!no_alloc) {
             for (ggml_tensor * t = ggml_get_first_tensor(ctx.get()); t != nullptr; t = ggml_get_next_tensor(ctx.get(), t)) {
                 if (t->data) {
                     if (reinterpret_cast<uintptr_t>(t->data) % 16 != 0 || t->nb[1] % 16 != 0) {

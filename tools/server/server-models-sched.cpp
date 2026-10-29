@@ -422,6 +422,10 @@ void server_models_sched::measure_next() {
         std::vector<std::string> child_env = models.base_env;
         child_env.push_back(std::string(SERVER_ENV_ROUTER_PORT) + "=" + std::to_string(models.base_params.port));
         child_env.push_back(std::string(SERVER_ENV_CHILD_ROLE) + "=" + server_role_type_to_str(SERVER_ROLE_MEASURE));
+        if (!meta.uses_gpu()) {
+            child_env.push_back("HIP_VISIBLE_DEVICES=-1");
+            child_env.push_back("ROCR_VISIBLE_DEVICES=-1");
+        }
 
         auto proc = std::make_shared<server_subproc>();
         if (!proc->sproc.create(child_args, subprocess_option_no_window, child_env)) {
@@ -591,3 +595,153 @@ std::map<std::string, size_t> server_models_sched::deficit(const std::string & n
     }
     return res;
 }
+
+//
+// server_gpu_lease & server_gpu_exec_gate
+//
+
+server_gpu_lease::server_gpu_lease(server_gpu_exec_gate & gate, uint64_t ticket, std::string owner, std::string op, int64_t acquire_time_us)
+    : gate(gate), ticket(ticket), owner(std::move(owner)), op(std::move(op)), acquire_time_us(acquire_time_us) {}
+
+server_gpu_lease::~server_gpu_lease() {
+    gate.release(ticket, owner, op, acquire_time_us, aborted || teardown);
+}
+
+std::shared_ptr<server_gpu_lease> server_gpu_exec_gate::acquire(
+    const std::string & owner,
+    const std::string & op,
+    const std::function<bool()> & should_stop) {
+
+    const int64_t start_time_us = ggml_time_us();
+    std::shared_ptr<waiter_t> waiter;
+    uint64_t ticket = 0;
+
+    {
+        std::lock_guard<std::mutex> lk(mu);
+        ticket = next_ticket++;
+        waiter = std::make_shared<waiter_t>();
+        waiter->ticket = ticket;
+        waiter->owner  = owner;
+        waiter->op     = op;
+        queue.push_back(waiter);
+
+        if (common_log_get_verbosity_thold() > LOG_LEVEL_INFO) {
+            int64_t held_for_ms = in_use ? (start_time_us - active_since_us) / 1000 : 0;
+            LOG_INF("srv  %12.*s: [GPU-GATE] [ENQUEUE] ticket=#%" PRIu64 " model=%s op=%s queue_depth=%zu active_holder=%s held_for_ms=%" PRId64 "\n",
+                    12, __func__, ticket, owner.c_str(), op.c_str(), queue.size(),
+                    in_use ? active_owner.c_str() : "none", held_for_ms);
+        }
+    }
+
+    std::unique_lock<std::mutex> lk(mu);
+    while (true) {
+        if (should_stop && should_stop()) {
+            for (auto it = queue.begin(); it != queue.end(); ++it) {
+                if (*it == waiter) {
+                    queue.erase(it);
+                    break;
+                }
+            }
+            int64_t cancelled_after_ms = (ggml_time_us() - start_time_us) / 1000;
+            if (common_log_get_verbosity_thold() > LOG_LEVEL_INFO) {
+                LOG_INF("srv  %12.*s: [GPU-GATE] [CANCEL]  ticket=#%" PRIu64 " model=%s op=%s cancelled_after_ms=%" PRId64 " reason=client_disconnected\n",
+                        12, __func__, ticket, owner.c_str(), op.c_str(), cancelled_after_ms);
+            }
+            if (!in_use && !queue.empty()) {
+                queue.front()->cv.notify_one();
+            }
+            throw std::runtime_error("request cancelled while waiting for GPU execution gate");
+        }
+
+        auto now = std::chrono::steady_clock::now();
+        bool is_head = (!queue.empty() && queue.front() == waiter);
+        bool cooldown_expired = (now >= cooldown_until);
+
+        if (is_head && !in_use && cooldown_expired) {
+            queue.pop_front();
+            in_use          = true;
+            active_owner    = owner;
+            active_op       = op;
+            active_since_us = ggml_time_us();
+
+            int64_t wait_ms = (active_since_us - start_time_us) / 1000;
+            if (common_log_get_verbosity_thold() > LOG_LEVEL_INFO) {
+                LOG_INF("srv  %12.*s: [GPU-GATE] [ACQUIRE] ticket=#%" PRIu64 " model=%s op=%s wait_ms=%" PRId64 " queue_remaining=%zu\n",
+                        12, __func__, ticket, owner.c_str(), op.c_str(), wait_ms, queue.size());
+            }
+
+            return std::make_shared<server_gpu_lease>(*this, ticket, owner, op, active_since_us);
+        }
+
+        if (is_head && !in_use && !cooldown_expired) {
+            auto cooldown_remaining_ms = std::chrono::duration_cast<std::chrono::milliseconds>(cooldown_until - now).count();
+            if (common_log_get_verbosity_thold() > LOG_LEVEL_INFO) {
+                LOG_INF("srv  %12.*s: [GPU-GATE] [COOLDOWN] ticket=#%" PRIu64 " model=%s waiting_cooldown_ms=%" PRId64 " reason=kfd_settle\n",
+                        12, __func__, ticket, owner.c_str(), (int64_t)cooldown_remaining_ms);
+            }
+            waiter->cv.wait_until(lk, cooldown_until);
+            continue;
+        }
+
+        if (should_stop) {
+            waiter->cv.wait_for(lk, std::chrono::milliseconds(50));
+        } else {
+            waiter->cv.wait(lk);
+        }
+    }
+}
+
+void server_gpu_exec_gate::release(uint64_t ticket, const std::string & owner, const std::string & op, int64_t acquire_time_us, bool apply_cooldown) {
+    std::lock_guard<std::mutex> lk(mu);
+    int64_t held_ms = (ggml_time_us() - acquire_time_us) / 1000;
+    int cooldown_applied_ms = 0;
+
+    if (apply_cooldown) {
+        cooldown_applied_ms = 150;
+        auto target = std::chrono::steady_clock::now() + std::chrono::milliseconds(150);
+        if (target > cooldown_until) {
+            cooldown_until = target;
+        }
+    }
+
+    in_use = false;
+    active_owner.clear();
+    active_op.clear();
+    active_since_us = 0;
+
+    std::string next_waiter = queue.empty() ? "none" : queue.front()->owner;
+    if (common_log_get_verbosity_thold() > LOG_LEVEL_INFO) {
+        LOG_INF("srv  %12.*s: [GPU-GATE] [RELEASE] ticket=#%" PRIu64 " model=%s op=%s held_ms=%" PRId64 " cooldown_applied_ms=%d next_waiter=%s\n",
+                12, __func__, ticket, owner.c_str(), op.c_str(), held_ms, cooldown_applied_ms, next_waiter.c_str());
+    }
+
+    if (!queue.empty()) {
+        queue.front()->cv.notify_one();
+    }
+}
+
+void server_gpu_exec_gate::apply_cooldown(int ms, const std::string & reason) {
+    std::lock_guard<std::mutex> lk(mu);
+    auto target = std::chrono::steady_clock::now() + std::chrono::milliseconds(ms);
+    if (target > cooldown_until) {
+        cooldown_until = target;
+    }
+    if (common_log_get_verbosity_thold() > LOG_LEVEL_INFO) {
+        LOG_INF("srv  %12.*s: [GPU-GATE] [COOLDOWN] applied_ms=%d reason=%s\n",
+                12, __func__, ms, reason.c_str());
+    }
+    if (!in_use && !queue.empty()) {
+        queue.front()->cv.notify_one();
+    }
+}
+
+size_t server_gpu_exec_gate::get_queue_depth() {
+    std::lock_guard<std::mutex> lk(mu);
+    return queue.size();
+}
+
+std::string server_gpu_exec_gate::get_active_owner() {
+    std::lock_guard<std::mutex> lk(mu);
+    return in_use ? active_owner : "";
+}
+

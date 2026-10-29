@@ -108,6 +108,32 @@ struct server_model_meta {
         return status == SERVER_MODEL_STATUS_UNLOADED && exit_code != 0;
     }
 
+    /**
+     * Determine whether this model configuration utilizes GPU acceleration.
+     * On AMD APUs (gfx1150) under amdgpu.cwsr_enable=0, CPU-only models (n-gpu-layers = 0)
+     * bypass the GPU execution gate and are spawned with ROCm environment isolation
+     * (HIP_VISIBLE_DEVICES=-1, ROCR_VISIBLE_DEVICES=-1), preventing /dev/kfd descriptor opens.
+     */
+    bool uses_gpu() const {
+        std::string val;
+        bool has_ngl = preset.get_option("LLAMA_ARG_N_GPU_LAYERS", val);
+        if (has_ngl && val == "0") {
+            std::string draft_val;
+            if (preset.get_option("LLAMA_ARG_N_GPU_LAYERS_DRAFT", draft_val) && draft_val != "0" && !draft_val.empty()) {
+                return true;
+            }
+            return false;
+        }
+        for (size_t i = 0; i < args.size(); ++i) {
+            if (args[i] == "-ngl" || args[i] == "--n-gpu-layers" || args[i] == "--gpu-layers") {
+                if (i + 1 < args.size() && args[i + 1] == "0") {
+                    return false;
+                }
+            }
+        }
+        return true;
+    }
+
     void update_args(common_preset_context & ctx_presets, std::string bin_path);
     void update_caps(const common_params & base);
 };
@@ -170,6 +196,7 @@ private:
         std::shared_ptr<server_subproc> subproc; // shared with the monitor thread
         server_model_meta meta;
         int req_count = 0; // number of active proxy requests
+        std::shared_ptr<server_gpu_lease> load_gpu_lease = nullptr; // held during SERVER_MODEL_STATUS_LOADING for GPU instances
 
         // ask the child to exit (it handles the command on its stdin, see server_role::setup)
         void request_exit() const;
@@ -259,6 +286,9 @@ private:
 
     // request queue (models_max) and memory accounting
     std::unique_ptr<server_models_sched> sched;
+
+    // GPU execution serialization gate for multi-process APU stability
+    std::unique_ptr<server_gpu_exec_gate> gpu_gate;
 
     // if true, add some delay to simulate works (useful for testing)
     bool debug_fake_timing = false;
