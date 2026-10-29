@@ -35,6 +35,9 @@
 
 #ifndef _WIN32
 extern char **environ;
+#include <dirent.h>
+#include <fcntl.h>
+#include <unistd.h>
 #endif
 
 #define DEFAULT_STOP_TIMEOUT 10 // seconds
@@ -1290,6 +1293,27 @@ void server_models::load(const std::string & name, const load_options & opts) {
             SRV_INF("  %s\n", arg.c_str());
         }
         inst.meta.args = child_args; // save for debugging
+
+#ifndef _WIN32
+        // Ensure all file descriptors opened by ROCm or the router (e.g. /dev/kfd, /dev/dri)
+        // have FD_CLOEXEC set so child processes do not inherit stray GPU queue descriptors.
+        DIR * dir = opendir("/proc/self/fd");
+        if (dir) {
+            int dir_fd = dirfd(dir);
+            struct dirent * de;
+            while ((de = readdir(dir)) != nullptr) {
+                if (de->d_name[0] == '.') continue;
+                int fd = std::atoi(de->d_name);
+                if (fd > 2 && fd != dir_fd) {
+                    int flags = fcntl(fd, F_GETFD);
+                    if (flags != -1 && !(flags & FD_CLOEXEC)) {
+                        fcntl(fd, F_SETFD, flags | FD_CLOEXEC);
+                    }
+                }
+            }
+            closedir(dir);
+        }
+#endif
 
         // the child writes its commands to stdout and its logs to stderr
         int options = subprocess_option_no_window;

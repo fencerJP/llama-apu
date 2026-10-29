@@ -274,11 +274,12 @@ llama_kv_cache::llama_kv_cache(
 
     // allocate the tensors and initialize the buffers to avoid NaNs in the padding
     for (auto & [buft, ctx] : ctx_map) {
+        ggml_context * raw_ctx = ctx.get();
         ggml_backend_buffer_t buf = ctxs_bufs.emplace(std::move(ctx), buft, "kv cache");
 
         bool tile_dma_compatible = true;
-        if (!no_alloc) {
-            for (ggml_tensor * t = ggml_get_first_tensor(ctx.get()); t != nullptr; t = ggml_get_next_tensor(ctx.get(), t)) {
+        if (!no_alloc && raw_ctx) {
+            for (ggml_tensor * t = ggml_get_first_tensor(raw_ctx); t != nullptr; t = ggml_get_next_tensor(raw_ctx, t)) {
                 if (t->data) {
                     if (reinterpret_cast<uintptr_t>(t->data) % 16 != 0 || t->nb[1] % 16 != 0) {
                         tile_dma_compatible = false;
