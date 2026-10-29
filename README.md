@@ -111,6 +111,11 @@ flowchart TD
 - Inter-accelerator speculative decoding coordinated via Linux DRM timeline sync objects.
 - Signals candidate token batch verification between GPU and NPU with **sub-10 microsecond latency**.
 
+### 8. Optional ROCm Custom Quantization Formats (`Q4_0_ROCMFP4`, `Q4_0_ROCMFP4_FAST`, `ROCmFPX`)
+- **Native HIP Dequantization & Execution:** Optional support for float-scaled 4-bit, 3-bit, 2-bit, and 6-bit quantization layouts tuned for AMD unified memory buses.
+- **Empirically Evaluated on RDNA 3.5 APUs:** Delivers up to **+42.4% token generation throughput** on MoE models (`Groot-19B-A3B`) and 14–16% VRAM reduction on 12B–33B models without sacrificing zero-copy APU handoff.
+- **Selectable in Tooling:** Retains standard GGUF formats (`Q4_K_M`, `IQ4_NL`, etc.) by default while enabling ROCm custom formats as selectable options in `llama-quantize` and model loading. See [`benches/rocm_quants_full_evaluation.md`](benches/rocm_quants_full_evaluation.md) for full benchmarks.
+
 ---
 
 ## 🛠️ Quickstart

@@ -28,6 +28,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Delivers **62.5% KV cache footprint reduction** (average 6-bit per token) while boosting prompt ingestion throughput by up to **+7.1%** (`291.33 t/s` vs `272.07 t/s` on 9B).
 - **Comprehensive APU Benchmark Suite**:
   - Documented realistic baseline benchmarks across 9B, 27B, and 33B models on AMD Ryzen AI 9 HX 470 APU (`gfx1150`) in [`benches/phase1_baseline_results.md`](benches/phase1_baseline_results.md).
+- **ROCm Custom Quantization Support (Optional Layouts: Q4_0_ROCMFP4, Q4_0_ROCMFP4_FAST, ROCmFPX)**:
+  - Added optional support for AMD ROCm custom float-scaled quants (`Q4_0_ROCMFP4`, `Q4_0_ROCMFP4_FAST`, `Q3_0_ROCMFPX`, `Q2_0_ROCMFPX`, `Q6_0_ROCMFPX`, `Q8_0_ROCMFPX`, `Q4_0_ROCMI4`).
+  - Integrated HIP dequantization routines, MMQ/MMVQ kernel instances, and type traits for RDNA 3.5 APU (`gfx1150`).
+  - Added selectable quantization targets in `llama-quantize` without altering default GGUF quantizations.
+  - Documented complete 6-pair head-to-head empirical evaluation in [`benches/rocm_quants_full_evaluation.md`](benches/rocm_quants_full_evaluation.md), demonstrating up to **+42.4% token generation throughput** on MoE models (`Groot-19B-A3B`) and 14–16% VRAM savings on 12B–33B models.
 
 ---
 
