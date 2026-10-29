@@ -185,14 +185,13 @@ int main(int argc, char ** argv) {
             n_draft_max = std::max(n_draft_max, 0);
 
             // generate a new draft
-            common_speculative_get_draft_params(spec, seq_id) = {
-                /* .drafting   = */ true,
-                /* .n_max      = */ n_draft_max,
-                /* .pos0       = */ n_past,
-                /* .id_last    = */ id_last,
-                /* .prompt     = */ &prompt_tgt,
-                /* .result     = */ &draft, // output
-            };
+            auto & dparams = common_speculative_get_draft_params(spec, seq_id);
+            dparams.drafting = true;
+            dparams.n_max    = n_draft_max;
+            dparams.pos0     = n_past;
+            dparams.id_last  = id_last;
+            dparams.prompt   = &prompt_tgt;
+            dparams.result   = &draft; // output
             common_speculative_draft(spec);
 
             // save a checkpoint of the target context before evaluating the draft
