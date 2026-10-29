@@ -7,6 +7,43 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [0.11.0] - 2026-10-29
+
+**Router GPU Execution Gate, CPU Fast-Path & Upstream Master Sync (`b11973`).**
+
+### Added
+- **Router-Level GPU Execution Gate (`server_gpu_exec_gate` & `server_gpu_lease`)**:
+  - Implemented ticket-based FIFO GPU execution scheduler in `tools/server/server-models-sched.h` and `server-models-sched.cpp`.
+  - Serializes active GPU inference (`/v1/chat/completions`, `/v1/completions`, `/v1/embeddings`) and model load/unload operations across resident child processes (`--models-max N`).
+  - Eliminates fatal MES queue lockups (`MES failed to respond to msg=REMOVE_QUEUE`) and aperture violations (`HSA_STATUS_ERROR_MEMORY_APERTURE_VIOLATION`) on AMD Strix Point APU (`gfx1150`) under `amdgpu.cwsr_enable=0`.
+  - Added mid-stream client disconnect support (`req.should_stop`), instantly freeing queued leases when HTTP clients disconnect.
+  - Added 150ms KFD settle cooldown upon process termination/abort, giving kernel DRM/TTM time to reclaim GTT apertures safely.
+  - Added detailed router gate telemetry under `--verbose` (`[GPU-GATE] [ENQUEUE]`, `[ACQUIRE]`, `[RELEASE]`, `[COOLDOWN]`).
+- **CPU Fast-Path Scheduler Bypass**:
+  - Automatically classifies models with `n_gpu_layers == 0` (such as `nomic-embed-text-v1.5` and `julia-1-gguf`) as CPU-only instances.
+  - Bypasses the GPU execution gate, enabling concurrent parallel execution of embedding requests on Zen 5 AVX-512 alongside active GPU LLM generations without queue latency or timeouts.
+- **Strict KFD Descriptor & Device Isolation**:
+  - Injects `HIP_VISIBLE_DEVICES=-1` and `ROCR_VISIBLE_DEVICES=-1` for CPU instances to prevent device enumeration and ROCm initialization.
+  - Enforces `FD_CLOEXEC` across all file descriptors (> 2) in the router process prior to spawning child processes, guaranteeing child instances never inherit stray `/dev/kfd` or `/dev/dri` queue handles from the parent.
+- **Upstream Sync (`e09a78a25` / `b11973`)**:
+  - Merged 139 upstream commits from `ggml-org/llama.cpp` master.
+  - Integrated upstream scheduler refactoring (`server_models_sched`, `--models-memory-margin`, `SERVER_ROLE_MEASURE`) and role type refactoring (`server_role_type`).
+  - Integrated ROCm/HIP fixes for `gfx1150` (WMMA operand types, byte permute fallback).
+- **Realistic End-to-End Test Suite (`scripts/test_router_gpu_gate_e2e.py`)**:
+  - Automated verification of presets, KFD isolation, high-token OpenClaw prompts (~3,057 tokens) with bursts of 20 concurrent embeddings, multi-model GPU contention, mid-stream disconnect recovery, and kernel `journalctl -k` driver audits.
+
+### Fixed
+- **KV Cache Null Context Dereference**:
+  - Fixed segmentation fault (exit code 139) in `src/llama-kv-cache.cpp` where `ctx` was moved into `ctxs_bufs.emplace(std::move(ctx), ...)` before tensor iteration, causing `ggml_get_first_tensor(ctx.get())` to dereference null. Preserved `raw_ctx` prior to the move.
+
+### Changed
+- **Presets & Docker Compose Optimization**:
+  - Configured `parallel = 1` in `[*]` in `models/presets.ini` to reduce GTT memory pressure and intra-process queue contention.
+  - Configured `n-gpu-layers = 0` for `nomic-embed-text-v1.5` and `julia-1-gguf` in `presets.ini`.
+  - Removed top-level CLI overrides (`-np 4`, `--ctx-size 131072`) from `docker-compose.yml` to allow individual per-model presets to take effect.
+
+---
+
 ## [0.10.1] - 2026-10-10
 
 **Upstream Master Sync (`b11541`) & Model Architecture Expansion.**
