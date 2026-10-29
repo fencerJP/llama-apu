@@ -622,8 +622,9 @@ struct common_params {
     ggml_type cache_type_k = GGML_TYPE_F16; // KV cache data type for the K
     ggml_type cache_type_v = GGML_TYPE_F16; // KV cache data type for the V
 
-    std::string kv_cache_type = "auto";     // Phase 3 APU KV cache type: {q4_0, fp16, auto}
+    std::string kv_cache_type = "auto";     // Phase 3 APU KV cache type: {q4_0, fp16, asym, auto}
     bool        no_kv_quant   = false;      // Phase 3 APU: explicitly disable dynamic KV quantization (force FP16)
+    int32_t     kv_boundary_layers = 2;     // boundary layers protected from low-bit KV quantization
     size_t      moe_cache_size = 0;         // GPU cache size in bytes for the MoE experts kept in the CPU, split among the GPUs like the layers
 
     common_conversation_mode conversation_mode = COMMON_CONVERSATION_MODE_AUTO;

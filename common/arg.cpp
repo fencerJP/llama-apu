@@ -2578,12 +2578,15 @@ common_params_context common_params_parser_init(common_params & params, llama_ex
         }
     ).set_env("LLAMA_ARG_CACHE_TYPE_V"));
     add_opt(common_arg(
-        {"--kv-cache-type"}, "{q4_0,fp16,auto}",
+        {"--kv-cache-type"}, "{q4_0,fp16,asym,auto}",
         "Phase 3 APU: dynamic KV cache quantization mode (default: auto)",
         [](common_params & params, const std::string & value) {
             params.kv_cache_type = value;
             if (value == "q4_0" || value == "Q4_0") {
                 params.cache_type_k = GGML_TYPE_Q4_0;
+                params.cache_type_v = GGML_TYPE_Q4_0;
+            } else if (value == "asym" || value == "ASYM" || value == "asymmetric") {
+                params.cache_type_k = GGML_TYPE_Q8_0;
                 params.cache_type_v = GGML_TYPE_Q4_0;
             } else if (value == "fp16" || value == "f16" || value == "FP16") {
                 params.cache_type_k = GGML_TYPE_F16;
@@ -2591,6 +2594,16 @@ common_params_context common_params_parser_init(common_params & params, llama_ex
             }
         }
     ).set_env("LLAMA_ARG_KV_CACHE_TYPE"));
+    add_opt(common_arg(
+        {"--kv-boundary-layers"}, "N",
+        "number of initial and trailing boundary layers protected from low-bit quantization (default: 2)",
+        [](common_params & params, const std::string & value) {
+            params.kv_boundary_layers = std::stoi(value);
+            char buf[32];
+            snprintf(buf, sizeof(buf), "%d", params.kv_boundary_layers);
+            setenv("LLAMA_KV_BOUNDARY_LAYERS", buf, 1);
+        }
+    ).set_env("LLAMA_ARG_KV_BOUNDARY_LAYERS"));
     add_opt(common_arg(
         {"--no-kv-quant"},
         "Phase 3 APU: explicitly disable dynamic KV cache quantization (force uncompressed FP16)",

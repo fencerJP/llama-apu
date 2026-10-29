@@ -108,9 +108,60 @@ void apu_spec_coordinator::record_rollback(uint32_t n_rolled_back) {
     stats_.rejected_draft_tokens += n_rolled_back;
 }
 
-bool apu_spec_coordinator::synchronize_draft_to_target() {
+int32_t apu_spec_coordinator::compute_dynamic_n_max(int32_t pos) const {
+    std::lock_guard<std::mutex> lock(mutex_);
+    // Context ladder:
+    // < 16k: n_max = 4
+    // 16k - 48k: n_max = 4
+    // 48k - 96k: n_max = 2
+    // >= 96k: n_max = 1
+    int32_t base_n = 4;
+    if (pos >= 98304) {
+        base_n = 1;
+    } else if (pos >= 49152) {
+        base_n = 2;
+    } else {
+        base_n = 4;
+    }
+
+    // Dynamic EMA feedback: if acceptance rate drops below 40%, throttle n_max by 1
+    if (stats_.total_draft_tokens > 16 && stats_.acceptance_rate < 0.40) {
+        base_n = std::max(1, base_n - 1);
+    }
+    return base_n;
+}
+
+float apu_spec_coordinator::compute_dynamic_p_min(int32_t pos) const {
+    std::lock_guard<std::mutex> lock(mutex_);
+    // Confidence gate ladder:
+    // < 16k: p_min = 0.75
+    // 16k - 48k: p_min = 0.25
+    // >= 48k: p_min = 0.00
+    float base_p = 0.0f;
+    if (pos < 16384) {
+        base_p = 0.75f;
+    } else if (pos < 49152) {
+        base_p = 0.25f;
+    } else {
+        base_p = 0.0f;
+    }
+
+    // Dynamic EMA feedback: if acceptance rate drops below 40%, step p_min up to avoid wasted verify work
+    if (stats_.total_draft_tokens > 16 && stats_.acceptance_rate < 0.40) {
+        base_p = std::min(0.85f, base_p + 0.15f);
+    }
+    return base_p;
+}
+
+bool apu_spec_coordinator::synchronize_draft_to_target(bool cross_accelerator) {
     std::lock_guard<std::mutex> lock(mutex_);
     if (mode_ == APU_SPEC_OFF || !timeline_sync_enabled_) {
+        return true;
+    }
+
+    // Adaptive DRM timeline: if draft and target run on the same HIP device/stream (e.g. single-model MTP),
+    // hardware queue ordering guarantees synchronization without user-space DRM ioctl overhead.
+    if (!cross_accelerator) {
         return true;
     }
 

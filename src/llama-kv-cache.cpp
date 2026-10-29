@@ -62,6 +62,19 @@ static void ggml_gen_hadamard(ggml_tensor * tensor) {
 // llama_kv_cache
 //
 
+static int get_kv_boundary_layers() {
+    static int b = -1;
+    if (b < 0) {
+        const char * env = getenv("LLAMA_KV_BOUNDARY_LAYERS");
+        if (env) {
+            b = std::max(0, atoi(env));
+        } else {
+            b = 2; // Default: 2 boundary layers guarded
+        }
+    }
+    return b;
+}
+
 llama_kv_cache::llama_kv_cache(
         const llama_model & model,
                      bool   no_alloc,
@@ -226,11 +239,25 @@ llama_kv_cache::llama_kv_cache(
             throw std::runtime_error("failed to create ggml context for kv cache");
         }
 
+        ggml_type layer_type_k = type_k;
+        ggml_type layer_type_v = type_v;
+
+        const int b_layers = get_kv_boundary_layers();
+        if (b_layers > 0 && (il < (uint32_t) b_layers || il + (uint32_t) b_layers >= n_layer)) {
+            // Guard boundary layers: elevate low-quantized KV to Q8_0 (or F16 if unquantized)
+            if (ggml_is_quantized(layer_type_k) && layer_type_k != GGML_TYPE_Q8_0) {
+                layer_type_k = GGML_TYPE_Q8_0;
+            }
+            if (ggml_is_quantized(layer_type_v) && layer_type_v != GGML_TYPE_Q8_0) {
+                layer_type_v = GGML_TYPE_Q8_0;
+            }
+        }
+
         const bool has_k = true;
         const bool has_v = !is_mla;
 
-        ggml_tensor * k = has_k ? ggml_new_tensor_3d(ctx, type_k, n_embd_k_gqa, kv_size, n_stream) : nullptr;
-        ggml_tensor * v = has_v ? ggml_new_tensor_3d(ctx, type_v, n_embd_v_gqa, kv_size, n_stream) : nullptr;
+        ggml_tensor * k = has_k ? ggml_new_tensor_3d(ctx, layer_type_k, n_embd_k_gqa, kv_size, n_stream) : nullptr;
+        ggml_tensor * v = has_v ? ggml_new_tensor_3d(ctx, layer_type_v, n_embd_v_gqa, kv_size, n_stream) : nullptr;
 
         has_k && ggml_format_name(k, "cache_%sk_l%d", name_tag, il);
         has_v && ggml_format_name(v, "cache_%sv_l%d", name_tag, il);

@@ -14,6 +14,8 @@ list(APPEND CMAKE_PREFIX_PATH  ${ROCM_PATH})
 list(APPEND CMAKE_PREFIX_PATH "${ROCM_PATH}/lib64/cmake")
 list(APPEND CMAKE_PREFIX_PATH "${ROCM_PATH}/lib/cmake")
 
+set(CMAKE_HIP_FLAGS "${CMAKE_HIP_FLAGS} --hip-path=${ROCM_PATH}")
+
 if (NOT DEFINED CMAKE_HIP_FLAGS_DEBUG)
     set(CMAKE_HIP_FLAGS_DEBUG "-g -Xarch_device -O2 -Xarch_host -O0")
 endif()
