@@ -48,8 +48,12 @@ public:
     // Record KV cache rollback event
     void record_rollback(uint32_t n_rolled_back);
 
+    // Dynamic confidence ladder calculation based on context depth (pos)
+    int32_t compute_dynamic_n_max(int32_t pos) const;
+    float   compute_dynamic_p_min(int32_t pos) const;
+
     // DRM timeline synchronization point between candidate drafting and target verification pass
-    bool synchronize_draft_to_target();
+    bool synchronize_draft_to_target(bool cross_accelerator = true);
 
     // Trigger graceful fallback to non-speculative execution
     void record_fallback(const std::string & reason);

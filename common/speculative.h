@@ -65,6 +65,9 @@ struct common_speculative_draft_params {
     int32_t n_max = -1;
 
     llama_pos   pos0;
+    // RoPE position that the target model would assign to id_last's successor.
+    // Defaults to -1, which falls back to pos0 / n_past.
+    llama_pos   pos_next = -1;
     llama_token id_last;
 
     // TODO: remove in the future by keeping track of the prompt from the _begin() call and the consecutive accept calls
@@ -79,6 +82,9 @@ struct common_speculative_draft_params {
     // the target's temp and seed, read only when the drafter samples probabilistically
     float    temp = 1.0f;
     uint32_t seed = LLAMA_DEFAULT_SEED;
+
+    int32_t n_min = -1;
+    float   p_min = -1.0f;
 };
 
 common_speculative_draft_params & common_speculative_get_draft_params(common_speculative * spec, llama_seq_id seq_id);
@@ -97,7 +103,15 @@ void common_speculative_accept(common_speculative * spec, llama_seq_id, uint16_t
 
 // (optional) get/set internal state
 bool common_speculative_get_state(common_speculative * spec, llama_seq_id seq_id, std::vector<uint8_t> & data);
-void common_speculative_set_state(common_speculative * spec, llama_seq_id seq_id, const std::vector<uint8_t> & data);
+bool common_speculative_set_state(common_speculative * spec, llama_seq_id seq_id, const std::vector<uint8_t> & data);
+bool common_speculative_state_required(const common_speculative * spec);
+
+// (optional) rewind the internal state to a previously seen position, so that
+// processing can resume from there after the target/draft memories rolled back
+// (bounded prompt-cache boundary salvage). Returns false when the position is
+// not recoverable.
+bool common_speculative_rollback_state(common_speculative * spec, llama_seq_id seq_id, llama_pos pos);
+void common_speculative_shift_state(common_speculative * spec, llama_seq_id seq_id, llama_pos delta);
 
 // print statistics about the speculative decoding
 void common_speculative_print_stats(const common_speculative * spec);

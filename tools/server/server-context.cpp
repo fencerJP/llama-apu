@@ -3882,6 +3882,7 @@ private:
 
                 slot.mem.seq_rm (slot.id, n_keep            , n_keep + n_discard);
                 slot.mem.seq_add(slot.id, n_keep + n_discard, slot.prompt.tokens.pos_next(), -n_discard);
+                common_speculative_shift_state(spec.get(), slot.id, -n_discard);
 
                 // add generated tokens to cache
                 // ref: https://github.com/ggml-org/llama.cpp/pull/16818#discussion_r2473269481
@@ -3970,12 +3971,15 @@ private:
                             /* .drafting = */ true,
                             /* .n_max    = */ n_draft_max,
                             /* .pos0     = */ slot.prompt.tokens.pos_next(),
+                            /* .pos_next = */ slot.prompt.tokens.pos_next(),
                             /* .id_last  = */ slot.sampled,
                             /* .prompt   = */ &slot.spec_prompt,
                             /* .result   = */ &slot.spec_draft,
                             /* .result_q = */ spec_reject ? &slot.spec_draft_q : nullptr,
                             /* .temp     = */ slot.task->params.sampling.temp,
                             /* .seed     = */ slot.task->params.sampling.seed,
+                            /* .n_min    = */ -1,
+                            /* .p_min    = */ -1.0f,
                         };
 
                         drafting.push_back(&slot);
@@ -4345,50 +4349,77 @@ private:
                                 }
 
                                 if (pos_min >= pos_min_thold) {
-                                    // search for a context checkpoint
-                                    const auto it = std::find_if(
-                                        slot.prompt.checkpoints.rbegin(),
-                                        slot.prompt.checkpoints.rend(),
-                                        [&](const auto & cur) {
-                                            // guarantee that a checkpoint will result in at least one token being processed [TAG_PROMPT_LOGITS]
-                                            SLT_TRC(slot, "checking checkpoint with [%d, %d] against %d...\n", cur.pos_min, cur.pos_max, pos_min_thold);
-                                            // workaround for [TAG_CHECKPOINTS_FIX_POS_MIN]
-                                            if (cur.pos_max > pos_next) {
-                                                return false;
-                                            }
-                                            return cur.pos_min < pos_min_thold || cur.pos_min == 0;
+                                    // Try prompt cache trailing rollback first if speculative state is required
+                                    bool trailing_salvaged = false;
+                                    if (common_speculative_state_required(spec.get()) &&
+                                        n_past > 0 && n_past < slot.prompt.n_tokens()) {
+                                        const llama_pos p0_rm = slot.prompt.tokens.pos_next(n_past);
+
+                                        bool rolled_back = p0_rm > 0 &&
+                                            llama_memory_seq_rm(llama_get_memory(ctx_tgt), slot.id, p0_rm, -1);
+
+                                        if (rolled_back && ctx_dft) {
+                                            rolled_back = llama_memory_seq_rm(llama_get_memory(ctx_dft), slot.id, p0_rm, -1);
                                         }
-                                    );
 
-                                    bool do_reset = it == slot.prompt.checkpoints.rend();
+                                        if (rolled_back) {
+                                            rolled_back = common_speculative_rollback_state(spec.get(), slot.id, p0_rm - 1);
+                                        }
 
-                                    if (!do_reset) {
-                                        // restore the context checkpoint
-                                        if (!it->load_tgt(ctx_tgt, slot.id, LLAMA_STATE_SEQ_FLAGS_PARTIAL_ONLY) ||
-                                            !it->load_dft(ctx_dft, slot.id, LLAMA_STATE_SEQ_FLAGS_PARTIAL_ONLY)) {
-                                            if (it->id_task != -1) {
-                                                GGML_ABORT("failed to restore context checkpoint\n");
-                                            }
-                                            // restored from a slot file, not guaranteed to load - fall back to full prompt re-processing
-                                            SLT_WRN(slot, "%s", "failed to load context checkpoint restored from a slot file\n");
-                                            do_reset = true;
+                                        if (rolled_back) {
+                                            SLT_INF(slot,
+                                                    "prompt cache trailing rollback: lcp=%d cached_tokens=%d request_tokens=%d p0=%d\n",
+                                                    n_past, slot.prompt.n_tokens(), slot.task->n_tokens(), p0_rm);
+                                            trailing_salvaged = true;
                                         }
                                     }
 
-                                    if (!do_reset) {
-                                        // restore the draft's speculative state
-                                        common_speculative_set_state(spec.get(), slot.id, it->data_spec);
+                                    if (!trailing_salvaged) {
+                                        // search for a context checkpoint
+                                        const auto it = std::find_if(
+                                            slot.prompt.checkpoints.rbegin(),
+                                            slot.prompt.checkpoints.rend(),
+                                            [&](const auto & cur) {
+                                                // guarantee that a checkpoint will result in at least one token being processed [TAG_PROMPT_LOGITS]
+                                                SLT_TRC(slot, "checking checkpoint with [%d, %d] against %d...\n", cur.pos_min, cur.pos_max, pos_min_thold);
+                                                // workaround for [TAG_CHECKPOINTS_FIX_POS_MIN]
+                                                if (cur.pos_max > pos_next) {
+                                                    return false;
+                                                }
+                                                return cur.pos_min < pos_min_thold || cur.pos_min == 0;
+                                            }
+                                        );
 
-                                        pos_next = std::min(pos_next, std::max(it->pos_min + 1, it->pos_max));
-                                        n_past   = std::min(slot.prompt.tokens.size_up_to_pos(pos_next), (size_t) it->n_tokens);
-                                        SLT_TRC(slot, "restored context checkpoint (pos_min = %d, pos_max = %d, n_tokens = %" PRId64 ", n_past = %d, size = %.3f MiB)\n", it->pos_min, it->pos_max, it->n_tokens, n_past, (float) it->size() / 1024 / 1024);
-                                    }
+                                        bool do_reset = it == slot.prompt.checkpoints.rend();
 
-                                    if (do_reset) {
-                                        SLT_TRC(slot, "forcing full prompt re-processing due to lack of cache data (likely due to SWA or hybrid/recurrent memory, see %s)\n",
-                                                "https://github.com/ggml-org/llama.cpp/pull/13194#issuecomment-2868343055");
-                                        pos_next = 0;
-                                        n_past = 0;
+                                        if (!do_reset) {
+                                            // restore the context checkpoint
+                                            if (!it->load_tgt(ctx_tgt, slot.id, LLAMA_STATE_SEQ_FLAGS_PARTIAL_ONLY) ||
+                                                !it->load_dft(ctx_dft, slot.id, LLAMA_STATE_SEQ_FLAGS_PARTIAL_ONLY)) {
+                                                if (it->id_task != -1) {
+                                                    GGML_ABORT("failed to restore context checkpoint\n");
+                                                }
+                                                // restored from a slot file, not guaranteed to load - fall back to full prompt re-processing
+                                                SLT_WRN(slot, "%s", "failed to load context checkpoint restored from a slot file\n");
+                                                do_reset = true;
+                                            }
+                                        }
+
+                                        if (!do_reset) {
+                                            // restore the draft's speculative state
+                                            common_speculative_set_state(spec.get(), slot.id, it->data_spec);
+
+                                            pos_next = std::min(pos_next, std::max(it->pos_min + 1, it->pos_max));
+                                            n_past   = std::min(slot.prompt.tokens.size_up_to_pos(pos_next), (size_t) it->n_tokens);
+                                            SLT_TRC(slot, "restored context checkpoint (pos_min = %d, pos_max = %d, n_tokens = %" PRId64 ", n_past = %d, size = %.3f MiB)\n", it->pos_min, it->pos_max, it->n_tokens, n_past, (float) it->size() / 1024 / 1024);
+                                        }
+
+                                        if (do_reset) {
+                                            SLT_TRC(slot, "forcing full prompt re-processing due to lack of cache data (likely due to SWA or hybrid/recurrent memory, see %s)\n",
+                                                    "https://github.com/ggml-org/llama.cpp/pull/13194#issuecomment-2868343055");
+                                            pos_next = 0;
+                                            n_past = 0;
+                                        }
                                     }
                                 }
                             }
