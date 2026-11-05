@@ -19,6 +19,7 @@ struct ggml_tensor;
 
 struct llama_cparams;
 struct llama_layer;
+struct llama_model;
 struct llama_prec_policy;
 struct llama_hadamard;
 
@@ -775,6 +776,8 @@ class llm_graph_result;
 struct llm_graph_params {
     llm_arch arch = LLM_ARCH_UNKNOWN;
 
+    const llama_model * model = nullptr;
+
     llama_hparams hparams;
     llama_cparams cparams;
 
@@ -1003,6 +1006,8 @@ struct llm_graph_amax_src1 {
 };
 
 struct llm_graph_context {
+    const llama_model & model;
+
     const llm_arch arch;
 
     const llama_hparams & hparams;
