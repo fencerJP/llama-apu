@@ -333,6 +333,13 @@ static bool tensor_allows_quantization(const llama_model_quantize_params * param
     // these are not too big so keep them as it is
     quantize &= name.find("per_layer_model_proj") == std::string::npos;
 
+    // limite: very small gates and dense connection mixers
+    if (arch == LLM_ARCH_LIMITE) {
+        quantize &= name.find("attn_gate.weight")    == std::string::npos;
+        quantize &= name.find("attn_ve_gate.weight") == std::string::npos;
+        quantize &= name.find("mudd_")               == std::string::npos;
+    }
+
     // do not quantize positional embeddings and token types (BERT)
     quantize &= name != LLM_TN(arch)(LLM_TENSOR_POS_EMBD,    "weight");
     quantize &= name != LLM_TN(arch)(LLM_TENSOR_TOKEN_TYPES, "weight");
@@ -354,6 +361,16 @@ static bool tensor_allows_quantization(const llama_model_quantize_params * param
     quantize &= name.find("indexer.k_proj.weight") == std::string::npos;
     quantize &= name.find("indexer.q_proj.weight") == std::string::npos;
 
+    // metis16: small control tensors that steer every layer; the stream and hc_ tables (ne[0] = 4) would fall back to F16
+    if (arch == LLM_ARCH_METIS16) {
+        quantize &= name.rfind("depth_mem_", 0) == std::string::npos;
+        quantize &= name.rfind("cont_", 0)      == std::string::npos;
+        quantize &= name.find("stream_embd")    == std::string::npos;
+        quantize &= name.find("attn_pass_lora") == std::string::npos;
+        quantize &= name.find("ffn_exp_embd")   == std::string::npos;
+        quantize &= name.find("hc_")            == std::string::npos;
+    }
+
     // glm5-next
     if (arch == LLM_ARCH_GLM5_NEXT) {
         quantize &= name.find("hc_")                     == std::string::npos;
@@ -370,6 +387,12 @@ static bool tensor_allows_quantization(const llama_model_quantize_params * param
         quantize &= name.find("attn_kv_a_mqa.weight")    == std::string::npos;
         quantize &= name.find("attn_k_b.weight")         == std::string::npos;
         quantize &= name.find("attn_v_b.weight")         == std::string::npos;
+    }
+
+    // xing4_0: do not quantize the MHC hyper-connection gate matrices
+    // (the 1D hc_*_base / hc_*_scale tensors are already excluded by the n_dims < 2 rule)
+    if (arch == LLM_ARCH_XING4_0) {
+        quantize &= name.find("hc_") == std::string::npos;
     }
 
     // the decision head of vllm-decision2 is small and computed in F32

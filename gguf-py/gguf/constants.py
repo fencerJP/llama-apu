@@ -143,6 +143,7 @@ class Keys:
         ATTN_LOGIT_SOFTCAPPING            = "{arch}.attn_logit_softcapping"
         ROUTER_LOGIT_SOFTCAPPING          = "{arch}.router_logit_softcapping"
         FINAL_LOGIT_SOFTCAPPING           = "{arch}.final_logit_softcapping"
+        FINAL_LOGIT_SIGMOID_CAPPING       = "{arch}.final_logit_sigmoid_capping"
         SWIN_NORM                         = "{arch}.swin_norm"
         RESCALE_EVERY_N_LAYERS            = "{arch}.rescale_every_n_layers"
         TIME_MIX_EXTRA_DIM                = "{arch}.time_mix_extra_dim"
@@ -161,6 +162,7 @@ class Keys:
         EMBD_LENGTH_PER_LAYER_INP         = "{arch}.embedding_length_per_layer_input"
         SWIGLU_CLAMP_EXP                  = "{arch}.swiglu_clamp_exp"
         SWIGLU_CLAMP_SHEXP                = "{arch}.swiglu_clamp_shexp"
+        SWIGLU_CLAMP                      = "{arch}.swiglu_clamp"
         HIDDEN_ACT                        = "{arch}.hidden_activation"
         DENSE_FEAT_IN_SIZE                = "{arch}.{dense}_feat_in"
         DENSE_FEAT_OUT_SIZE               = "{arch}.{dense}_feat_out"
@@ -202,6 +204,7 @@ class Keys:
         ICLR_LORA_RANK               = "{arch}.attention.iclr_lora_rank"
         VALUE_RESIDUAL_MIX_LORA_RANK = "{arch}.attention.value_residual_mix_lora_rank"
         GATE_LORA_RANK               = "{arch}.attention.gate_lora_rank"
+        PASS_LORA_RANK               = "{arch}.attention.pass_lora_rank"
         REL_BUCKETS_COUNT            = "{arch}.attention.relative_buckets_count"
         SLIDING_WINDOW               = "{arch}.attention.sliding_window"
         SCALE                        = "{arch}.attention.scale"
@@ -228,6 +231,7 @@ class Keys:
         ROPE_PATTERN                 = "{arch}.attention.rope_pattern"
         VALUE_EXPERT_COUNT           = "{arch}.attention.value_expert_count"
         VALUE_EXPERT_USED_COUNT      = "{arch}.attention.value_expert_used_count"
+        XSA_EPS                      = "{arch}.attention.xsa_epsilon"
 
         class Indexer:
             HEAD_COUNT = "{arch}.attention.indexer.head_count"
@@ -302,11 +306,22 @@ class Keys:
         LLM_KV_SPLIT_COUNT         = "split.count"
         LLM_KV_SPLIT_TENSORS_COUNT = "split.tensors.count"
 
+    class MUDD:
+        FEED_FORWARD_LENGTH = "{arch}.mudd.feed_forward_length"
+        TAP_COUNT           = "{arch}.mudd.tap_count"
+        TAP_INDICES         = "{arch}.mudd.tap_indices"
+
     class HRM:
         LAYERS_PER_STACK = "{arch}.hrm.layers_per_stack"
         H_CYCLES         = "{arch}.hrm.h_cycles"
         L_CYCLES         = "{arch}.hrm.l_cycles"
         PREFIX_LM        = "{arch}.hrm.prefix_lm"
+
+    class Metis:
+        PASS_COUNT               = "{arch}.metis.pass_count"
+        MEMORY_LENGTH            = "{arch}.metis.memory_length"
+        ROUTE_LENGTH             = "{arch}.metis.route_length"
+        CONTINUATION_LOGIT_LIMIT = "{arch}.metis.continuation_logit_limit"
 
     class SSM:
         CONV_KERNEL    = "{arch}.ssm.conv_kernel"
@@ -315,6 +330,7 @@ class Keys:
         TIME_STEP_RANK = "{arch}.ssm.time_step_rank"
         GROUP_COUNT    = "{arch}.ssm.group_count"
         DT_B_C_RMS     = "{arch}.ssm.dt_b_c_rms"
+        NORM_EPSILON   = "{arch}.ssm.norm_epsilon"
 
     class KDA:
         HEAD_DIM         = "{arch}.kda.head_dim"
@@ -608,6 +624,7 @@ class MODEL_ARCH(IntEnum):
     QWEN35MOE        = auto()
     CLEF             = auto()
     VLLM_DECISION2   = auto()
+    CLOVER_MOE       = auto()
     QWEN4EXP         = auto()
     PHI2             = auto()
     PHI3             = auto()
@@ -655,6 +672,7 @@ class MODEL_ARCH(IntEnum):
     DEEPSEEK32       = auto()
     DEEPSEEK4        = auto()
     DEEPSEEK41       = auto()
+    XING4_0          = auto()
     CHATGLM          = auto()
     GLM4             = auto()
     GLM4_MOE         = auto()
@@ -668,6 +686,7 @@ class MODEL_ARCH(IntEnum):
     NEMOTRON         = auto()
     NEMOTRON_H       = auto()
     NEMOTRON_H_MOE   = auto()
+    METIS16          = auto()
     EXAONE           = auto()
     EXAONE4          = auto()
     EXAONE_MOE       = auto()
@@ -687,6 +706,7 @@ class MODEL_ARCH(IntEnum):
     ARCEE            = auto()
     AFMOE            = auto()
     LAGUNA           = auto()
+    RICURSIVE        = auto()
     ERNIE4_5         = auto()
     ERNIE4_5_MOE     = auto()
     HUNYUAN_MOE      = auto()
@@ -733,6 +753,7 @@ class MODEL_ARCH(IntEnum):
     POCKETTTS        = auto()
     K2HORIZON        = auto()
     KOLIBRI1         = auto()
+    LIMITE           = auto()
 
 
 class VISION_PROJECTOR_TYPE(IntEnum):
@@ -816,6 +837,36 @@ class MODEL_TENSOR(IntEnum):
     FFN_GATE_TID2EID     = auto()
     MOE_LATENT_DOWN      = auto() # nemotron 3 super
     MOE_LATENT_UP        = auto() # nemotron 3 super
+    STREAM_EMBD          = auto()
+    DEPTH_MEM_STATE_WRITE = auto()
+    DEPTH_MEM_META_WRITE = auto()
+    DEPTH_MEM_ENTRY_BIAS = auto()
+    DEPTH_MEM_QUERY      = auto()
+    DEPTH_MEM_KEY        = auto()
+    DEPTH_MEM_VALUE      = auto()
+    DEPTH_MEM_OUT        = auto()
+    DEPTH_MEM_ROUTE_STATE = auto()
+    DEPTH_MEM_ROUTE_RETR = auto()
+    DEPTH_MEM_ROUTE_DIFF = auto()
+    DEPTH_MEM_ROUTE_HIST = auto()
+    DEPTH_MEM_ROUTE      = auto()
+    DEPTH_MEM_STREAM_GATE = auto()
+    CONT_HIDDEN_STATE    = auto()
+    CONT_HIDDEN_RETR     = auto()
+    CONT_HIDDEN_DIFF     = auto()
+    CONT_HIDDEN_ROUTE    = auto()
+    CONT_HIDDEN          = auto()
+    CONT_OUTPUT          = auto()
+    HC_ATTN_MIX          = auto()
+    HC_ATTN_READ         = auto()
+    HC_ATTN_WRITE        = auto()
+    HC_FFN_MIX           = auto()
+    HC_FFN_READ          = auto()
+    HC_FFN_WRITE         = auto()
+    ATTN_PASS_LORA_DOWN  = auto()
+    ATTN_PASS_LORA_UP    = auto()
+    ATTN_PASS_GATE       = auto()
+    FFN_EXP_EMBD         = auto()
     FFN_RESID_ALPHA      = auto()
     FFN_RESID_BETA       = auto()
     FFN_PRE_EXP_NORM     = auto()
@@ -824,6 +875,7 @@ class MODEL_TENSOR(IntEnum):
     ATTN_K_NORM          = auto()
     LAYER_OUT_NORM       = auto()
     LAYER_OUT_SCALE      = auto()
+    ATTN_VRES_LAMBDA     = auto()
     PER_LAYER_TOKEN_EMBD = auto() # gemma3n
     PER_LAYER_MODEL_PROJ = auto() # gemma3n
     PER_LAYER_INP_GATE   = auto() # gemma3n
@@ -868,6 +920,13 @@ class MODEL_TENSOR(IntEnum):
     FFN_ROUTED_DOWN      = auto() # Kimi K3 (latent MoE: hidden -> latent)
     FFN_ROUTED_UP        = auto() # Kimi K3 (latent MoE: latent -> hidden)
     FFN_ROUTED_NORM      = auto() # Kimi K3 (latent MoE: norm on expert output)
+    VALUE_EMBD           = auto() # limite
+    ATTN_VE_GATE         = auto() # limite
+    ATTN_XSA_ALPHA       = auto() # limite
+    ATTN_RESID_SCALE     = auto() # limite
+    FFN_RESID_SCALE      = auto() # limite
+    MUDD_DOWN            = auto() # limite
+    MUDD_UP              = auto() # limite
     TIME_MIX_W0          = auto()
     TIME_MIX_W1          = auto()
     TIME_MIX_W2          = auto()
@@ -1458,6 +1517,7 @@ MODEL_ARCH_NAMES: dict[MODEL_ARCH, str] = {
     MODEL_ARCH.QWEN35MOE:        "qwen35moe",
     MODEL_ARCH.CLEF:             "clef",
     MODEL_ARCH.VLLM_DECISION2:   "vllm-decision2",
+    MODEL_ARCH.CLOVER_MOE:       "clover_moe",
     MODEL_ARCH.QWEN4EXP:         "qwen4exp",
     MODEL_ARCH.PHI2:             "phi2",
     MODEL_ARCH.PHI3:             "phi3",
@@ -1504,6 +1564,7 @@ MODEL_ARCH_NAMES: dict[MODEL_ARCH, str] = {
     MODEL_ARCH.DEEPSEEK2OCR:     "deepseek2-ocr",
     MODEL_ARCH.DEEPSEEK32:       "deepseek32",
     MODEL_ARCH.DEEPSEEK4:        "deepseek4",
+    MODEL_ARCH.XING4_0:          "xing4_0",
     MODEL_ARCH.DEEPSEEK41:       "deepseek41",
     MODEL_ARCH.CHATGLM:          "chatglm",
     MODEL_ARCH.GLM4:             "glm4",
@@ -1518,6 +1579,7 @@ MODEL_ARCH_NAMES: dict[MODEL_ARCH, str] = {
     MODEL_ARCH.NEMOTRON:         "nemotron",
     MODEL_ARCH.NEMOTRON_H:       "nemotron_h",
     MODEL_ARCH.NEMOTRON_H_MOE:   "nemotron_h_moe",
+    MODEL_ARCH.METIS16:          "metis16",
     MODEL_ARCH.EXAONE:           "exaone",
     MODEL_ARCH.EXAONE4:          "exaone4",
     MODEL_ARCH.EXAONE_MOE:       "exaone-moe",
@@ -1537,6 +1599,7 @@ MODEL_ARCH_NAMES: dict[MODEL_ARCH, str] = {
     MODEL_ARCH.ARCEE:            "arcee",
     MODEL_ARCH.AFMOE:            "afmoe",
     MODEL_ARCH.LAGUNA:           "laguna",
+    MODEL_ARCH.RICURSIVE:        "ricursive",
     MODEL_ARCH.ERNIE4_5:         "ernie4_5",
     MODEL_ARCH.ERNIE4_5_MOE:     "ernie4_5-moe",
     MODEL_ARCH.FALCON_H1:        "falcon-h1",
@@ -1584,6 +1647,7 @@ MODEL_ARCH_NAMES: dict[MODEL_ARCH, str] = {
     MODEL_ARCH.POCKETTTS:        "pockettts",
     MODEL_ARCH.K2HORIZON:        "k2-horizon",
     MODEL_ARCH.KOLIBRI1:         "kolibri1",
+    MODEL_ARCH.LIMITE:           "limite",
 }
 
 VISION_PROJECTOR_TYPE_NAMES: dict[VISION_PROJECTOR_TYPE, str] = {
@@ -1667,12 +1731,43 @@ TENSOR_NAMES: dict[MODEL_TENSOR, str] = {
     MODEL_TENSOR.FFN_GATE_TID2EID:          "blk.{bid}.ffn_gate_tid2eid",
     MODEL_TENSOR.MOE_LATENT_DOWN:           "blk.{bid}.ffn_latent_down",      # nemotron 3 super
     MODEL_TENSOR.MOE_LATENT_UP:             "blk.{bid}.ffn_latent_up",        # nemotron 3 super
+    MODEL_TENSOR.STREAM_EMBD:               "stream_embd",
+    MODEL_TENSOR.DEPTH_MEM_STATE_WRITE:     "depth_mem_state_write",
+    MODEL_TENSOR.DEPTH_MEM_META_WRITE:      "depth_mem_meta_write",
+    MODEL_TENSOR.DEPTH_MEM_ENTRY_BIAS:      "depth_mem_entry_bias",
+    MODEL_TENSOR.DEPTH_MEM_QUERY:           "depth_mem_query",
+    MODEL_TENSOR.DEPTH_MEM_KEY:             "depth_mem_key",
+    MODEL_TENSOR.DEPTH_MEM_VALUE:           "depth_mem_value",
+    MODEL_TENSOR.DEPTH_MEM_OUT:             "depth_mem_out",
+    MODEL_TENSOR.DEPTH_MEM_ROUTE_STATE:     "depth_mem_route_state",
+    MODEL_TENSOR.DEPTH_MEM_ROUTE_RETR:      "depth_mem_route_retr",
+    MODEL_TENSOR.DEPTH_MEM_ROUTE_DIFF:      "depth_mem_route_diff",
+    MODEL_TENSOR.DEPTH_MEM_ROUTE_HIST:      "depth_mem_route_hist",
+    MODEL_TENSOR.DEPTH_MEM_ROUTE:           "depth_mem_route",
+    MODEL_TENSOR.DEPTH_MEM_STREAM_GATE:     "depth_mem_stream_gate",
+    MODEL_TENSOR.CONT_HIDDEN_STATE:         "cont_hidden_state",
+    MODEL_TENSOR.CONT_HIDDEN_RETR:          "cont_hidden_retr",
+    MODEL_TENSOR.CONT_HIDDEN_DIFF:          "cont_hidden_diff",
+    MODEL_TENSOR.CONT_HIDDEN_ROUTE:         "cont_hidden_route",
+    MODEL_TENSOR.CONT_HIDDEN:               "cont_hidden",
+    MODEL_TENSOR.CONT_OUTPUT:               "cont_output",
+    MODEL_TENSOR.HC_ATTN_MIX:               "blk.{bid}.hc_attn_mix",
+    MODEL_TENSOR.HC_ATTN_READ:              "blk.{bid}.hc_attn_read",
+    MODEL_TENSOR.HC_ATTN_WRITE:             "blk.{bid}.hc_attn_write",
+    MODEL_TENSOR.HC_FFN_MIX:                "blk.{bid}.hc_ffn_mix",
+    MODEL_TENSOR.HC_FFN_READ:               "blk.{bid}.hc_ffn_read",
+    MODEL_TENSOR.HC_FFN_WRITE:              "blk.{bid}.hc_ffn_write",
+    MODEL_TENSOR.ATTN_PASS_LORA_DOWN:       "blk.{bid}.attn_pass_lora_down",
+    MODEL_TENSOR.ATTN_PASS_LORA_UP:         "blk.{bid}.attn_pass_lora_up",
+    MODEL_TENSOR.ATTN_PASS_GATE:            "blk.{bid}.attn_pass_gate",
+    MODEL_TENSOR.FFN_EXP_EMBD:              "blk.{bid}.ffn_exp_embd",
     MODEL_TENSOR.FFN_RESID_ALPHA:           "blk.{bid}.ffn_resid_alpha",
     MODEL_TENSOR.FFN_RESID_BETA:            "blk.{bid}.ffn_resid_beta",
     MODEL_TENSOR.FFN_PRE_EXP_NORM:          "blk.{bid}.ffn_pre_exp_norm",
     MODEL_TENSOR.FFN_POST_EXP_NORM:         "blk.{bid}.ffn_post_exp_norm",
     MODEL_TENSOR.LAYER_OUT_NORM:            "blk.{bid}.layer_output_norm",
     MODEL_TENSOR.LAYER_OUT_SCALE:           "blk.{bid}.layer_output_scale",
+    MODEL_TENSOR.ATTN_VRES_LAMBDA:          "blk.{bid}.attn_vres_lambda",
     MODEL_TENSOR.PER_LAYER_TOKEN_EMBD:      "per_layer_token_embd",           # gemma3n
     MODEL_TENSOR.PER_LAYER_MODEL_PROJ:      "per_layer_model_proj",           # gemma3n
     MODEL_TENSOR.PER_LAYER_PROJ_NORM:       "per_layer_proj_norm",            # gemma3n
@@ -1717,6 +1812,13 @@ TENSOR_NAMES: dict[MODEL_TENSOR, str] = {
     MODEL_TENSOR.FFN_ROUTED_DOWN:           "blk.{bid}.ffn_routed_down",      # Kimi K3
     MODEL_TENSOR.FFN_ROUTED_UP:             "blk.{bid}.ffn_routed_up",        # Kimi K3
     MODEL_TENSOR.FFN_ROUTED_NORM:           "blk.{bid}.ffn_routed_norm",      # Kimi K3
+    MODEL_TENSOR.VALUE_EMBD:                "value_embd",                     # limite
+    MODEL_TENSOR.ATTN_VE_GATE:              "blk.{bid}.attn_ve_gate",         # limite
+    MODEL_TENSOR.ATTN_XSA_ALPHA:            "blk.{bid}.attn_xsa_alpha",       # limite
+    MODEL_TENSOR.ATTN_RESID_SCALE:          "blk.{bid}.attn_resid_scale",     # limite
+    MODEL_TENSOR.FFN_RESID_SCALE:           "blk.{bid}.ffn_resid_scale",      # limite
+    MODEL_TENSOR.MUDD_DOWN:                 "blk.{bid}.mudd_down",            # limite
+    MODEL_TENSOR.MUDD_UP:                   "blk.{bid}.mudd_up",              # limite
     MODEL_TENSOR.TIME_MIX_W0:               "blk.{bid}.time_mix_w0",
     MODEL_TENSOR.TIME_MIX_W1:               "blk.{bid}.time_mix_w1",
     MODEL_TENSOR.TIME_MIX_W2:               "blk.{bid}.time_mix_w2",
@@ -3360,6 +3462,37 @@ MODEL_TENSORS: dict[MODEL_ARCH, list[MODEL_TENSOR]] = {
         MODEL_TENSOR.NEXTN_SHARED_HEAD_HEAD,
         MODEL_TENSOR.NEXTN_SHARED_HEAD_NORM,
     ],
+    MODEL_ARCH.CLOVER_MOE: [
+        MODEL_TENSOR.TOKEN_EMBD,
+        MODEL_TENSOR.OUTPUT_NORM,
+        MODEL_TENSOR.OUTPUT,
+        MODEL_TENSOR.ATTN_NORM,
+        MODEL_TENSOR.ATTN_Q,
+        MODEL_TENSOR.ATTN_Q_NORM,
+        MODEL_TENSOR.ATTN_K,
+        MODEL_TENSOR.ATTN_K_NORM,
+        MODEL_TENSOR.ATTN_V,
+        MODEL_TENSOR.ATTN_OUT,
+        MODEL_TENSOR.ATTN_POST_NORM,
+        MODEL_TENSOR.ATTN_GATE,
+        MODEL_TENSOR.ATTN_QKV,
+        MODEL_TENSOR.FFN_GATE_INP,
+        MODEL_TENSOR.FFN_GATE_INP_SHEXP,
+        MODEL_TENSOR.FFN_UP_SHEXP,
+        MODEL_TENSOR.FFN_DOWN_SHEXP,
+        MODEL_TENSOR.FFN_GATE_SHEXP,
+        MODEL_TENSOR.FFN_DOWN_EXP,
+        MODEL_TENSOR.FFN_UP_EXP,
+        MODEL_TENSOR.FFN_GATE_EXP,
+        MODEL_TENSOR.FFN_GATE_UP_EXP,
+        MODEL_TENSOR.SSM_A,
+        MODEL_TENSOR.SSM_CONV1D,
+        MODEL_TENSOR.SSM_DT,
+        MODEL_TENSOR.SSM_NORM,
+        MODEL_TENSOR.SSM_BETA,
+        MODEL_TENSOR.SSM_ALPHA,
+        MODEL_TENSOR.SSM_OUT,
+    ],
     MODEL_ARCH.QWEN4EXP: [
         MODEL_TENSOR.TOKEN_EMBD,
         MODEL_TENSOR.OUTPUT,
@@ -4321,6 +4454,51 @@ MODEL_TENSORS: dict[MODEL_ARCH, list[MODEL_TENSOR]] = {
         MODEL_TENSOR.NEXTN_SHARED_HEAD_HEAD,
         MODEL_TENSOR.NEXTN_SHARED_HEAD_NORM,
     ],
+    MODEL_ARCH.XING4_0: [
+        MODEL_TENSOR.TOKEN_EMBD,
+        MODEL_TENSOR.OUTPUT_NORM,
+        MODEL_TENSOR.OUTPUT,
+        MODEL_TENSOR.ROPE_FREQS,
+        MODEL_TENSOR.ATTN_NORM,
+        MODEL_TENSOR.ATTN_Q,
+        MODEL_TENSOR.ATTN_Q_A,
+        MODEL_TENSOR.ATTN_Q_B,
+        MODEL_TENSOR.ATTN_KV_A_MQA,
+        MODEL_TENSOR.ATTN_KV_B,
+        MODEL_TENSOR.ATTN_K,
+        MODEL_TENSOR.ATTN_K_B,
+        MODEL_TENSOR.ATTN_V,
+        MODEL_TENSOR.ATTN_V_B,
+        MODEL_TENSOR.ATTN_Q_A_NORM,
+        MODEL_TENSOR.ATTN_KV_A_NORM,
+        MODEL_TENSOR.ATTN_OUT,
+        MODEL_TENSOR.HC_ATTN_FN,
+        MODEL_TENSOR.HC_ATTN_BASE,
+        MODEL_TENSOR.HC_ATTN_SCALE,
+        MODEL_TENSOR.ATTN_ROT_EMBD,
+        MODEL_TENSOR.HC_FFN_FN,
+        MODEL_TENSOR.HC_FFN_BASE,
+        MODEL_TENSOR.HC_FFN_SCALE,
+        MODEL_TENSOR.FFN_GATE_INP,
+        MODEL_TENSOR.FFN_NORM,
+        MODEL_TENSOR.FFN_GATE,
+        MODEL_TENSOR.FFN_DOWN,
+        MODEL_TENSOR.FFN_UP,
+        MODEL_TENSOR.FFN_GATE_EXP,
+        MODEL_TENSOR.FFN_DOWN_EXP,
+        MODEL_TENSOR.FFN_UP_EXP,
+        MODEL_TENSOR.FFN_GATE_SHEXP,
+        MODEL_TENSOR.FFN_DOWN_SHEXP,
+        MODEL_TENSOR.FFN_UP_SHEXP,
+        MODEL_TENSOR.FFN_EXP_PROBS_B,
+        # NextN/MTP tensors
+        MODEL_TENSOR.NEXTN_EH_PROJ,
+        MODEL_TENSOR.NEXTN_EMBED_TOKENS,
+        MODEL_TENSOR.NEXTN_ENORM,
+        MODEL_TENSOR.NEXTN_HNORM,
+        MODEL_TENSOR.NEXTN_SHARED_HEAD_HEAD,
+        MODEL_TENSOR.NEXTN_SHARED_HEAD_NORM,
+    ],
     MODEL_ARCH.DEEPSEEK2OCR: [
         MODEL_TENSOR.TOKEN_EMBD,
         MODEL_TENSOR.OUTPUT_NORM,
@@ -4802,6 +4980,61 @@ MODEL_TENSORS: dict[MODEL_ARCH, list[MODEL_TENSOR]] = {
         MODEL_TENSOR.FFN_DOWN,
         MODEL_TENSOR.FFN_UP,
     ],
+    MODEL_ARCH.METIS16: [
+        MODEL_TENSOR.TOKEN_EMBD,
+        MODEL_TENSOR.OUTPUT_NORM,
+        MODEL_TENSOR.OUTPUT,
+        MODEL_TENSOR.ATTN_NORM,
+        MODEL_TENSOR.FFN_NORM,
+        MODEL_TENSOR.STREAM_EMBD,
+        MODEL_TENSOR.DEPTH_MEM_STATE_WRITE,
+        MODEL_TENSOR.DEPTH_MEM_META_WRITE,
+        MODEL_TENSOR.DEPTH_MEM_ENTRY_BIAS,
+        MODEL_TENSOR.DEPTH_MEM_QUERY,
+        MODEL_TENSOR.DEPTH_MEM_KEY,
+        MODEL_TENSOR.DEPTH_MEM_VALUE,
+        MODEL_TENSOR.DEPTH_MEM_OUT,
+        MODEL_TENSOR.DEPTH_MEM_ROUTE_STATE,
+        MODEL_TENSOR.DEPTH_MEM_ROUTE_RETR,
+        MODEL_TENSOR.DEPTH_MEM_ROUTE_DIFF,
+        MODEL_TENSOR.DEPTH_MEM_ROUTE_HIST,
+        MODEL_TENSOR.DEPTH_MEM_ROUTE,
+        MODEL_TENSOR.DEPTH_MEM_STREAM_GATE,
+        MODEL_TENSOR.CONT_HIDDEN_STATE,
+        MODEL_TENSOR.CONT_HIDDEN_RETR,
+        MODEL_TENSOR.CONT_HIDDEN_DIFF,
+        MODEL_TENSOR.CONT_HIDDEN_ROUTE,
+        MODEL_TENSOR.CONT_HIDDEN,
+        MODEL_TENSOR.CONT_OUTPUT,
+        MODEL_TENSOR.HC_ATTN_MIX,
+        MODEL_TENSOR.HC_ATTN_READ,
+        MODEL_TENSOR.HC_ATTN_WRITE,
+        MODEL_TENSOR.HC_FFN_MIX,
+        MODEL_TENSOR.HC_FFN_READ,
+        MODEL_TENSOR.HC_FFN_WRITE,
+        MODEL_TENSOR.ATTN_PASS_LORA_DOWN,
+        MODEL_TENSOR.ATTN_PASS_LORA_UP,
+        MODEL_TENSOR.ATTN_PASS_GATE,
+        MODEL_TENSOR.FFN_EXP_EMBD,
+        MODEL_TENSOR.SSM_IN,
+        MODEL_TENSOR.SSM_CONV1D,
+        MODEL_TENSOR.SSM_DT,
+        MODEL_TENSOR.SSM_A,
+        MODEL_TENSOR.SSM_D,
+        MODEL_TENSOR.SSM_NORM,
+        MODEL_TENSOR.SSM_OUT,
+        MODEL_TENSOR.ATTN_QKV,
+        MODEL_TENSOR.ATTN_OUT,
+        MODEL_TENSOR.MOE_LATENT_DOWN,
+        MODEL_TENSOR.MOE_LATENT_UP,
+        MODEL_TENSOR.FFN_GATE_INP,
+        MODEL_TENSOR.FFN_EXP_PROBS_B,
+        MODEL_TENSOR.FFN_GATE_UP_EXP,
+        MODEL_TENSOR.FFN_DOWN_EXP,
+        MODEL_TENSOR.FFN_GATE_SHEXP,
+        MODEL_TENSOR.FFN_UP_SHEXP,
+        MODEL_TENSOR.FFN_DOWN_SHEXP,
+    ],
     MODEL_ARCH.NEMOTRON_H: [
         MODEL_TENSOR.TOKEN_EMBD,
         MODEL_TENSOR.OUTPUT_NORM,
@@ -5277,6 +5510,26 @@ MODEL_TENSORS: dict[MODEL_ARCH, list[MODEL_TENSOR]] = {
         MODEL_TENSOR.FFN_PRE_NORM,
         MODEL_TENSOR.FFN_POST_NORM,
         MODEL_TENSOR.FFN_EXP_PROBS_B,
+    ],
+    MODEL_ARCH.RICURSIVE: [
+        MODEL_TENSOR.TOKEN_EMBD,
+        MODEL_TENSOR.OUTPUT_NORM,
+        MODEL_TENSOR.OUTPUT,
+        MODEL_TENSOR.ATTN_NORM,
+        MODEL_TENSOR.ATTN_Q,
+        MODEL_TENSOR.ATTN_K,
+        MODEL_TENSOR.ATTN_V,
+        MODEL_TENSOR.ATTN_OUT,
+        MODEL_TENSOR.ATTN_Q_NORM,
+        MODEL_TENSOR.ATTN_K_NORM,
+        MODEL_TENSOR.ATTN_GATE,
+        MODEL_TENSOR.ATTN_VRES_LAMBDA,
+        MODEL_TENSOR.ATTN_POST_NORM,
+        MODEL_TENSOR.FFN_PRE_NORM,
+        MODEL_TENSOR.FFN_GATE,
+        MODEL_TENSOR.FFN_DOWN,
+        MODEL_TENSOR.FFN_UP,
+        MODEL_TENSOR.FFN_POST_NORM,
     ],
     MODEL_ARCH.LAGUNA: [
         MODEL_TENSOR.TOKEN_EMBD,
@@ -6337,6 +6590,25 @@ MODEL_TENSORS: dict[MODEL_ARCH, list[MODEL_TENSOR]] = {
         MODEL_TENSOR.FFN_UP_SHEXP,
         MODEL_TENSOR.FFN_DOWN_SHEXP,
     ],
+    MODEL_ARCH.LIMITE: [
+        MODEL_TENSOR.TOKEN_EMBD,
+        MODEL_TENSOR.VALUE_EMBD,
+        MODEL_TENSOR.OUTPUT,
+        MODEL_TENSOR.ATTN_Q,
+        MODEL_TENSOR.ATTN_K,
+        MODEL_TENSOR.ATTN_V,
+        MODEL_TENSOR.ATTN_OUT,
+        MODEL_TENSOR.ATTN_GATE,
+        MODEL_TENSOR.ATTN_VE_GATE,
+        MODEL_TENSOR.ATTN_XSA_ALPHA,
+        MODEL_TENSOR.ATTN_RESID_SCALE,
+        MODEL_TENSOR.FFN_RESID_SCALE,
+        MODEL_TENSOR.FFN_GATE,
+        MODEL_TENSOR.FFN_DOWN,
+        MODEL_TENSOR.FFN_UP,
+        MODEL_TENSOR.MUDD_DOWN,
+        MODEL_TENSOR.MUDD_UP,
+    ],
 }
 
 # tensors that will not be serialized
@@ -6390,6 +6662,10 @@ MODEL_TENSOR_SKIP: dict[MODEL_ARCH, list[MODEL_TENSOR]] = {
         MODEL_TENSOR.ATTN_ROT_EMBD,
     ],
     MODEL_ARCH.HY_V4: [
+        MODEL_TENSOR.ROPE_FREQS,
+        MODEL_TENSOR.ATTN_ROT_EMBD,
+    ],
+    MODEL_ARCH.XING4_0: [
         MODEL_TENSOR.ROPE_FREQS,
         MODEL_TENSOR.ATTN_ROT_EMBD,
     ],

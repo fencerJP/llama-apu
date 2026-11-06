@@ -879,6 +879,9 @@ class GGUFWriter:
     def add_final_logit_softcapping(self, value: float) -> None:
         self.add_float32(Keys.LLM.FINAL_LOGIT_SOFTCAPPING.format(arch=self.arch), value)
 
+    def add_final_logit_sigmoid_capping(self, scale: float, shift: float, temperature: float) -> None:
+        self.add_array(Keys.LLM.FINAL_LOGIT_SIGMOID_CAPPING.format(arch=self.arch), [scale, shift, temperature])
+
     def add_expert_count(self, count: int) -> None:
         self.add_uint32(Keys.LLM.EXPERT_COUNT.format(arch=self.arch), count)
 
@@ -908,6 +911,9 @@ class GGUFWriter:
 
     def add_swiglu_clamp_exp(self, values: Sequence[float]) -> None:
         self.add_array(Keys.LLM.SWIGLU_CLAMP_EXP.format(arch=self.arch), values)
+
+    def add_swiglu_clamp(self, values: Sequence[float]) -> None:
+        self.add_array(Keys.LLM.SWIGLU_CLAMP.format(arch=self.arch), values)
 
     def add_swiglu_clamp_shexp(self, values: Sequence[float]) -> None:
         self.add_array(Keys.LLM.SWIGLU_CLAMP_SHEXP.format(arch=self.arch), values)
@@ -951,6 +957,15 @@ class GGUFWriter:
     def add_embedding_scale(self, value: float) -> None:
         self.add_float32(Keys.LLM.EMBEDDING_SCALE.format(arch=self.arch), value)
 
+    def add_mudd_feed_forward_length(self, value: int) -> None:
+        self.add_uint32(Keys.MUDD.FEED_FORWARD_LENGTH.format(arch=self.arch), value)
+
+    def add_mudd_tap_count(self, value: int) -> None:
+        self.add_uint32(Keys.MUDD.TAP_COUNT.format(arch=self.arch), value)
+
+    def add_mudd_tap_indices(self, value: Sequence[int]) -> None:
+        self.add_array(Keys.MUDD.TAP_INDICES.format(arch=self.arch), value)
+
     def add_hrm_layers_per_stack(self, value: int) -> None:
         self.add_uint32(Keys.HRM.LAYERS_PER_STACK.format(arch=self.arch), value)
 
@@ -962,6 +977,18 @@ class GGUFWriter:
 
     def add_hrm_prefix_lm(self, value: bool) -> None:
         self.add_bool(Keys.HRM.PREFIX_LM.format(arch=self.arch), value)
+
+    def add_metis_pass_count(self, value: int) -> None:
+        self.add_uint32(Keys.Metis.PASS_COUNT.format(arch=self.arch), value)
+
+    def add_metis_memory_length(self, value: int) -> None:
+        self.add_uint32(Keys.Metis.MEMORY_LENGTH.format(arch=self.arch), value)
+
+    def add_metis_route_length(self, value: int) -> None:
+        self.add_uint32(Keys.Metis.ROUTE_LENGTH.format(arch=self.arch), value)
+
+    def add_metis_continuation_logit_limit(self, value: float) -> None:
+        self.add_float32(Keys.Metis.CONTINUATION_LOGIT_LIMIT.format(arch=self.arch), value)
 
     def add_adapter_count(self, count: int) -> None:
         self.add_uint32(Keys.Adapters.COUNT.format(arch=self.arch), count)
@@ -1074,6 +1101,9 @@ class GGUFWriter:
     def add_attention_output_lora_rank(self, length: int) -> None:
         self.add_uint32(Keys.Attention.OUTPUT_LORA_RANK.format(arch=self.arch), length)
 
+    def add_attention_pass_lora_rank(self, length: int) -> None:
+        self.add_uint32(Keys.Attention.PASS_LORA_RANK.format(arch=self.arch), length)
+
     def add_attention_compress_ratios(self, values: Sequence[int]) -> None:
         self.add_array(Keys.Attention.COMPRESS_RATIOS.format(arch=self.arch), values)
 
@@ -1153,6 +1183,9 @@ class GGUFWriter:
 
     def add_attention_scale(self, value: float) -> None:
         self.add_float32(Keys.Attention.SCALE.format(arch=self.arch), value)
+
+    def add_xsa_eps(self, value: float) -> None:
+        self.add_float32(Keys.Attention.XSA_EPS.format(arch=self.arch), value)
 
     def add_attn_output_scale(self, value: float) -> None:
         self.add_float32(Keys.Attention.OUTPUT_SCALE.format(arch=self.arch), value)
@@ -1251,6 +1284,9 @@ class GGUFWriter:
 
     def add_ssm_dt_b_c_rms(self, value: bool) -> None:
         self.add_bool(Keys.SSM.DT_B_C_RMS.format(arch=self.arch), value)
+
+    def add_ssm_norm_epsilon(self, value: float) -> None:
+        self.add_float32(Keys.SSM.NORM_EPSILON.format(arch=self.arch), value)
 
     def add_expert_latent_length(self, value: int) -> None:
         self.add_uint32(Keys.LLM.EXPERT_LATENT_LENGTH.format(arch=self.arch), value)
