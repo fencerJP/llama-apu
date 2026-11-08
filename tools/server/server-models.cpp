@@ -1785,7 +1785,6 @@ server_http_res_ptr server_models::proxy_request(const server_http_req & req, co
         // sleep after req_count++, so the model counts as busy while we wait here
         std::this_thread::sleep_for(std::chrono::seconds(2));
     }
-
     std::shared_ptr<server_gpu_lease> lease = nullptr;
     const bool is_gpu_req = meta->uses_gpu() && is_gpu_compute_request(method, req.path);
 
@@ -1812,7 +1811,7 @@ server_http_res_ptr server_models::proxy_request(const server_http_req & req, co
         }
     }
 
-    SRV_INF("proxying request to model %s on port %d\n", name.c_str(), meta->port);
+    SRV_TRC("proxying request to model %s on port %d\n", name.c_str(), meta->port);
     std::string proxy_path = req.path;
     if (!req.query_string.empty()) {
         proxy_path += '?' + req.query_string;
@@ -1868,7 +1867,6 @@ void server_models::proxy_ws(const server_http_req & req, server_http_context::w
         mapping[name].meta.last_used = ggml_time_ms();
         mapping[name].req_count++;
     }
-
     std::shared_ptr<server_gpu_lease> lease = nullptr;
     if (meta->uses_gpu()) {
         try {
@@ -1893,7 +1891,7 @@ void server_models::proxy_ws(const server_http_req & req, server_http_context::w
         }
     }
 
-    SRV_INF("proxying websocket to model %s on port %d\n", name.c_str(), meta->port);
+    SRV_TRC("proxying websocket to model %s on port %d\n", name.c_str(), meta->port);
 
     std::string url = std::string("ws://") + CHILD_ADDR + ":" + std::to_string(meta->port) + req.path;
     if (!req.query_string.empty()) {
