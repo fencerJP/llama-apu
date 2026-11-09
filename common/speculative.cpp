@@ -1625,6 +1625,13 @@ struct common_speculative_impl_draft_mtp : public common_speculative_impl {
     std::vector<uint32_t>               ring_len;      // [n_seq]
     std::vector<uint32_t>               ring_head;     // [n_seq] next write slot
 
+    // target h rows on the device (llama_set_embeddings_nextn_dev): the catch-up in process() reads row k - 1 of the last
+    // target decode in place, and row n_batch_tgt + seq_id for the first token of seq_id, uploaded from selected boundary
+    // pending_h stays on the host: process() and accept() fetch it before the next target decode overwrites the rows
+    bool    dev_rows    = false;
+    int32_t n_batch_tgt = 0;
+    std::vector<int32_t> verify_row0; // [n_seq] device row of the first verify row, see verify_h_rows
+
     common_speculative_impl_draft_mtp(const common_params_speculative & params, uint32_t n_seq)
         : common_speculative_impl(COMMON_SPECULATIVE_TYPE_DRAFT_MTP, n_seq, params.draft.n_max)
         , params(params.draft)
@@ -1717,10 +1724,27 @@ struct common_speculative_impl_draft_mtp : public common_speculative_impl {
         }
         verify_h_rows.assign(n_seq, 0);
         verify_pos_first.assign(n_seq, -1);
+
+        n_batch_tgt = (int32_t) llama_n_batch(ctx_tgt);
+        verify_row0.assign(n_seq, -1);
+
+        // shared memory and chained heads keep the host rows
+        if (!is_mem_shared && !chain_heads) {
+            dev_rows = llama_set_embeddings_nextn_dev(ctx_tgt, true) && llama_set_embd_state_src(ctx_dft, ctx_tgt);
+            if (!dev_rows) {
+                llama_set_embd_state_src(ctx_dft, nullptr);
+                llama_set_embeddings_nextn_dev(ctx_tgt, false);
+            }
+        }
+        SPC_TRC("- target h rows on the device: %s\n", dev_rows ? "yes" : "no");
     }
 
     ~common_speculative_impl_draft_mtp() override {
         auto * ctx_dft = this->params.ctx_dft;
+        if (dev_rows) {
+            llama_set_embd_state_src(ctx_dft, nullptr);
+            llama_set_embeddings_nextn_dev(this->params.ctx_tgt, false);
+        }
         for (llama_seq_id seq_id = 0; seq_id < (llama_seq_id) backend_chains.size(); ++seq_id) {
             if (backend_chains[seq_id] == nullptr) {
                 continue;
@@ -1770,6 +1794,7 @@ struct common_speculative_impl_draft_mtp : public common_speculative_impl {
         std::fill(i_batch_end.begin(), i_batch_end.end(), -1);
         std::fill(verify_h_rows.begin(), verify_h_rows.end(), 0);
         std::fill(verify_pos_first.begin(), verify_pos_first.end(), -1);
+        std::fill(verify_row0.begin(), verify_row0.end(), -1);
         std::fill(process_boundary_valid.begin(), process_boundary_valid.end(), 0);
         std::fill(process_boundary_pos.begin(), process_boundary_pos.end(), -1);
 
@@ -1834,7 +1859,25 @@ struct common_speculative_impl_draft_mtp : public common_speculative_impl {
         if (!is_mem_shared) {
             batch.clear();
 
-            const float * h_tgt = llama_get_embeddings_nextn(ctx_tgt);
+            // pair each token with the tgt embedding shifted right by one position, and
+            // the first token of each sequence with the selected boundary embedding
+            // assumes that the tokens in the batch are sequential for each sequence
+            // i.e. we cannot have seq_id like this: [0, 0, 0, 1, 1, 0, 1, 1]
+            //                                                       ^--- this is a problem
+            // TODO:this is generally true, but would be nice to assert it
+            if (dev_rows) {
+                GGML_ASSERT(n_tokens <= n_batch_tgt && "the target batch exceeds the h_nextn device buffer");
+                for (llama_seq_id seq_id = 0; seq_id < (llama_seq_id) n_seq; ++seq_id) {
+                    if (i_batch_beg[seq_id] >= 0) {
+                        const float * h_first = process_boundary_valid[seq_id]
+                            ? process_boundary_h[seq_id].data()
+                            : pending_h[seq_id].data();
+                        llama_set_embeddings_nextn_rows(ctx_tgt, n_batch_tgt + seq_id, 1, h_first);
+                    }
+                }
+            }
+
+            const float * h_tgt = dev_rows ? nullptr : llama_get_embeddings_nextn(ctx_tgt);
 
             for (int k = 0; k < n_tokens; ++k) {
                 const auto & t = batch_in.tokens[k];
@@ -1843,6 +1886,11 @@ struct common_speculative_impl_draft_mtp : public common_speculative_impl {
                 const int32_t idx = t.id != LLAMA_TOKEN_NULL
                     ? batch.add(t.id, t.pos[0], seq_id, false)
                     : batch.add_embd(t.embd, t.pos.data(), seq_id, false);
+
+                if (dev_rows) {
+                    batch.set_embd_state_row(idx, k == i_batch_beg[seq_id] ? n_batch_tgt + seq_id : k - 1);
+                    continue;
+                }
 
                 const float * h_row = k == i_batch_beg[seq_id]
                     ? (process_boundary_valid[seq_id] ? process_boundary_h[seq_id].data() : pending_h[seq_id].data())
@@ -1902,6 +1950,17 @@ struct common_speculative_impl_draft_mtp : public common_speculative_impl {
 
             verify_h_rows[seq_id] = h_rows;
             verify_pos_first[seq_id] = batch_in.tokens[i_batch_beg[seq_id]].pos[0];
+            const llama_pos pos_last = batch_in.tokens[i_batch_end[seq_id]].pos[0];
+
+            if (dev_rows) {
+                // the rows stay on the device until the next target decode, only the pending row comes to the host
+                verify_row0[seq_id] = h_offset;
+                llama_get_embeddings_nextn_rows(ctx_tgt, h_offset + h_rows - 1, 1, pending_h[seq_id].data());
+                pending_h_valid[seq_id] = 1;
+                pending_h_pos[seq_id] = pos_last;
+                continue;
+            }
+
             verify_h[seq_id].resize((size_t) h_rows * n_embd);
 
             for (int32_t i = 0; i < h_rows; ++i) {
@@ -1912,7 +1971,6 @@ struct common_speculative_impl_draft_mtp : public common_speculative_impl {
             const float * h_last = verify_h[seq_id].data() + (size_t) (h_rows - 1) * n_embd;
             std::memcpy(pending_h[seq_id].data(), h_last, row_bytes);
             pending_h_valid[seq_id] = 1;
-            const llama_pos pos_last = batch_in.tokens[i_batch_end[seq_id]].pos[0];
             pending_h_pos[seq_id] = pos_last;
         }
 
@@ -2100,13 +2158,26 @@ struct common_speculative_impl_draft_mtp : public common_speculative_impl {
 
         const int32_t i_h = std::min<int32_t>(n_accepted, n_rows - 1);
         const size_t row_bytes = (size_t) n_embd * sizeof(float);
+        int32_t n_ring_rows = n_rows;
+
+        if (dev_rows) {
+            if (verify_row0[seq_id] < 0) {
+                return;
+            }
+            // Fetch only the accepted prefix [0..i_h] in one contiguous transfer to feed pending_h, pending_h_prev, and ring_h
+            const int32_t n_fetch = i_h + 1;
+            verify_h[seq_id].resize((size_t) n_fetch * n_embd);
+            llama_get_embeddings_nextn_rows(params.ctx_tgt, verify_row0[seq_id], n_fetch, verify_h[seq_id].data());
+            n_ring_rows = n_fetch;
+        }
+
         if (i_h != n_rows - 1) {
             std::memcpy(pending_h[seq_id].data(), verify_h[seq_id].data() + (size_t) i_h * n_embd, row_bytes);
         }
         pending_h_valid[seq_id] = 1;
         pending_h_pos[seq_id] = verify_pos_first[seq_id] + i_h;
 
-        for (int32_t i = 0; i < n_rows; ++i) {
+        for (int32_t i = 0; i < n_ring_rows; ++i) {
             ring_push(seq_id, verify_pos_first[seq_id] + i, verify_h[seq_id].data() + (size_t) i * n_embd);
         }
 
@@ -2189,6 +2260,7 @@ struct common_speculative_impl_draft_mtp : public common_speculative_impl {
         verify_h[seq_id].clear();
         verify_h_rows[seq_id] = 0;
         verify_pos_first[seq_id] = -1;
+        verify_row0[seq_id] = -1;
 
         for (uint32_t i = 0; i < RING_N; ++i) {
             if (ring_pos[seq_id][i] > pos) {
@@ -2216,6 +2288,7 @@ struct common_speculative_impl_draft_mtp : public common_speculative_impl {
         verify_h[seq_id].clear();
         verify_h_rows[seq_id] = 0;
         verify_pos_first[seq_id] = -1;
+        verify_row0[seq_id] = -1;
 
         std::fill(ring_pos[seq_id].begin(), ring_pos[seq_id].end(), -1);
         ring_len[seq_id] = 0;
