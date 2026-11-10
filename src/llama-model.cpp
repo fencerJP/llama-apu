@@ -1698,11 +1698,12 @@ bool llama_model_base::load_tensors(llama_model_loader & ml) {
         }
     }
 
-    // resolve AUTO on systems without mmap support (e.g. iGPUs): fall back to OFF; see #28160
-    // AMD APU iGPUs (unified memory, e.g. gfx1150/gfx1151) are typed GGML_BACKEND_DEVICE_TYPE_IGPU and
-    // report mmap_support=false, so lazy tensor loading — which would page-fault per row through the
-    // unified memory bus — is disabled by default here (phase-2 §2.1, issue #28326 page-fault stalls).
-    if (ml.lazy.mode == LLAMA_LAZY_MODE_AUTO) {
+    // resolve AUTO on systems without mmap support (e.g. iGPUs): fall back to OFF; see #28160, #31943
+    // llama-apu (Phase 2 §2.1): keep lazy loading OFF by default on AMD APU unified memory (gfx1150)
+    // to avoid per-row page-fault stalls (#28326), EXCEPT preserve AUTO (allowing llama_prefetch_rows)
+    // when a per-layer embedding table is present AND mmap is enabled (Decision A1 Option C).
+    const bool has_ple = ml.get_weight("per_layer_token_embd.weight") != nullptr;
+    if (ml.lazy.mode == LLAMA_LAZY_MODE_AUTO && !(has_ple && ml.use_mmap)) {
         for (const auto & dev : devices) {
             ggml_backend_dev_props props;
             ggml_backend_dev_get_props(dev.dev, &props);
