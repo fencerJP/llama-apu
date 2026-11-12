@@ -73,7 +73,6 @@ set(GGML_OPENCL_KERNELS
     clamp
     cpy
     cvt
-    diag_mask_inf
     diag
     div
     gelu
