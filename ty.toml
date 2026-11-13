@@ -21,12 +21,3 @@ include = [
 unresolved-reference = "ignore"
 unresolved-import = "ignore"
 unresolved-attribute = "ignore"
-
-[[overrides]]
-include = [
-    "./examples/pydantic_models_to_grammar.py",
-]
-
-[overrides.rules]
-unsupported-operator = "ignore"
-not-subscriptable = "ignore"
