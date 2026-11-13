@@ -3,8 +3,8 @@ cmake_minimum_required(VERSION 3.14...3.28) # for add_link_options and implicit 
 project("ggml" C CXX ASM)
 
 ### GGML Version
-set(GGML_VERSION_MAJOR 0)
-set(GGML_VERSION_MINOR 28)
+set(GGML_VERSION_MAJOR 1)
+set(GGML_VERSION_MINOR 0)
 set(GGML_VERSION_PATCH 0)
 set(GGML_VERSION_BASE "${GGML_VERSION_MAJOR}.${GGML_VERSION_MINOR}.${GGML_VERSION_PATCH}")
 
@@ -218,7 +218,6 @@ option(GGML_HIP_GRAPHS                      "ggml: use HIP graph"               
 option(GGML_HIP_RCCL                        "ggml: use ROCm Collective Comm. Library"         OFF)
 option(GGML_HIP_NO_VMM                      "ggml: do not try to use HIP VMM"                 ON)
 option(GGML_HIP_MMQ_MFMA                    "ggml: enable MFMA MMA for CDNA in MMQ"           ON)
-option(GGML_HIP_USE_HIPBLASLT               "ggml: build hipBLASLt support for large prefill GEMMs (ROCm 10.1+); runtime-disabled by default (llama-apu Phase 10.1)" ON)
 option(GGML_HIP_EXPORT_METRICS              "ggml: enable kernel perf metrics output"         OFF)
 option(GGML_MUSA_GRAPHS                     "ggml: use MUSA graph, experimental, unstable"    OFF)
 option(GGML_MUSA_MUDNN_COPY                 "ggml: enable muDNN for accelerated copy"         OFF)
@@ -251,6 +250,7 @@ option(GGML_OPENMP_FETCH                    "ggml: fetch LLVM OpenMP"           
 option(GGML_RPC                             "ggml: use RPC"                                   OFF)
 option(GGML_SYCL                            "ggml: use SYCL"                                  OFF)
 option(GGML_SYCL_F16                        "ggml: use 16 bit floats for sycl calculations"   OFF)
+option(GGML_SYCL_SUPPORT_XMX                "ggml: build the XMX (DPAS) code paths in the SYCL backend" ON)
 option(GGML_SYCL_GRAPH                      "ggml: enable graphs in the SYCL backend"         ON)
 option(GGML_SYCL_HOST_MEM_FALLBACK          "ggml: allow host memory fallback in SYCL reorder (requires kernel 6.8+)" ON)
 option(GGML_SYCL_SUPPORT_LEVEL_ZERO_API     "ggml: use Level Zero API in SYCL backend"  ON)
