@@ -49,7 +49,7 @@ static __global__ void flash_attn_mask_to_sparse_indices(
                     selected |= (!oob || q < q1 - q0) && isfinite(__half2float(mask[q*s31 + i]));
                 }
             }
-            selected_warp[item] = __ballot_sync(0xFFFFFFFF, selected);
+            selected_warp[item] = (uint32_t) ggml_cuda_ballot((int) selected, 0xFFFFFFFF);
             warp_count += __popc(selected_warp[item]);
         }
 
