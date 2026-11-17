@@ -2603,25 +2603,35 @@ private:
             }
 
             const int32_t n_embd_out = llama_model_n_embd_out(model_tgt);
-            const int32_t n_pointer  = n_embd_out / 2;
-            const float * embd_q = decision.pointer >= 0 ? get_embd(decision.pointer) : nullptr;
-            GGML_ASSERT(decision.column >= 0 && decision.column < n_embd_out);
-
-            for (const int32_t marker : decision.markers) {
-                const float * embd = get_embd(marker);
-                if (embd == nullptr || (decision.pointer >= 0 && embd_q == nullptr)) {
+            if (decision.n_logits > 0 && decision.markers.size() == 1 && decision.pointer < 0) {
+                const float * embd = get_embd(decision.markers[0]);
+                if (embd == nullptr) {
                     send_error(slot, "failed to get embeddings, the question and its options must fit in one batch", ERROR_TYPE_SERVER);
                     return;
                 }
-                if (decision.pointer < 0) {
-                    res->scores.push_back(embd[decision.column]);
-                    continue;
+                GGML_ASSERT(decision.n_logits <= n_embd_out);
+                res->scores.assign(embd, embd + decision.n_logits);
+            } else {
+                const int32_t n_pointer  = n_embd_out / 2;
+                const float * embd_q = decision.pointer >= 0 ? get_embd(decision.pointer) : nullptr;
+                GGML_ASSERT(decision.column >= 0 && decision.column < n_embd_out);
+
+                for (const int32_t marker : decision.markers) {
+                    const float * embd = get_embd(marker);
+                    if (embd == nullptr || (decision.pointer >= 0 && embd_q == nullptr)) {
+                        send_error(slot, "failed to get embeddings, the question and its options must fit in one batch", ERROR_TYPE_SERVER);
+                        return;
+                    }
+                    if (decision.pointer < 0) {
+                        res->scores.push_back(embd[decision.column]);
+                        continue;
+                    }
+                    float dot = 0.0f;
+                    for (int32_t i = 0; i < n_pointer; i++) {
+                        dot += embd_q[i] * embd[n_pointer + i];
+                    }
+                    res->scores.push_back(dot / sqrtf((float) n_pointer));
                 }
-                float dot = 0.0f;
-                for (int32_t i = 0; i < n_pointer; i++) {
-                    dot += embd_q[i] * embd[n_pointer + i];
-                }
-                res->scores.push_back(dot / sqrtf((float) n_pointer));
             }
         }
 
@@ -4069,7 +4079,8 @@ private:
         // sarathi_token_budget (tau). Decode tokens were charged to the batch
         // above (decodes-first); the prompt-fill loop below only consumes the
         // remainder, so no unchunked prefill can leak past the scheduler.
-        const int32_t n_batch_eff = params_base.apu.sarathi_stall_free
+        const bool non_causal = !llama_get_causal_attn(ctx_tgt);
+        const int32_t n_batch_eff = (params_base.apu.sarathi_stall_free && !non_causal)
             ? std::min<int32_t>(n_batch, (int32_t) params_base.apu.sarathi_token_budget)
             : n_batch;
         // Prefill share cap: --sarathi-chunk-size bounds the prompt tokens ONE
@@ -4077,7 +4088,7 @@ private:
         // (decodes + <=chunk_size prefill <= tau). Without this, --sarathi-chunk-size
         // is dead config and every prefill iteration stuffs tau-decodes prompt
         // tokens in at once (measured p99 TBT scaled linearly with tau).
-        const int32_t n_fill_cap = params_base.apu.sarathi_stall_free
+        const int32_t n_fill_cap = (params_base.apu.sarathi_stall_free && !non_causal)
             ? std::min<int32_t>(n_batch_eff,
                                 (int32_t) batch.size() + (int32_t) params_base.apu.sarathi_chunk_size)
             : n_batch_eff;

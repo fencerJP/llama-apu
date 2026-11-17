@@ -45,6 +45,9 @@ void llama_model_modern_bert::load_arch_hparams(llama_model_loader & ml) {
         }
         // the output is one score per question type
         hparams.n_embd_out_impl = N_DECISION_TYPES;
+    } else if (hparams.n_cls_out == 255) {
+        // GLiDE encoder decision model: 255-way readout via cls_out
+        hparams.n_embd_out_impl = hparams.n_cls_out;
     }
 
     switch (hparams.n_layer()) {
@@ -227,6 +230,12 @@ llama_model_modern_bert::graph::graph(const llm_graph_params & params) : llm_gra
 
     if (n_layer_dec > 0) {
         cur = build_decision_head(cur, inp_attn, inp_out_ids);
+    } else if (model.cls_out && cparams.pooling_type == LLAMA_POOLING_TYPE_NONE) {
+        cur = build_lora_mm(model.cls_out, cur);
+        if (model.cls_out_b) {
+            cur = ggml_add(ctx0, cur, model.cls_out_b);
+        }
+        cb(cur, "decision_logits", -1);
     }
 
     res->t_embd = cur;
