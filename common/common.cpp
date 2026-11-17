@@ -1154,6 +1154,7 @@ static const std::map<common_decision_type, std::string> COMMON_DECISION_TYPE_NA
     { COMMON_DECISION_TYPE_MINICPM_OCR_JEV, "openbmb-minicpm-ocr-jev" },
     { COMMON_DECISION_TYPE_LFM3_D1,        "lfm3-d1"       },
     { COMMON_DECISION_TYPE_LFM3_D1_OMNI,   "lfm3-d1-omni"  },
+    { COMMON_DECISION_TYPE_GLIDE_ENCODER,  "glide-encoder" },
     // for future models, ALWAYS add org name prefix to avoid name collisions, e.g. "orgname-modelname"
 };
 
@@ -1171,8 +1172,14 @@ common_decision_type common_get_decision_type(const struct llama_model * model) 
     if (llama_model_meta_val_str(model, "general.architecture", buf, sizeof(buf)) < 0) {
         return COMMON_DECISION_TYPE_NONE;
     }
-    const std::string key = std::string(buf) + ".decision.type";
+    const std::string arch = buf;
+    const std::string key = arch + ".decision.type";
     if (llama_model_meta_val_str(model, key.c_str(), buf, sizeof(buf)) < 0) {
+        // GLiDE encoder GGUFs may omit <arch>.decision.type and instead carry 255 classifier.output_labels on modern-bert
+        if (arch == "modern-bert" && llama_model_n_cls_out(model) == 255 &&
+            llama_model_meta_val_str(model, "modern-bert.decision_block_count", buf, sizeof(buf)) < 0) {
+            return COMMON_DECISION_TYPE_GLIDE_ENCODER;
+        }
         return COMMON_DECISION_TYPE_NONE;
     }
     return common_decision_type_from_string(buf);
@@ -1202,7 +1209,15 @@ common_gguf_info common_get_gguf_info(const std::string & fname) {
 
     const int64_t type_id = gguf_find_key(gguf_ctx.get(), (arch + ".decision.type").c_str());
     if (type_id < 0) {
-        info.decision_type = COMMON_DECISION_TYPE_NONE;
+        const int64_t labels_id = gguf_find_key(gguf_ctx.get(), "modern-bert.classifier.output_labels");
+        if (arch == "modern-bert" && labels_id >= 0 &&
+            gguf_get_kv_type(gguf_ctx.get(), labels_id) == GGUF_TYPE_ARRAY &&
+            gguf_get_arr_n(gguf_ctx.get(), labels_id) == 255 &&
+            gguf_find_key(gguf_ctx.get(), "modern-bert.decision_block_count") < 0) {
+            info.decision_type = COMMON_DECISION_TYPE_GLIDE_ENCODER;
+        } else {
+            info.decision_type = COMMON_DECISION_TYPE_NONE;
+        }
     } else if (gguf_get_kv_type(gguf_ctx.get(), type_id) == GGUF_TYPE_STRING) {
         info.decision_type = common_decision_type_from_string(gguf_get_val_str(gguf_ctx.get(), type_id));
     }
@@ -1283,7 +1298,7 @@ common_init_result::common_init_result(common_params & params, bool model_only) 
     // minicpm-ocr-jev reads its class scores from the pooled output, the pooling type is the one of the GGUF
     if (decision_type == COMMON_DECISION_TYPE_LAYA || decision_type == COMMON_DECISION_TYPE_KEV || decision_type == COMMON_DECISION_TYPE_CLEF ||
         decision_type == COMMON_DECISION_TYPE_LFM2_D1_OMNI || decision_type == COMMON_DECISION_TYPE_VLLM_DECISION2 ||
-        decision_type == COMMON_DECISION_TYPE_MINICPM_OCR_JEV) {
+        decision_type == COMMON_DECISION_TYPE_MINICPM_OCR_JEV || decision_type == COMMON_DECISION_TYPE_GLIDE_ENCODER) {
         const auto pooling_type = decision_type == COMMON_DECISION_TYPE_MINICPM_OCR_JEV ? LLAMA_POOLING_TYPE_UNSPECIFIED : LLAMA_POOLING_TYPE_NONE;
 
         params.embedding    = true;

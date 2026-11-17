@@ -155,6 +155,13 @@ private:
     std::vector<std::string> quoted_spellings; // texts of the special tokens, quoted in the input, longest first
     std::string              quoted_first;     // the first bytes of these texts
 
+    // GLIDE_ENCODER
+    size_t glide_max_len     = 7999;
+    size_t glide_trunc_head  = 1024;
+    bool   glide_cls_pooling = false;
+
+    std::string render_glide(const json & state, const server_decision_question & question) const;
+
     std::string render(
             const json & state,
             const std::vector<server_decision_question> & questions,

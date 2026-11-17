@@ -217,6 +217,9 @@ struct server_task {
         // if set, the outputs are the pooled embeddings of the sequence, one score per class
         bool                     pooled = false;
 
+        // if > 0, read the first n_logits floats from markers[0] (GLiDE encoder 255-way readout)
+        int32_t                  n_logits = 0;
+
         // first prompt position that is read, -1 if none
         int32_t pos_first() const {
             int32_t pos = pointer;
