@@ -2198,6 +2198,10 @@ bool llama_model_base::load_tensors(llama_model_loader & ml) {
         }
     }
 
+    if (per_layer_tok_embd_s) {
+        ggml_backend_tensor_get(per_layer_tok_embd_s, &per_layer_tok_embd_scale, 0, sizeof(per_layer_tok_embd_scale));
+    }
+
     load_tensors_hadamard();
 
     // APU Phase 5 §5.1-§5.3: MoE router matrix isolation and AIE2P SRAM pinning
