@@ -25,7 +25,6 @@
 #include "ggml-cuda/cpy.cuh"
 #include "ggml-cuda/cross-entropy-loss.cuh"
 #include "ggml-cuda/cumsum.cuh"
-#include "ggml-cuda/diagmask.cuh"
 #include "ggml-cuda/diag.cuh"
 #include "ggml-cuda/fattn.cuh"
 #include "ggml-cuda/fp8.cuh"
@@ -2027,7 +2026,7 @@ static void ggml_cuda_mul_mat_cublas_impl(ggml_backend_cuda_context & ctx, const
 
 static void ggml_cuda_mul_mat_cublas(ggml_backend_cuda_context & ctx, const ggml_tensor * src0, const ggml_tensor * src1, ggml_tensor * dst) {
     const int cc = ggml_cuda_info().devices[ctx.device].cc;
-    const ggml_prec prec = (ggml_prec) ggml_get_op_params_i32(dst, 0);
+    const ggml_prec prec = ggml_prec_get_acc(dst);
     ggml_type compute_type = src0->type;
     if (ggml_is_quantized(compute_type) || compute_type == GGML_TYPE_F8_E4M3) {
         compute_type = fast_fp16_hardware_available(cc) ? GGML_TYPE_F16 : GGML_TYPE_F32;
@@ -2738,7 +2737,6 @@ static bool ggml_cuda_compute_forward(ggml_backend_cuda_context & ctx, struct gg
             ggml_cuda_dup(ctx, dst);
             break;
         case GGML_OP_ADD:
-        case GGML_OP_ADD1: // TODO: more efficient implementation
             ggml_cuda_op_add(ctx, dst);
             break;
         case GGML_OP_ADD_ID:
@@ -2932,9 +2930,6 @@ static bool ggml_cuda_compute_forward(ggml_backend_cuda_context & ctx, struct gg
                 break;
         case GGML_OP_DIAG:
             ggml_cuda_op_diag(ctx, dst);
-            break;
-        case GGML_OP_DIAG_MASK_INF:
-            ggml_cuda_op_diag_mask_inf(ctx, dst);
             break;
         case GGML_OP_SOFT_MAX:
             ggml_cuda_op_soft_max(ctx, dst);
@@ -4181,20 +4176,23 @@ static bool ggml_cuda_can_fuse(const struct ggml_cgraph *                cgraph,
             add = cgraph->nodes[node_idx+2];
         }
 
-        GGML_ASSERT(rms_norm->src[0]->type == GGML_TYPE_F32);
-        GGML_ASSERT(rms_norm->type == GGML_TYPE_F32);
-
-        //rms norm only supports F32
-        if (mul->src[0]->type != GGML_TYPE_F32 ||
-            mul->src[1]->type != GGML_TYPE_F32 ||
-            mul->type != GGML_TYPE_F32) {
+        // the mul operand is a norm weight, which model files store as F32;
+        // the add operand is an F32 bias or a residual with the type of x
+        const ggml_type type = rms_norm->type;
+        if ((type != GGML_TYPE_F32 && type != GGML_TYPE_BF16) || rms_norm->src[0]->type != type) {
             return false;
         }
 
-        if (add && (add->src[0]->type != GGML_TYPE_F32 ||
-            add->src[1]->type != GGML_TYPE_F32 ||
-            add->type != GGML_TYPE_F32) ) {
+        const ggml_tensor * mul_src = mul->src[0] == rms_norm ? mul->src[1] : mul->src[0];
+        if (mul_src->type != GGML_TYPE_F32 || mul->type != type) {
             return false;
+        }
+
+        if (add) {
+            const ggml_tensor * add_src = add->src[0] == mul ? add->src[1] : add->src[0];
+            if ((add_src->type != GGML_TYPE_F32 && add_src->type != type) || add->type != type) {
+                return false;
+            }
         }
 
         //if rms norm is the B operand, then we don't handle broadcast
@@ -4218,8 +4216,9 @@ static bool ggml_cuda_can_fuse(const struct ggml_cgraph *                cgraph,
         const ggml_tensor * rms_norm = cgraph->nodes[node_idx];
         const ggml_tensor * scale    = cgraph->nodes[node_idx+1];
 
-        GGML_ASSERT(rms_norm->src[0]->type == GGML_TYPE_F32);
-        GGML_ASSERT(rms_norm->type == GGML_TYPE_F32);
+        if (rms_norm->src[0]->type != GGML_TYPE_F32 || rms_norm->type != GGML_TYPE_F32) {
+            return false;
+        }
 
         float bias;
         memcpy(&bias, (const float *) scale->op_params + 1, sizeof(float));
@@ -6575,9 +6574,11 @@ static bool ggml_backend_cuda_device_supports_op(ggml_backend_dev_t dev, const g
         case GGML_OP_SILU_BACK:
             return ggml_is_contiguous(op->src[0]) && op->src[0]->type == GGML_TYPE_F32;
         case GGML_OP_NORM:
-        case GGML_OP_RMS_NORM:
         case GGML_OP_L2_NORM:
             return ggml_is_contiguous_rows(op->src[0]);
+        case GGML_OP_RMS_NORM:
+            return (op->src[0]->type == GGML_TYPE_F32 || op->src[0]->type == GGML_TYPE_BF16) && op->type == op->src[0]->type &&
+                   ggml_is_contiguous_rows(op->src[0]);
         case GGML_OP_RMS_NORM_BACK:
             return ggml_is_contiguous(op->src[0]);
         case GGML_OP_NONE:
@@ -6586,7 +6587,6 @@ static bool ggml_backend_cuda_device_supports_op(ggml_backend_dev_t dev, const g
         case GGML_OP_PERMUTE:
         case GGML_OP_TRANSPOSE:
         case GGML_OP_ADD_ID:
-        case GGML_OP_ADD1:
         case GGML_OP_SQR:
         case GGML_OP_SQRT:
         case GGML_OP_SIN:
@@ -6632,8 +6632,6 @@ static bool ggml_backend_cuda_device_supports_op(ggml_backend_dev_t dev, const g
             return op->src[0]->ne[1] % 128 == 0;
         }
         case GGML_OP_CONT:
-            return true;
-        case GGML_OP_DIAG_MASK_INF:
             return true;
         case GGML_OP_SOFT_MAX:
             return true;

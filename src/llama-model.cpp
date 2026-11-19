@@ -1698,11 +1698,12 @@ bool llama_model_base::load_tensors(llama_model_loader & ml) {
         }
     }
 
-    // resolve AUTO on systems without mmap support (e.g. iGPUs): fall back to OFF; see #28160
-    // AMD APU iGPUs (unified memory, e.g. gfx1150/gfx1151) are typed GGML_BACKEND_DEVICE_TYPE_IGPU and
-    // report mmap_support=false, so lazy tensor loading — which would page-fault per row through the
-    // unified memory bus — is disabled by default here (phase-2 §2.1, issue #28326 page-fault stalls).
-    if (ml.lazy.mode == LLAMA_LAZY_MODE_AUTO) {
+    // resolve AUTO on systems without mmap support (e.g. iGPUs): fall back to OFF; see #28160, #31943
+    // llama-apu (Phase 2 §2.1): keep lazy loading OFF by default on AMD APU unified memory (gfx1150)
+    // to avoid per-row page-fault stalls (#28326), EXCEPT preserve AUTO (allowing llama_prefetch_rows)
+    // when a per-layer embedding table is present AND mmap is enabled (Decision A1 Option C).
+    const bool has_ple = ml.get_weight("per_layer_token_embd.weight") != nullptr;
+    if (ml.lazy.mode == LLAMA_LAZY_MODE_AUTO && !(has_ple && ml.use_mmap)) {
         for (const auto & dev : devices) {
             ggml_backend_dev_props props;
             ggml_backend_dev_get_props(dev.dev, &props);
@@ -1823,6 +1824,16 @@ bool llama_model_base::load_tensors(llama_model_loader & ml) {
         // this avoids having to add scale loading to every architecture
         for (int i = 0; i < n_layer_all; ++i) {
             auto & layer = layers[i];
+
+            if (hparams.has_kv(i)) {
+                layer.k_cache_s = create_tensor(tn(LLM_TENSOR_ATTN_K, "k_scale", i), {1}, TENSOR_NOT_REQUIRED);
+                layer.v_cache_s = create_tensor(tn(LLM_TENSOR_ATTN_V, "v_scale", i), {1}, TENSOR_NOT_REQUIRED);
+
+                if ((layer.k_cache_s && layer.k_cache_s->type != GGML_TYPE_F32) ||
+                    (layer.v_cache_s && layer.v_cache_s->type != GGML_TYPE_F32)) {
+                    throw std::runtime_error(format("KV cache scales for layer %d must be F32", i));
+                }
+            }
 
             // attention weight scales (per-tensor, shape {1})
             if (!layer.wq_s && layer.wq) {
@@ -3520,6 +3531,8 @@ ggml_cgraph * llama_model::build_graph(const llm_graph_params & params) const {
 
     llm->build_layer_inp_dev();
 
+    llm->build_h_nextn_dev();
+
     llm->res->set_outputs(params);
 
     return llm->res->get_gf();
@@ -3556,10 +3569,6 @@ llama_model_params llama_model_default_params() {
 
 const llama_vocab * llama_model_get_vocab(const llama_model * model) {
     return &model->vocab;
-}
-
-void llama_free_model(llama_model * model) {
-    llama_model_free(model);
 }
 
 void llama_model_free(llama_model * model) {
@@ -3630,26 +3639,6 @@ const char * llama_model_decision_label(const struct llama_model * model, uint32
     }
 
     return nullptr;
-}
-
-// deprecated
-int32_t llama_n_ctx_train(const llama_model * model) {
-    return llama_model_n_ctx_train(model);
-}
-
-// deprecated
-int32_t llama_n_embd(const llama_model * model) {
-    return llama_model_n_embd(model);
-}
-
-// deprecated
-int32_t llama_n_layer(const llama_model * model) {
-    return llama_model_n_layer(model);
-}
-
-// deprecated
-int32_t llama_n_head(const llama_model * model) {
-    return llama_model_n_head(model);
 }
 
 llama_rope_type llama_model_rope_type(const llama_model * model) {

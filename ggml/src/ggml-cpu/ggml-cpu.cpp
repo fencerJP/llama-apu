@@ -441,8 +441,17 @@ static bool ggml_backend_cpu_device_supports_op(ggml_backend_dev_t dev, const st
 
     switch (op->op) {
         case GGML_OP_GET_ROWS:
-            return src0->type == GGML_TYPE_F32 || src0->type == GGML_TYPE_F16 ||
-                   src0->type == GGML_TYPE_BF16 || src0->type == GGML_TYPE_I32;
+            // Custom GPU-only ROCmFP4/FPX/Turbo/ROCmI4 types have no CPU GET_ROWS kernel;
+            // all standard GGML types (including quantized and F8_E4M3) are supported on CPU.
+            return src0->type != GGML_TYPE_Q4_0_ROCMFP4 &&
+                   src0->type != GGML_TYPE_Q4_0_ROCMFP4_FAST &&
+                   src0->type != GGML_TYPE_Q6_0_ROCMFPX &&
+                   src0->type != GGML_TYPE_Q8_0_ROCMFPX &&
+                   src0->type != GGML_TYPE_Q3_0_ROCMFPX &&
+                   src0->type != GGML_TYPE_TURBO3_0 &&
+                   src0->type != GGML_TYPE_TURBO4_0 &&
+                   src0->type != GGML_TYPE_Q2_0_ROCMFPX &&
+                   src0->type != GGML_TYPE_Q4_0_ROCMI4;
         case GGML_OP_CPY:
         case GGML_OP_SET_ROWS:
             return
@@ -458,10 +467,11 @@ static bool ggml_backend_cpu_device_supports_op(ggml_backend_dev_t dev, const st
                 src0->type == GGML_TYPE_F32 && op->type == GGML_TYPE_F32) {
                 return src1->type == GGML_TYPE_F32 || src1->type == GGML_TYPE_F16;
             }
-            // BF16 in src1 is widened into the F32 work buffer
+            // F16 or BF16 in src1 is widened into the F32 work buffer
             return src1->type == GGML_TYPE_F32 ||
                    src1->type == ggml_get_type_traits_cpu(src0->type)->vec_dot_type ||
-                   (src1->type == GGML_TYPE_BF16 && ggml_get_type_traits_cpu(src0->type)->vec_dot_type == GGML_TYPE_F32);
+                   ((src1->type == GGML_TYPE_F16 || src1->type == GGML_TYPE_BF16) &&
+                    ggml_get_type_traits_cpu(src0->type)->vec_dot_type == GGML_TYPE_F32);
         case GGML_OP_SOFT_MAX_BACK: {
             if (op->src[0]->type != GGML_TYPE_F32 || op->src[1]->type != GGML_TYPE_F32) {
                 return false;

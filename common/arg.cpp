@@ -284,6 +284,7 @@ const std::vector<ggml_type> kv_cache_types = {
     GGML_TYPE_F32,
     GGML_TYPE_F16,
     GGML_TYPE_BF16,
+    GGML_TYPE_F8_E4M3,
     GGML_TYPE_Q8_0,
     GGML_TYPE_Q4_0,
     GGML_TYPE_Q4_1,
@@ -1330,7 +1331,7 @@ static void apu_route_resolve(common_params & params) {
 
     // APU Sparse MoE Chunk Loader: activate by default for large MoE models
     // Scales number of pinned layers/experts by available memory with headroom and KV cache space
-    if (!params.model.path.empty()) {
+    if (!params.model.path.empty() && params.moe_cache_size == 0) {
         auto plan = apu_plan_moe_memory(params.model.path, params.n_ctx ? params.n_ctx : 4096, params.n_gpu_layers);
         if (plan.chunk_loader_active) {
             LOG_INF("[APU MoE Chunk Loader] Activated by default for %s (%.2f GiB MoE, %d layers, %d experts)\n",
@@ -1357,6 +1358,9 @@ static void apu_route_resolve(common_params & params) {
             params.no_host = true;
             params.fit_params = false; // already fitted via APU chunk loader
         }
+    } else if (!params.model.path.empty() && params.moe_cache_size > 0) {
+        LOG_INF("[APU MoE Chunk Loader] Bypassed because --moe-cache-mib (%.1f MiB) was explicitly configured\n",
+                (double) params.moe_cache_size / (1024.0 * 1024.0));
     }
 }
 bool common_params_parse(int argc, char ** argv, common_params & params, llama_example ex, void(*print_usage)(int, char **)) {
@@ -2642,15 +2646,6 @@ common_params_context common_params_parser_init(common_params & params, llama_ex
             params.ppl_output_type = value;
         }
     ).set_examples({LLAMA_EXAMPLE_PERPLEXITY}));
-    add_opt(common_arg(
-        {"-dt", "--defrag-thold"}, "N",
-        string_format("KV cache defragmentation threshold (DEPRECATED)"),
-        [](common_params & params, const std::string & value) {
-            GGML_UNUSED(params);
-            GGML_UNUSED(value);
-            LOG_WRN("DEPRECATED: --defrag-thold is deprecated and no longer necessary to specify\n");
-        }
-    ).set_env("LLAMA_ARG_DEFRAG_THOLD"));
     if (ex == LLAMA_EXAMPLE_SERVER) {
         // this is to make sure this option appears in the server-specific section of the help message
         add_opt(common_arg(
@@ -3079,6 +3074,17 @@ common_params_context common_params_parser_init(common_params & params, llama_ex
         }
     ).set_env("LLAMA_ARG_MOE_CACHE_MIB"));
     add_opt(common_arg(
+        {"--moe-cache-cpu-share"}, "F",
+        string_format("share of the MoE cache misses that the CPU computes from the host experts instead of uploading them to the GPU once the cache is full, from 0 to 1 (default: %.2f)", (double) params.moe_cache_cpu_share),
+        [](common_params & params, const std::string & value) {
+            const float share = std::stof(value);
+            if (share < 0.0f || share > 1.0f) {
+                throw std::invalid_argument("invalid value");
+            }
+            params.moe_cache_cpu_share = share;
+        }
+    ).set_env("LLAMA_ARG_MOE_CACHE_CPU_SHARE"));
+    add_opt(common_arg(
         {"-ncffn", "--n-cpu-ffn"}, "N",
         "keep the dense FFN weights of the first N layers in the CPU\n"
         "(dense models; for MoE expert weights use --n-cpu-moe)",
@@ -3142,7 +3148,7 @@ common_params_context common_params_parser_init(common_params & params, llama_ex
             const std::regex regex{ R"([,/]+)" };
             std::sregex_token_iterator it{ arg_next.begin(), arg_next.end(), regex, -1 };
             std::vector<std::string> split_arg{ it, {} };
-            if (split_arg.size() >= llama_max_devices()) {
+            if (split_arg.size() > llama_max_devices()) {
                 throw std::invalid_argument(
                     string_format("got %zu input configs, but system only has %zu devices", split_arg.size(), llama_max_devices())
                 );
@@ -3208,7 +3214,7 @@ common_params_context common_params_parser_init(common_params & params, llama_ex
             const std::regex regex{ R"([,/]+)" };
             std::sregex_token_iterator it{ arg_next.begin(), arg_next.end(), regex, -1 };
             std::vector<std::string> split_arg{ it, {} };
-            if (split_arg.size() >= llama_max_devices()) {
+            if (split_arg.size() > llama_max_devices()) {
                 throw std::invalid_argument(
                     string_format("got %zu input configs, but system only has %zu devices", split_arg.size(), llama_max_devices())
                 );
@@ -3345,6 +3351,16 @@ common_params_context common_params_parser_init(common_params & params, llama_ex
             params.model.path = value;
         }
     ).set_examples({LLAMA_EXAMPLE_COMMON, LLAMA_EXAMPLE_EXPORT_LORA, LLAMA_EXAMPLE_DOWNLOAD, LLAMA_EXAMPLE_TOKENIZE}).set_env("LLAMA_ARG_MODEL"));
+    add_opt(common_arg(
+        {"--ple", "--shard"}, "FNAME,...",
+        "extra GGUF shards for the model, comma separated; may be given more than once\n"
+        "paths may live anywhere, including on different drives; --ple is an alias for --shard",
+        [](common_params & params, const std::string & value) {
+            for (const auto & item : parse_csv_row(value)) {
+                params.model.shards.push_back(item);
+            }
+        }
+    ).set_examples({LLAMA_EXAMPLE_COMMON}).set_env("LLAMA_ARG_SHARD"));
     add_opt(common_arg(
         {"-mu", "--model-url"}, "MODEL_URL",
         "model download url (default: unused)",
