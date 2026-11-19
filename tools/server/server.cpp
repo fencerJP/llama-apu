@@ -12,10 +12,12 @@
 #include "fit.h"
 #include "llama.h"
 #include "log.h"
+#include "optimize.h"
 
 #include <algorithm>
 #include <atomic>
 #include <clocale>
+#include <cstring>
 #include <exception>
 #include <signal.h>
 #include <thread> // for std::thread::hardware_concurrency
@@ -785,6 +787,12 @@ static int server_run(common_params & params, int argc, char ** argv, server_rol
 }
 
 int llama_server(int argc, char ** argv) {
+    for (int i = 1; i + 1 < argc; ++i) {
+        if (strcmp(argv[i], "--optimization-test-worker") == 0) {
+            return common_run_optimization_worker(argv[i + 1]);
+        }
+    }
+
     server_role role;
 
     std::setlocale(LC_NUMERIC, "C");
@@ -811,6 +819,14 @@ int llama_server(int argc, char ** argv) {
 
     llama_backend_init();
     llama_numa_init(params.numa);
+
+    if (params.optimization_test) {
+        const int rc = common_run_optimization_test(params, argc > 0 ? argv[0] : "llama-server");
+        server_stream_session_manager_stop();
+        llama_backend_free();
+        common_log_flush(common_log_main());
+        return rc;
+    }
 
     const int result = server_run(params, argc, argv, role, server_run_opts{});
     common_log_flush(common_log_main());

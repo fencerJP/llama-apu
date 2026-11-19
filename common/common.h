@@ -647,6 +647,11 @@ struct common_params {
     size_t      moe_cache_size      = 0;    // GPU cache size in bytes for the MoE experts kept in the CPU, split among the GPUs like the layers
     float       moe_cache_cpu_share = 0.0f; // share of the MoE cache misses computed on the CPU instead of uploaded
 
+    bool        optimization_test         = false; // run self-contained model optimization loop
+    std::string optimization_test_worker;          // internal subprocess trial runner JSON path
+    std::string optimize_settings_path;            // path to optimized-settings.json
+    bool        optimize_settings_applied = false; // guard against double application per model load
+
     common_conversation_mode conversation_mode = COMMON_CONVERSATION_MODE_AUTO;
 
     // multimodal models (see tools/mtmd)

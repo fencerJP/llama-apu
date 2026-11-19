@@ -61,9 +61,26 @@ struct command {
 #define UPDATE_HIDDEN true
 #endif
 
+static int llama_optimization_test(int argc, char ** argv) {
+    std::vector<std::string> owned_args;
+    owned_args.reserve((size_t) argc + 2);
+    owned_args.push_back(argc > 0 ? argv[0] : "llama");
+    owned_args.push_back("--optimization-test");
+    for (int i = 1; i < argc; ++i) {
+        owned_args.push_back(argv[i]);
+    }
+    std::vector<char *> ptrs;
+    ptrs.reserve(owned_args.size());
+    for (auto & s : owned_args) {
+        ptrs.push_back(s.data());
+    }
+    return llama_server((int) ptrs.size(), ptrs.data());
+}
+
 static const command cmds[] = {
-    {"serve",         "HTTP API server",                                    {"server"},   false,         llama_server       },
-    {"cli",           "Command-line interactive interface",                 {"client"},   false,         llama_cli          },
+    {"serve",             "HTTP API server",                                    {"server"},   false, llama_server           },
+    {"cli",               "Command-line interactive interface",                 {"client"},   false, llama_cli              },
+    {"optimization-test", "Run adaptive model optimization benchmark loop",     {},           false, llama_optimization_test, true },
     {"update",        "Update llama to the latest release",                 {},           UPDATE_HIDDEN, llama_update       },
     {"download",      "Download a model",                                   {"get"},      false,         llama_download     },
     {"completion",    "Text completion",                                    {"complete"}, true,          llama_completion   },
@@ -130,6 +147,10 @@ int main(int argc, char ** argv) {
     progname = argv[0];
 
     const std::string arg = argc >= 2 ? argv[1] : "help";
+
+    if (arg == "--optimization-test-worker") {
+        return llama_server(argc, argv);
+    }
 
     for (const auto & cmd : cmds) {
         if (matches(arg, cmd)) {

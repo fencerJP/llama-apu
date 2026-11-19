@@ -4,6 +4,7 @@
 #include "json.h"
 #include "llama-cpp.h"
 #include "log.h"
+#include "optimize.h"
 
 #include "../src/llama-ext.h"
 
@@ -200,6 +201,10 @@ std::vector<common_memory_breakdown_row> common_fit_measure(
 }
 
 common_memory_reports common_measure_memory(common_params & params) {
+    if (!params.optimize_settings_path.empty() && !params.model.path.empty()) {
+        common_optimize_settings_apply(params);
+    }
+
     const ggml_log_level log_level = params.verbosity >= LOG_LEVEL_DEBUG ? GGML_LOG_LEVEL_DEBUG : GGML_LOG_LEVEL_ERROR;
     const std::vector<std::string> paths_model = params.model.get_paths();
 
