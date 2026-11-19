@@ -1343,7 +1343,7 @@ static void apu_route_resolve(common_params & params) {
 
     // APU Sparse MoE Chunk Loader: activate by default for large MoE models
     // Scales number of pinned layers/experts by available memory with headroom and KV cache space
-    if (!params.model.path.empty() && params.moe_cache_size == 0) {
+    if (!params.model.path.empty() && params.moe_cache_size == 0 && params.optimize_settings_path.empty()) {
         auto plan = apu_plan_moe_memory(params.model.path, params.n_ctx ? params.n_ctx : 4096, params.n_gpu_layers);
         if (plan.chunk_loader_active) {
             LOG_INF("[APU MoE Chunk Loader] Activated by default for %s (%.2f GiB MoE, %d layers, %d experts)\n",
@@ -3021,6 +3021,27 @@ common_params_context common_params_parser_init(common_params & params, llama_ex
             params.apu.sarathi_stall_free = value;
         }
     ).set_examples({LLAMA_EXAMPLE_SERVER, LLAMA_EXAMPLE_CLI}).set_env("LLAMA_ARG_STALL_FREE"));
+    add_opt(common_arg(
+        {"--optimization-test"},
+        "discover diverse MoE, dense, and decision models and run up to 3 adaptive benchmark-and-adjust rounds per model to generate optimized-settings.json",
+        [](common_params & params) {
+            params.optimization_test = true;
+        }
+    ).set_examples({LLAMA_EXAMPLE_SERVER, LLAMA_EXAMPLE_CLI}).set_env("LLAMA_ARG_OPTIMIZATION_TEST"));
+    add_opt(common_arg(
+        {"--optimization-test-worker"}, "FILE",
+        "internal subprocess trial runner for --optimization-test",
+        [](common_params & params, const std::string & value) {
+            params.optimization_test_worker = value;
+        }
+    ).set_examples({LLAMA_EXAMPLE_SERVER, LLAMA_EXAMPLE_CLI}).set_env("LLAMA_ARG_OPTIMIZATION_TEST_WORKER"));
+    add_opt(common_arg(
+        {"--optimize-settings"}, "FILE",
+        "automatically adapt runtime parameters from an optimized-settings.json profile on every model load",
+        [](common_params & params, const std::string & value) {
+            params.optimize_settings_path = value;
+        }
+    ).set_env("LLAMA_ARG_OPTIMIZE_SETTINGS"));
     add_opt(common_arg(
         {"--numa"}, "TYPE",
         "attempt optimizations that help on some NUMA systems\n"

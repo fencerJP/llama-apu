@@ -10,6 +10,7 @@
 #include "fit.h"
 #include "log.h"
 #include "llama.h"
+#include "optimize.h"
 #include "sampling.h"
 #include "speculative.h"
 #include "unicode.h"
@@ -1274,6 +1275,10 @@ void common_fit_apply(common_params & params, llama_model_params & mparams, llam
 
 common_init_result::common_init_result(common_params & params, bool model_only) :
     pimpl(new impl{}) {
+    if (!params.optimize_settings_path.empty() && !params.model.path.empty()) {
+        common_optimize_settings_apply(params);
+    }
+
     auto mparams = common_model_params_to_llama(params);
     auto cparams = common_context_params_to_llama(params);
 
@@ -1392,6 +1397,22 @@ common_init_result::common_init_result(common_params & params, bool model_only) 
         cparams.type_k = GGML_TYPE_F16;
         cparams.type_v = GGML_TYPE_F16;
         LOG_INF("%s: APU dynamic KV quantization disabled (--no-kv-quant), using FP16 baseline\n", __func__);
+    } else if (params.optimize_settings_applied) {
+        apu_kv_mode_t resolved_mode = APU_KV_MODE_AUTO;
+        std::string reason;
+        apu_evaluate_kv_quant_compatibility(model, APU_KV_MODE_AUTO, resolved_mode, reason);
+        if (resolved_mode == APU_KV_MODE_FP16) {
+            cparams.type_k = GGML_TYPE_F16;
+            cparams.type_v = GGML_TYPE_F16;
+            LOG_INF("%s: --optimize-settings KV overridden to FP16 for compatibility (%s)\n", __func__, reason.c_str());
+        } else {
+            if (cparams.type_v != GGML_TYPE_F16 && cparams.type_v != GGML_TYPE_F32 && cparams.type_v != GGML_TYPE_BF16 &&
+                (cparams.flash_attn_type == LLAMA_FLASH_ATTN_TYPE_AUTO || cparams.flash_attn_type == LLAMA_FLASH_ATTN_TYPE_DISABLED)) {
+                cparams.flash_attn_type = LLAMA_FLASH_ATTN_TYPE_ENABLED;
+            }
+            LOG_INF("%s: preserving --optimize-settings KV types (%s/%s)\n", __func__,
+                    ggml_type_name(cparams.type_k), ggml_type_name(cparams.type_v));
+        }
     } else {
         apu_kv_mode_t req_mode = apu_kv_mode_from_string(params.kv_cache_type);
         apu_kv_mode_t resolved_mode = req_mode;

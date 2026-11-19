@@ -299,6 +299,8 @@ static void unset_reserved_args(common_preset & preset, bool unset_model_args) {
     preset.unset_option("LLAMA_ARG_CONNECT_CODE");
     preset.unset_option("LLAMA_ARG_MCP_SERVERS_CONFIG");
     preset.unset_option("LLAMA_ARG_MCP_SERVERS_JSON");
+    preset.unset_option("LLAMA_ARG_OPTIMIZATION_TEST");
+    preset.unset_option("LLAMA_ARG_OPTIMIZATION_TEST_WORKER");
     if (unset_model_args) {
         preset.unset_option("LLAMA_ARG_MODEL");
         preset.unset_option("LLAMA_ARG_SHARD");

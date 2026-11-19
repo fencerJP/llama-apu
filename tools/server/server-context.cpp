@@ -18,6 +18,7 @@
 #include "fit.h"
 #include "llama.h"
 #include "log.h"
+#include "optimize.h"
 #include "sampling.h"
 #include "speculative.h"
 #include "mtmd.h"
@@ -1234,6 +1235,10 @@ private:
         load_progress_data load_progress_spec  (this, "spec_model");
 
         const bool is_resume = sleeping;
+
+        if (!params.optimize_settings_path.empty() && !params.model.path.empty()) {
+            common_optimize_settings_apply(params);
+        }
 
         params_base = params;
         const auto output_limits = server_output_limits(params_base);

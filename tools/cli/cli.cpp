@@ -1,9 +1,11 @@
 #include "arg.h"
 #include "common.h"
 #include "log.h"
+#include "optimize.h"
 
 #include "cli-context.h"
 
+#include <cstring>
 #include <signal.h>
 
 #if defined(_WIN32)
@@ -31,6 +33,12 @@ static void signal_handler(int) {
 int llama_cli(int argc, char ** argv);
 
 int llama_cli(int argc, char ** argv) {
+    for (int i = 1; i + 1 < argc; ++i) {
+        if (strcmp(argv[i], "--optimization-test-worker") == 0) {
+            return common_run_optimization_worker(argv[i + 1]);
+        }
+    }
+
     common_params params;
 
     params.verbosity = LOG_LEVEL_ERROR; // by default, less verbose logs
@@ -43,6 +51,13 @@ int llama_cli(int argc, char ** argv) {
 
     llama_backend_init();
     llama_numa_init(params.numa);
+
+    if (params.optimization_test) {
+        const int rc = common_run_optimization_test(params, argc > 0 ? argv[0] : "llama-cli");
+        llama_backend_free();
+        common_log_flush(common_log_main());
+        return rc;
+    }
 
 #if defined (__unix__) || (defined (__APPLE__) && defined (__MACH__))
     struct sigaction sigint_action;
