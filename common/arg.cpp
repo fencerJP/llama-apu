@@ -1331,7 +1331,7 @@ static void apu_route_resolve(common_params & params) {
 
     // APU Sparse MoE Chunk Loader: activate by default for large MoE models
     // Scales number of pinned layers/experts by available memory with headroom and KV cache space
-    if (!params.model.path.empty()) {
+    if (!params.model.path.empty() && params.moe_cache_size == 0) {
         auto plan = apu_plan_moe_memory(params.model.path, params.n_ctx ? params.n_ctx : 4096, params.n_gpu_layers);
         if (plan.chunk_loader_active) {
             LOG_INF("[APU MoE Chunk Loader] Activated by default for %s (%.2f GiB MoE, %d layers, %d experts)\n",
@@ -1358,6 +1358,9 @@ static void apu_route_resolve(common_params & params) {
             params.no_host = true;
             params.fit_params = false; // already fitted via APU chunk loader
         }
+    } else if (!params.model.path.empty() && params.moe_cache_size > 0) {
+        LOG_INF("[APU MoE Chunk Loader] Bypassed because --moe-cache-mib (%.1f MiB) was explicitly configured\n",
+                (double) params.moe_cache_size / (1024.0 * 1024.0));
     }
 }
 bool common_params_parse(int argc, char ** argv, common_params & params, llama_example ex, void(*print_usage)(int, char **)) {
