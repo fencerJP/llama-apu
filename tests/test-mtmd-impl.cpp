@@ -7,12 +7,22 @@
 #include "mtmd-helper.h"
 #include "mtmd-image.h"
 #include "mtmd-internal.h"
+#include "models/models.h"
+
+#include "chat-tts-norm.h"
+#include "jinja/lexer.h"
+#include "jinja/parser.h"
+#include "jinja/runtime.h"
 
 #include <algorithm>
+#include <array>
 #include <cmath>
 #include <cstdint>
 #include <cstdlib>
+#include <fstream>
 #include <iostream>
+#include <iterator>
+#include <memory>
 #include <stdexcept>
 #include <string>
 #include <tuple>
@@ -418,9 +428,19 @@ MAKE_TEST(test_video_config) {
 // n_frames source frames, each one starts with its index
 struct test_video_source : mtmd_helper_video_seq {
     int32_t n_frames;
-    int32_t n_read = 0;
+    int32_t n_read    = 0;
+    int32_t n_skipped = 0;
 
     test_video_source(int32_t n_frames) : n_frames(n_frames) {}
+
+    bool skip_raw_frame() override {
+        if (n_read >= n_frames) {
+            return false;
+        }
+        n_read++;
+        n_skipped++;
+        return true;
+    }
 
     bool read_raw_frame() override {
         if (n_read >= n_frames) {
@@ -463,17 +483,17 @@ MAKE_TEST(test_video_sequence_qwen3vl) {
     const mtmd_image_preprocessor_qwen3vl preproc(hparams);
 
     // { source video, expected frame size and sequence from Qwen3VLProcessor (transformers 4.57.1) }
-    const std::vector<std::tuple<mtmd_helper_video_src, mtmd_image_size, std::string>> cases = {
-        { {  720, 358, 24.0f, 240 }, { 704, 352 },
+    const std::vector<std::tuple<mtmd_helper_video_stream_info, mtmd_image_size, std::string>> cases = {
+        { {  720, 358, 24.0f, 240, -1.0f }, { 704, 352 },
             "<0.3 seconds>[0][13]<1.3 seconds>[25][38]<2.4 seconds>[50][63]<3.4 seconds>[75][88]<4.5 seconds>[101][113]"
             "<5.5 seconds>[126][138]<6.6 seconds>[151][164]<7.6 seconds>[176][189]<8.6 seconds>[201][214]<9.7 seconds>[226][239]" },
         // odd frame count: the last group repeats its last frame
-        { {  640, 480, 10.0f,  35 }, { 640, 480 },
+        { {  640, 480, 10.0f,  35, -1.0f }, { 640, 480 },
             "<0.3 seconds>[0][6]<1.4 seconds>[11][17]<2.5 seconds>[23][28]<3.4 seconds>[34]" },
         // fewer frames than the minimum of 4
-        { {  320, 240, 30.0f,   3 }, { 320, 256 },
+        { {  320, 240, 30.0f,   3, -1.0f }, { 320, 256 },
             "<0.0 seconds>[0][1]<0.1 seconds>[2]" },
-        { { 1280, 720, 30000.0f / 1001.0f, 300 }, { 1280, 704 },
+        { { 1280, 720, 30000.0f / 1001.0f, 300, -1.0f }, { 1280, 704 },
             "<0.3 seconds>[0][16]<1.3 seconds>[31][47]<2.4 seconds>[63][79]<3.4 seconds>[94][110]<4.5 seconds>[126][142]"
             "<5.5 seconds>[157][173]<6.6 seconds>[189][205]<7.6 seconds>[220][236]<8.7 seconds>[252][268]<9.7 seconds>[283][299]" },
     };
@@ -496,17 +516,41 @@ MAKE_TEST(test_video_sequence_lfm3_omni) {
     hparams.n_merge = 2;
     const mtmd_image_preprocessor_lfm3vl preproc(hparams);
 
-    const mtmd_helper_video_src src = { 64, 64, 2.0f, 9 };
+    const mtmd_helper_video_stream_info src = { 64, 64, 2.0f, 9, -1.0f };
     const mtmd_video_config cfg = mtmd_video_config_init(MTMD_VIDEO_TEMPLATE_LFM3_OMNI, &preproc, src.width, src.height, src.n_frames, src.fps);
     test_video_source video(src.n_frames);
     video.configure(cfg, src, 0.0f);
-    video.src_alive  = true;
-    video.audio_rate = 100;
-    video.soundtrack.assign(450, 0.0f);
+    video.src_alive = true;
+    // the video is 4.5 seconds long, the rest of the soundtrack is dropped
+    const std::vector<float> pcm(500, 0.0f);
+    video.set_soundtrack(pcm.data(), pcm.size(), 100);
 
     t.assert_equal("sequence",
         std::string("<0.2 seconds>[0][1]{100}<1.2 seconds>[2][3]{100}<2.2 seconds>[4][5]{100}<3.2 seconds>[6][7]{100}<4.0 seconds>[8]{50}"),
         video_sequence_to_str(t, video));
+}
+
+// a source that gives every frame: the frames of fps_target are picked by index
+MAKE_TEST(test_video_sequence_sample_by_index) {
+    const mtmd_video_config cfg = { MTMD_VIDEO_TEMPLATE_DEFAULT, 0.0f, 0, 0, 0 };
+
+    // { source video, frames in the source, expected sequence, expected number of skipped frames }
+    const std::vector<std::tuple<mtmd_helper_video_stream_info, int32_t, std::string, int32_t>> cases = {
+        { { 64, 64, 8.0f, 16, -1.0f }, 16, "Video:[0][0m0.00s][4][8][0m1.00s][12]", 9 },
+        // unknown length: every frame is kept
+        { { 64, 64, 8.0f, -1, -1.0f },  3, "Video:[0][0m0.00s][1][2]", 0 },
+    };
+
+    for (const auto & [src, n_frames, expected, expected_skipped] : cases) {
+        const std::string name = std::to_string(src.n_frames) + " frames";
+        test_video_source video(n_frames);
+        video.timestamp_interval_ms = 1000;
+        video.configure(cfg, src, 2.0f);
+        video.sample_by_index(src);
+        video.src_alive = true;
+        t.assert_equal(name + " sequence", expected, video_sequence_to_str(t, video));
+        t.assert_equal(name + " skipped", expected_skipped, video.n_skipped);
+    }
 }
 
 //
@@ -766,6 +810,256 @@ MAKE_TEST(test_audio_log_mel_blocks) {
         }
     }
     t.assert_true("max_diff = " + std::to_string(max_diff), max_diff < 1e-5f);
+}
+
+//
+// mtmd_helper_resampler
+//
+
+static std::vector<float> make_tone(double freq, int rate, size_t n) {
+    const double pi = 3.14159265358979323846;
+    std::vector<float> x(n);
+    for (size_t i = 0; i < n; i++) {
+        x[i] = (float) (0.5 * std::sin(2 * pi * freq * i / rate));
+    }
+    return x;
+}
+
+// amplitude of the freq component, skipping the edges
+static double tone_amplitude(const std::vector<float> & x, double freq, int rate) {
+    const double pi = 3.14159265358979323846;
+    const size_t skip = rate / 10;
+    double re = 0.0, im = 0.0;
+    for (size_t i = skip; i < x.size() - skip; i++) {
+        re += x[i] * std::cos(2 * pi * freq * i / rate);
+        im += x[i] * std::sin(2 * pi * freq * i / rate);
+    }
+    return 2.0 * std::sqrt(re * re + im * im) / (x.size() - 2 * skip);
+}
+
+static std::vector<float> resample_chunked(mtmd_helper_resampler * rs, const std::vector<float> & in, size_t chunk) {
+    std::vector<float> res;
+    for (size_t off = 0; off < in.size(); off += chunk) {
+        const float * out = nullptr;
+        const int64_t n = mtmd_helper_resampler_process(rs, in.data() + off, std::min(chunk, in.size() - off), &out);
+        if (n < 0) {
+            return {};
+        }
+        res.insert(res.end(), out, out + n);
+    }
+    return res;
+}
+
+MAKE_TEST(test_helper_resampler) {
+    const int rate_out = 16000;
+    for (int rate_in : { 8000, 24000, 44100, 48000 }) {
+        const std::string name = std::to_string(rate_in) + " -> " + std::to_string(rate_out);
+        const std::vector<float> in = make_tone(440, rate_in, (size_t) rate_in * 2);
+
+        mtmd_helper::resampler_ptr rs_all(mtmd_helper_resampler_init(rate_in, rate_out));
+        mtmd_helper::resampler_ptr rs_chk(mtmd_helper_resampler_init(rate_in, rate_out));
+        if (!t.assert_true(name + " init", rs_all && rs_chk)) {
+            continue;
+        }
+        const std::vector<float> all = resample_chunked(rs_all.get(), in, in.size());
+        const std::vector<float> chk = resample_chunked(rs_chk.get(), in, 1234); // odd size, not a multiple of the ratio
+
+        t.assert_equal(name + " n_samples", (size_t) rate_out * 2, all.size());
+        t.assert_true(name + " chunked == one-shot", all == chk);
+
+        const double amp = tone_amplitude(all, 440, rate_out);
+        t.assert_true(name + " amplitude = " + std::to_string(amp), std::fabs(amp - 0.5) < 0.02);
+    }
+
+    // above the output Nyquist: 10 kHz at 48 kHz aliases to 6 kHz at 16 kHz, the low-pass filter must cut it
+    {
+        mtmd_helper::resampler_ptr rs(mtmd_helper_resampler_init(48000, rate_out));
+        const std::vector<float> out = resample_chunked(rs.get(), make_tone(10000, 48000, 48000 * 2), 4800);
+        const double db = 20 * std::log10(tone_amplitude(out, 6000, rate_out) / 0.5);
+        t.assert_true("aliasing = " + std::to_string(db) + " dB", db < -15); // about -20 dB with lpfOrder = 8, -10 dB with the default
+    }
+
+    // same rate: no copy
+    {
+        mtmd_helper::resampler_ptr rs(mtmd_helper_resampler_init(rate_out, rate_out));
+        const std::vector<float> in = make_tone(440, rate_out, 1000);
+        const float * out = nullptr;
+        const int64_t n = rs ? mtmd_helper_resampler_process(rs.get(), in.data(), in.size(), &out) : -1;
+        t.assert_true("passthrough", n == (int64_t) in.size() && out == in.data());
+    }
+
+    t.assert_true("invalid rate", mtmd_helper_resampler_init(0, rate_out) == nullptr);
+}
+
+//
+// kokoro
+//
+
+// a dictionary for tts_dict(): entries in any order, sorted here
+static common_tts_dict kokoro_dict(std::vector<std::pair<std::string, std::string>> entries) {
+    std::sort(entries.begin(), entries.end());
+    common_tts_dict dict;
+    for (auto & e : entries) {
+        dict.keys.push_back(e.first);
+        dict.values.push_back(e.second);
+    }
+    return dict;
+}
+
+// the "tts" template with small dictionaries: a few lexicon words, fixed tags, and a model for unknown words over the letters z a b i n g
+MAKE_TEST(test_kokoro_tts_template) {
+    std::string path = __FILE__;
+    const size_t pos = path.find_last_of("/\\");
+    path = (pos == std::string::npos ? std::string(".") : path.substr(0, pos)) + "/../models/templates/hexgrad-Kokoro-82M-tts.jinja";
+    std::ifstream fs(path, std::ios_base::binary);
+    if (!t.assert_true("template file is readable: " + path, fs.is_open())) {
+        return;
+    }
+    const std::string tmpl((std::istreambuf_iterator<char>(fs)), std::istreambuf_iterator<char>());
+
+    const auto dicts = std::make_shared<const common_tts_dicts>(common_tts_dicts{
+        {"gold", kokoro_dict({
+            {"hello", "\"h\xc9\x99l\xcb\x88O\""},
+            {"world", "\"w\xcb\x88\xc9\x9c\xc9\xb9ld\""},
+            {"I", "\"\xcb\x88I\""},
+            {"read", "{\"ADJ\":\"\xc9\xb9\xcb\x88\xc9\x9b" "d\",\"DEFAULT\":\"\xc9\xb9\xcb\x88id\",\"VBD\":\"\xc9\xb9\xcb\x88\xc9\x9b" "d\",\"VBN\":\"\xc9\xb9\xcb\x88\xc9\x9b" "d\",\"VBP\":\"\xc9\xb9\xcb\x88\xc9\x9b" "d\"}"},
+            {"it", "\"\xc9\xaat\""},
+            {"three", "\"\xce\xb8\xc9\xb9\xcb\x88i\""},
+            {"cat", "\"k\xcb\x88\xc3\xa6t\""},
+            {"walk", "\"w\xcb\x88\xc9\x94k\""},
+            {"the", "\"\xc3\xb0i\""},
+            {"Z", "\"z\xcb\x88i\""},
+            {"'s", "\"s\""},
+            {"a", "\"A\""},
+            {"and", "\"\xc3\xa6nd\""},
+            {"is", "\"\xc9\xaaz\""},
+        })},
+        {"silver", kokoro_dict({
+        })},
+        {"gold_gb", kokoro_dict({
+            {"hello", "\"h\xc9\x99l\xcb\x88Q\""},
+            {"world", "\"w\xcb\x88\xc9\x9c\xcb\x90ld\""},
+            {"walk", "\"w\xcb\x88\xc9\x94\xcb\x90k\""},
+        })},
+        {"silver_gb", kokoro_dict({
+        })},
+        {"pos_classes", kokoro_dict({
+            {"", "[\"NN\",\"NNP\",\"PRP\",\"VBD\"]"},
+        })},
+        {"pos_tagdict", kokoro_dict({
+            {"I", "\"PRP\""},
+            {"read", "\"VBD\""},
+            {"it", "\"PRP\""},
+            {".", "\".\""},
+            {",", "\",\""},
+        })},
+        {"pos_weights", kokoro_dict({
+            {"bias", "{\"c0\":1.0}"},
+        })},
+        {"lts", kokoro_dict({
+            {"z", "{\"z\":0.1}"},
+            {"b", "{\"b\":0.1}"},
+            {"i", "{\"\xc9\xaa\":0.1}"},
+            {"n", "{\"\xc5\x8b\":0.1}"},
+            {"g", "{\"\":0.1}"},
+            {"a", "{\"\xcb\x88\xc3\xa6\":0.1,\"\xc3\xa6\":0.06}"},
+            {"z:z a", "{\"\xcb\x88\xc3\xa6\":0.2,\"\xc3\xa6\":0.01}"},
+            {"$", "{\"\":0.2}"},
+        })},
+        {"lts_gb", kokoro_dict({
+            {"z", "{\"z\":0.1}"},
+            {"b", "{\"b\":0.1}"},
+            {"i", "{\"\xc9\xaa\":0.1}"},
+            {"n", "{\"\xc5\x8b\":0.1}"},
+            {"g", "{\"\":0.1}"},
+            {"a", "{\"\xcb\x88\xc9\x91\xcb\x90\":0.1,\"\xc9\x91\xcb\x90\":0.06}"},
+            {"z:z a", "{\"\xcb\x88\xc9\x91\xcb\x90\":0.2,\"\xc9\x91\xcb\x90\":0.01}"},
+            {"$", "{\"\":0.2}"},
+        })},
+    });
+
+    // voice, text, expected phonemes
+    const std::vector<std::array<std::string, 3>> cases = {
+        // words of the lexicon
+        { "af_heart", "Hello world.", "h\xc9\x99l\xcb\x88O w\xcb\x88\xc9\x9c\xc9\xb9ld." },
+        // the pronunciation depends on the part of speech
+        { "af_heart", "I read it.", "\xcb\x8cI \xc9\xb9\xcb\x88\xc9\x9b" "d \xc9\xaat." },
+        // a number, and the -s suffix rule
+        { "af_heart", "3 cats", "\xce\xb8\xc9\xb9\xcb\x88i k\xcb\x88\xc3\xa6ts" },
+        // the -ed and -ing suffix rules
+        { "af_heart", "walked, walking", "w\xcb\x88\xc9\x94kt, w\xcb\x88\xc9\x94k\xc9\xaa\xc5\x8b" },
+        // not in the lexicon: predicted from the spelling
+        { "af_heart", "zab", "z\xcb\x88\xc3\xa6" "b" },
+        // the free search gives two primary stresses, the stress pass keeps one
+        { "af_heart", "zaba", "z\xcb\x88\xc3\xa6" "b\xc3\xa6" },
+        // a doubled consonant says one sound
+        { "af_heart", "zabbing", "z\xcb\x88\xc3\xa6" "b\xc9\xaa\xc5\x8b" },
+        // an unknown word with 's
+        { "af_heart", "The zab's cat", "\xc3\xb0\xc9\x99 z\xcb\x88\xc3\xa6" "bs k\xcb\x88\xc3\xa6t" },
+        // no vowel: spelled out
+        { "af_heart", "zz", "z\xcb\x8ciz\xcb\x88i" },
+        // an accented letter is read as its base letter
+        { "af_heart", "H\xc3\xa9ll\xc3\xb3 world.", "h\xc9\x99l\xcb\x88O w\xcb\x88\xc9\x9c\xc9\xb9ld." },
+        // digits glued to letters are read as a number
+        { "af_heart", "3Z cats", "\xce\xb8\xc9\xb9\xcb\x88i z\xcb\x88i k\xcb\x88\xc3\xa6ts" },
+        // an unknown word in mixed case is read part by part
+        { "af_heart", "catWalk", "k\xcb\x88\xc3\xa6tw\xcb\x88\xc9\x94k" },
+        // a british voice uses the british lexicon
+        { "bf_emma", "Hello world.", "h\xc9\x99l\xcb\x88Q w\xcb\x88\xc9\x9c\xcb\x90ld." },
+        // and the british model for unknown words
+        { "bf_emma", "zaba", "z\xcb\x88\xc9\x91\xcb\x90" "b\xc9\x91\xcb\x90" },
+        // a voice of another language takes phonemes, they pass through
+        { "ef_dora", "\xcb\x88ola, m\xcb\x88undo.", "\xcb\x88ola, m\xcb\x88undo." },
+    };
+
+    jinja::lexer lexer;
+    const jinja::program ast = jinja::parse_from_tokens(lexer.tokenize(tmpl));
+    for (const auto & c : cases) {
+        std::string out;
+        try {
+            jinja::context ctx(tmpl);
+            common_chat_tts_norm_add_builtins(ctx, dicts);
+            auto msg = jinja::mk_val<jinja::value_object>();
+            msg->insert("role", jinja::mk_val<jinja::value_string>("user"));
+            msg->insert("content", jinja::mk_val<jinja::value_string>(c[1]));
+            auto msgs = jinja::mk_val<jinja::value_array>();
+            msgs->push_back(msg);
+            ctx.set_val("messages", msgs);
+            ctx.set_val("language", jinja::mk_val<jinja::value_string>(""));
+            ctx.set_val("voice", jinja::mk_val<jinja::value_string>(c[0]));
+            jinja::runtime runtime(ctx);
+            out = jinja::runtime::gather_string_parts(runtime.execute(ast))->as_string().str();
+        } catch (const std::exception & e) {
+            out = std::string("exception: ") + e.what();
+        }
+        if (!t.assert_true(c[0] + ": " + c[1], out == c[2])) {
+            t.log("Expected: " + c[2]);
+            t.log("Actual  : " + out);
+        }
+    }
+}
+
+// every frame is the constant 0.25 (only the DC bin, of magnitude n_fft * 0.25)
+// the overlap-add of hann windows at a quarter hop sums to 2, their squares to 1.5: the output is 0.25 * 2 / 1.5
+MAKE_TEST(test_kokoro_istft) {
+    const int n_fft = 20, hop = 5, n_frames = 9;
+    std::vector<float> spec((size_t) n_frames * (n_fft + 2), 0.0f);
+    for (int fr = 0; fr < n_frames; fr++) {
+        float * row = spec.data() + (size_t) fr * (n_fft + 2);
+        // the first half of a row is log magnitudes, the second half phases
+        for (int k = 0; k <= n_fft / 2; k++) {
+            row[k] = k == 0 ? logf(n_fft * 0.25f) : -100.0f;
+        }
+    }
+    std::vector<float> audio;
+    mtmd_graph_kokoro::istft(spec, audio);
+    t.assert_equal("samples", (size_t) (n_frames - 1) * hop, audio.size());
+    // the first and last hop are covered by fewer frames
+    float max_err = 0.0f;
+    for (size_t i = hop; i + hop < audio.size(); i++) {
+        max_err = std::max(max_err, std::fabs(audio[i] - 1.0f / 3.0f));
+    }
+    t.assert_true("constant signal, max error " + std::to_string(max_err), max_err < 1e-4f);
 }
 
 //

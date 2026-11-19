@@ -174,18 +174,20 @@ enum common_params_sampling_config : uint64_t {
 };
 
 enum common_speculative_type {
-    COMMON_SPECULATIVE_TYPE_NONE,          // no speculative decoding
-    COMMON_SPECULATIVE_TYPE_DRAFT_SIMPLE,  // standalone draft model speculative decoding
-    COMMON_SPECULATIVE_TYPE_DRAFT_EAGLE3,  // Eagle3 speculative decoding
-    COMMON_SPECULATIVE_TYPE_DRAFT_MTP,     // Multi-token prediction
-    COMMON_SPECULATIVE_TYPE_DRAFT_DFLASH,  // DFlash speculative decoding
-    COMMON_SPECULATIVE_TYPE_DRAFT_DSPARK,  // DSpark speculative decoding (DFlash + Markov head)
-    COMMON_SPECULATIVE_TYPE_NGRAM_SIMPLE,  // simple self-speculative decoding based on n-grams
-    COMMON_SPECULATIVE_TYPE_NGRAM_MAP_K,   // self-speculative decoding with n-gram keys only
-    COMMON_SPECULATIVE_TYPE_NGRAM_MAP_K4V, // self-speculative decoding with n-gram keys and 4 m-gram values
+    COMMON_SPECULATIVE_TYPE_NONE,           // no speculative decoding
+    COMMON_SPECULATIVE_TYPE_DRAFT_SIMPLE,   // standalone draft model speculative decoding
+    COMMON_SPECULATIVE_TYPE_DRAFT_EAGLE3,   // Eagle3 speculative decoding
+    COMMON_SPECULATIVE_TYPE_DRAFT_MTP,      // Multi-token prediction
+    COMMON_SPECULATIVE_TYPE_DRAFT_DFLASH,   // DFlash speculative decoding
+    COMMON_SPECULATIVE_TYPE_DRAFT_DSPARK,   // DSpark speculative decoding (DFlash + Markov head)
+    COMMON_SPECULATIVE_TYPE_DRAFT_DFLASH2,  // DFlash2 speculative decoding (DFlash + selector)
+    COMMON_SPECULATIVE_TYPE_DRAFT_LILICORR, // LiliCorr speculative decoding (DFlash + scorer)
+    COMMON_SPECULATIVE_TYPE_NGRAM_SIMPLE,   // simple self-speculative decoding based on n-grams
+    COMMON_SPECULATIVE_TYPE_NGRAM_MAP_K,    // self-speculative decoding with n-gram keys only
+    COMMON_SPECULATIVE_TYPE_NGRAM_MAP_K4V,  // self-speculative decoding with n-gram keys and 4 m-gram values
     COMMON_SPECULATIVE_TYPE_NGRAM_MOD,
-    COMMON_SPECULATIVE_TYPE_NGRAM_CACHE,   // self-speculative decoding with 3-level n-gram cache
-    COMMON_SPECULATIVE_TYPE_COUNT          // number of types, unknown type
+    COMMON_SPECULATIVE_TYPE_NGRAM_CACHE,    // self-speculative decoding with 3-level n-gram cache
+    COMMON_SPECULATIVE_TYPE_COUNT           // number of types, unknown type
 };
 
 // Grammar type enumeration
@@ -414,7 +416,12 @@ struct common_params_speculative {
 
     uint32_t need_n_rs_seq() const {
         bool needs_rs_seq = std::any_of(types.begin(), types.end(), [&](auto t) {
-            return t == COMMON_SPECULATIVE_TYPE_DRAFT_MTP || t == COMMON_SPECULATIVE_TYPE_DRAFT_EAGLE3 || t == COMMON_SPECULATIVE_TYPE_DRAFT_DFLASH || t == COMMON_SPECULATIVE_TYPE_DRAFT_DSPARK;
+            return t == COMMON_SPECULATIVE_TYPE_DRAFT_MTP     ||
+                   t == COMMON_SPECULATIVE_TYPE_DRAFT_EAGLE3  ||
+                   t == COMMON_SPECULATIVE_TYPE_DRAFT_DFLASH  ||
+                   t == COMMON_SPECULATIVE_TYPE_DRAFT_DSPARK  ||
+                   t == COMMON_SPECULATIVE_TYPE_DRAFT_DFLASH2 ||
+                   t == COMMON_SPECULATIVE_TYPE_DRAFT_LILICORR;
         });
 
         return needs_rs_seq ? draft.n_max : 0u;
@@ -733,6 +740,7 @@ struct common_params {
     // enable built-in tools
     std::vector<std::string> server_tools;
     std::string server_tools_runtime;
+    bool server_tools_allow_unauth = false; // allow tools/MCP on a non-loopback address without API key
 
     // MCP server configs (Cursor-compatible JSON)
     std::string mcp_servers_config;   // path to JSON file with MCP server definitions
@@ -750,6 +758,7 @@ struct common_params {
 
     std::string slot_save_path;
     std::string media_path; // path to directory for loading media files
+    bool media_allow_private_urls = false; // allow http(s) media URLs on local or private addresses
 
     float slot_prompt_similarity = 0.1f;
 
@@ -815,6 +824,7 @@ struct common_params {
     std::string tts_lang = "";
     std::string tts_voice = "";
     std::string tts_speaker_file = "";
+    std::string tts_speaker_text = "";
 
     bool is_gen_docs = false; // whether we are running inside llama-gen-docs
 };
@@ -1021,6 +1031,9 @@ enum common_decision_type {
     COMMON_DECISION_TYPE_UNKNOWN, // a decision model of a type that is not supported
 };
 
+// lfm3-d1: max questions packed in one prompt
+#define COMMON_DECISION_LFM3_D1_SET_SIZE 16
+
 common_decision_type common_get_decision_type(const struct llama_model * model);
 
 // metadata of a GGUF file, read without loading the model
@@ -1136,6 +1149,7 @@ struct common_batch {
         llama_embd   state; // non-owning view of the data passed to set_embd_state(), data == NULL if none
         std::vector<llama_seq_id> seq_ids_extra; // see add_seq()
         int32_t      decision_order = 0; // see llama_batch_ext_set_decision_order()
+        int32_t      decision_group = 0; // see llama_batch_ext_set_decision_group()
         int32_t      embd_row = -1; // see add_embd_row(), -1 if none
         int32_t      state_row = -1; // see set_embd_state_row(), -1 if none
     };

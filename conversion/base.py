@@ -2010,6 +2010,14 @@ class TextModel(ModelBase):
         if (local_rope_theta := self.rope_parameters.get("sliding_attention", {}).get("rope_theta")) is not None:
             self.gguf_writer.add_rope_freq_base_swa(local_rope_theta)
             logger.info(f"gguf: rope theta swa = {local_rope_theta}")
+        # Add rope_pattern from no_rope_layers
+        if no_rope_layers := self.hparams.get("no_rope_layers"):
+            if len(no_rope_layers) == self.block_count:  # "no_rope_layers": [0, 0, 0, 1]
+                rope_pattern = [bool(x) for x in no_rope_layers]
+            else:  # "no_rope_layers": [3]
+                rope_pattern = [i not in no_rope_layers for i in range(self.block_count)]
+            self.gguf_writer.add_rope_pattern(rope_pattern)
+            logger.info(f"gguf: rope_pattern = {sum(rope_pattern)} RoPE layers / {len(rope_pattern)} total")
         if (f_rms_eps := self.find_hparam(["rms_norm_eps", "norm_eps"], optional=True)) is not None:
             self.gguf_writer.add_layer_norm_rms_eps(f_rms_eps)
             logger.info(f"gguf: rms norm epsilon = {f_rms_eps}")
@@ -3495,7 +3503,7 @@ def get_model_architecture(hparams: dict[str, Any], model_type: ModelType) -> st
     # Kimi-K3's text_config reports "KimiLinearForCausalLM", which is the older
     # Kimi-Linear-48B architecture and cannot load K3 (no attention residuals,
     # latent MoE, situ, ...). Route on the top-level architecture instead.
-    if model_type == ModelType.TEXT and arch in ("NEOChatModel", "StepVLForConditionalGeneration", "Sarashina2VisionForCausalLM", "Exaone4_5_ForConditionalGeneration", "Step3p7ForConditionalGeneration", "KimiK3ForConditionalGeneration", "KimiK31ForConditionalGeneration", "Nemotron3_5TranscribeForConditionalGeneration"):
+    if model_type == ModelType.TEXT and arch in ("NEOChatModel", "StepVLForConditionalGeneration", "Sarashina2VisionForCausalLM", "Exaone4_5_ForConditionalGeneration", "Step3p7ForConditionalGeneration", "KimiK3ForConditionalGeneration", "KimiK31ForConditionalGeneration", "Nemotron3_5TranscribeForConditionalGeneration", "HiggsAudio3Model"):
         return arch
 
     # if "architectures" is found in the sub-config, use that instead
@@ -3506,6 +3514,9 @@ def get_model_architecture(hparams: dict[str, Any], model_type: ModelType) -> st
     # some models (llava_onevision2) only declare the architecture inside text_config
     if arch is None and text_config.get("architectures") is not None:
         arch = text_config["architectures"][0]
+    # some configs only have a model_type (fishaudio/s2-pro)
+    if arch is None:
+        arch = hparams.get("model_type")
     if arch is None:
         raise ValueError("Failed to detect model architecture")
     return arch

@@ -2976,6 +2976,7 @@ class TensorNameMap:
 
         MODEL_TENSOR.A_ENC_DOWNSAMPLE_CONV: (
             "encoder.down_sample_layer.0", # mimo-audio-tokenizer
+            "audio_encoder_proj.temporal", # higgs-audio
         ),
 
         MODEL_TENSOR.A_ENC_DOWNSAMPLE_NORM: (
@@ -3029,6 +3030,7 @@ class TensorNameMap:
             "mlp.model.{bid}", # lfm3a
             "audio_tower.proj{bid}", # qwen3omni
             "sound_projection.linear{bid}", # parakeet (linear1, linear2)
+            "audio_encoder_proj.linear{bid}", # higgs-audio (linear1, linear2)
         ),
 
         MODEL_TENSOR.A_MMPROJ_FC: (

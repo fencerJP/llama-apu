@@ -15,8 +15,9 @@ llama-tts -hf ggml-org/Qwen3-TTS-12Hz-1.7B-Base-GGUF -p "Hello world" --output o
 Note: it's highly recommended to always provide a speaker reference voice (via `--tts-speaker-file`); otherwise, the model's performance may be degraded.
 
 Common params:
-- Sampling params such as `--top-k`, `--top-p`, `--temp`, etc.
-- `-n <number_of_frames>` limits the output length, e.g. `-n 500`. Note that how many milliseconds each frame represents varies by model
+- Sampling params such as `--top-k`, `--top-p`, `--temp`, etc. `--temp` also sets the temperature of the audio frames for models that support it, without it they use the model default
+- `-n <number_of_frames>` limits the output length, e.g. `-n 500` (default: the limit of the model, 512 frames for most models). Note that how many milliseconds each frame represents varies by model
+- `--tts-speaker-text` (optional) gives the transcript of `--tts-speaker-file`, some models put it in the prompt (e.g. Fish Audio S2 Pro)
 - Core inference params such as `-ngl`, `-b`, `-ub`, etc.
 
 ## Qwen3-TTS

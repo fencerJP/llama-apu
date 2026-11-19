@@ -277,7 +277,7 @@ For the full list of features, please refer to [server's changelog](https://gith
 | `--spec-draft-device, -devd, --device-draft <dev1,dev2,..>` | comma-separated list of devices to use for offloading the draft model (none = don't offload, default: follows --device)<br/>use --list-devices to see a list of available devices |
 | `--spec-draft-ngl, -ngld, --gpu-layers-draft, --n-gpu-layers-draft N` | max. number of draft model layers to store in VRAM, either an exact number, 'auto', or 'all' (default: auto)<br/>(env: LLAMA_ARG_N_GPU_LAYERS_DRAFT) |
 | `--spec-draft-model, -md, --model-draft FNAME` | draft model for speculative decoding (default: unused)<br/>(env: LLAMA_ARG_SPEC_DRAFT_MODEL) |
-| `--spec-type none,draft-simple,draft-eagle3,draft-mtp,draft-dflash,draft-dspark,ngram-simple,ngram-map-k,ngram-map-k4v,ngram-mod,ngram-cache` | comma-separated list of types of speculative decoding to use (default: none)<br/><br/>(env: LLAMA_ARG_SPEC_TYPE) |
+| `--spec-type none,draft-simple,draft-eagle3,draft-mtp,draft-dflash,draft-dspark,draft-dflash2,draft-lilicorr,ngram-simple,ngram-map-k,ngram-map-k4v,ngram-mod,ngram-cache` | comma-separated list of types of speculative decoding to use (default: none)<br/><br/>(env: LLAMA_ARG_SPEC_TYPE) |
 | `--spec-ngram-mod-n-min N` | minimum number of ngram tokens to use for ngram-based speculative decoding (default: 48) |
 | `--spec-ngram-mod-n-max N` | maximum number of ngram tokens to use for ngram-based speculative decoding (default: 64) |
 | `--spec-ngram-mod-n-match N` | ngram-mod lookup length (default: 24) |
@@ -862,9 +862,13 @@ Returns raw audio bytes (`audio/wav` by default) rather than JSON. For more info
 
 `lang`: Language code for the utterance (model-dependent, e.g. `en`, `zh`). Optional.
 
+`raw_prompt`: If `true`, `input` is passed to the model as is, without the text preprocessing of the model's `tts` chat template (prompt format, text normalization, text to phonemes). For example, a Kokoro model then takes a phoneme string. Default: `false`
+
 `voice`: Voice for the utterance, one of the `voices` listed by `GET /props` (model-dependent, e.g. `female` or `male` for LFM3-Audio). Optional: a model with predefined voices speaks with the first of them when neither `voice` nor `speaker_ref` is given. It rejects any other name, and a predefined voice cannot be combined with `speaker_ref`.
 
 `speaker_ref_b64`: Base64-encoded reference audio to clone the speaker's voice. Optional. Alternatively, upload the reference audio as a `speaker_ref` file field via `multipart/form-data` (see example below) - if both are provided, the uploaded file takes precedence. Rejected when the model has no voice encoder (e.g. Pocket TTS without voice cloning).
+
+`speaker_ref_text`: Transcript of the reference audio, put in the prompt by some models (e.g. Fish Audio S2 Pro, Qwen3-TTS). Optional.
 
 `top_k`, `top_p`: Sampling params for both the backbone sampler and the acoustic code predictor. Optional, `0` or absent keeps the server `--top-k`/`--top-p` for the backbone and the model defaults for the code predictor.
 
@@ -874,9 +878,17 @@ Returns raw audio bytes (`audio/wav` by default) rather than JSON. For more info
 
 `seed`: RNG seed for both the backbone sampler and the codec/vocoder (`-1` = random, the default). Set to a fixed value for reproducible output.
 
-`n_predict`: Max number of audio frames to generate. Defaults to `512`; generation normally stops earlier once the model emits an end-of-speech token.
+`speed`: Speaking speed relative to a typical pace, `> 0` (default `1.0`, the model's own pace). Only for models that support it, others reject a value other than `1.0` with a 400 error.
 
-`response_format`: `wav` (default), `pcm` (raw `float32` little-endian mono samples, no header; the response `Content-Type` carries the sample rate, e.g. `audio/pcm;rate=24000;encoding=float;bits=32`) or `pcm16` (same, as signed 16-bit samples, e.g. `audio/pcm;rate=24000;encoding=signed-int;bits=16`).
+`loudness`: Target loudness in LUFS, `< 0` (default `0.0`, the model's own loudness). Only for models that support it, others reject a value other than `0.0` with a 400 error.
+
+`cfg_scale`: Classifier-free guidance scale of the audio codes, `> 0`, `1.0` disables it (default `0.0`, the model's own). Only for models that support it (YuE2, MiniMax Music 3), others reject a value other than `0.0` with a 400 error.
+
+`flow_steps`: Steps of the flow-matching ODE solver, `1` to `1024` (default `0`, the model's own). Fewer steps are faster and the audio is less accurate. Only for models that support it (YuE2, MiniMax Music 3), others reject a value other than `0` with a 400 error.
+
+`n_predict`: Max number of audio frames to generate. Defaults to the limit of the model (`512` for most models); generation normally stops earlier once the model emits an end-of-speech token.
+
+`response_format`: `wav` (default), `pcm` (raw `float32` little-endian samples, no header, channels interleaved; the response `Content-Type` carries the sample rate and, for stereo models, the channel count, e.g. `audio/pcm;rate=24000;encoding=float;bits=32`) or `pcm16` (same, as signed 16-bit samples, e.g. `audio/pcm;rate=24000;encoding=signed-int;bits=16`).
 
 `stream`: If `true`, the response is streamed as audio becomes available instead of waiting for the full generation to finish. WAV streaming writes an RFC-noncompliant header with an unknown (`0xFFFFFFFF`) size field, since the final length isn't known up front; most players and decoders (ffmpeg, VLC, ...) handle this by reading until EOF.
 
@@ -1027,7 +1039,7 @@ By default, it is read-only. To make POST request to change global properties, y
 - `voices` - the predefined voices of an audio generation model, to pass as `voice` to `/tts`. Only present when the model has some (e.g. LFM3-Audio, Pocket TTS without voice cloning)
 - `model_path` - the path to model file (same with `-m` argument)
 - `chat_template` - the model's original Jinja2 prompt template
-- `chat_template_caps` - capabilities of the chat template (see `common/jinja/caps.h` for more info), `reasoning_effort_levels` lists the `reasoning_effort` values the template renders distinctly, from lowest to highest
+- `chat_template_caps` - capabilities of the chat template (see `common/jinja/caps.h` for more info), `reasoning_effort_levels` lists the `reasoning_effort` values the template renders distinctly, from lowest to highest, and `reasoning_effort_rejected` the ones it raises on, which are answered with a 400
 - `modalities` - the list of supported modalities
 - `is_sleeping` - sleeping status, see [Sleeping on idle](#sleeping-on-idle)
 
@@ -1628,7 +1640,7 @@ Models that answer after the audio, like LFM3-Audio and LFM3-Omni, hold a conver
 `session.type` selects the session, it can be changed with `session.update` before the first audio or message:
 
 - `realtime` (default): a conversation, every response stays in context for the next turns
-- `transcription`: each committed audio buffer is transcribed on its own, `audio.input.transcription.language` picks the language
+- `transcription`: each committed audio buffer is transcribed on its own, `audio.input.transcription.language` picks the language and `audio.input.transcription.prompt` replaces the default instruction (`Transcribe audio to text`) as the `prompt` of `/v1/audio/transcriptions` does; the prompt can change between utterances
 
 *Client events:*
 
@@ -1654,8 +1666,6 @@ LFM3-Omni is not trained to reason, run it with `--reasoning off` so that its tu
 
 Tools go into the system prompt with the chat template, and the tool calls are parsed as in `/v1/chat/completions`. The client runs the calls of a response, sends their results as `function_call_output` items, then asks for the next response.
 
-See [examples/realtime_client.py](../../examples/realtime_client.py) for a client with the `openai` library.
-
 ### POST `/v1/audio/speech`: OpenAI-compatible Speech API
 
 Generates speech from text, for models that can generate audio. The request is converted to a [`/tts`](#post-tts-generate-speech-audio-from-text) request, so the `/tts` options such as `lang`, `seed` or `speaker_ref_b64` can also be used.
@@ -1670,7 +1680,7 @@ Generates speech from text, for models that can generate audio. The request is c
 
 `stream_format`: `audio` streams the response as it becomes available, see `stream` in `/tts` for the WAV header it writes. `sse` is rejected. The response is not streamed when omitted.
 
-`speed`: Only `1.0` is accepted.
+`speed`: Speaking speed, see `speed` in `/tts`. Only models that support it accept a value other than `1.0`. `loudness`, `cfg_scale`, `flow_steps`, `lang` and `raw_prompt` of `/tts` can be used as well.
 
 `instructions`: Ignored.
 
@@ -1921,11 +1931,11 @@ Follows the [TypeSafe API](https://docs.typesafe.ai/api), streaming is not suppo
   - `score`: An array of 2 to 10 level descriptions, lowest level first.
   - `noul`: Optional. An object with the descriptions of `true` and `false`.
 
-The questions of a request are answered independently, an answer does not depend on the other questions. The exception is clef: it reads all the questions in one prompt and decides them jointly.
+The questions of a request are answered independently, an answer does not depend on the other questions. The exceptions are clef, which reads all the questions in one prompt and decides them jointly, and lfm3-d1 and lfm3-d1-omni, which read up to 16 questions after the state in one pass, as the models were trained (requests with a spoken question read one question per pass).
 
 The number of options of a `choice` question is limited by the model, for example: 52 for openjev, 255 for granite-switch, laya, clef, pplx-decider, vllm-decision2, vllm-d3, lfm2-d1, lfm2-d1-omni and h2o-lightning, 2 for openbmb-minicpm-ocr-jev. For laya, long questions and options are truncated to the token budget the model was trained with.
 
-For laya, clef, vllm-d3 and lfm2-d1-omni, the whole prompt is evaluated in one batch: it must fit in `--ubatch-size`. An lfm2-d1-omni prompt is cut to 16384 tokens. For vllm-decision2, the options of a question and the end of the prompt must fit in one batch. An h2o-lightning state longer than 32000 tokens keeps its first and last 16000 tokens. A server that runs clef only serves this endpoint, text generation is not available. A decision model that is also a text model, such as granite-switch, serves both and reports `["text", "decisions"]`.
+For laya, clef, vllm-d3, lfm2-d1-omni, lfm3-d1 and lfm3-d1-omni, the whole prompt is evaluated in one batch: it must fit in `--ubatch-size`. An lfm2-d1-omni prompt is cut to 16384 tokens. For vllm-decision2, the options of a question and the end of the prompt must fit in one batch. An h2o-lightning state longer than 32000 tokens keeps its first and last 16000 tokens. A server that runs clef only serves this endpoint, text generation is not available. A decision model that is also a text model, such as granite-switch, serves both and reports `["text", "decisions"]`.
 
 openbmb-minicpm-ocr-jev answers one fixed question: is an OCR text, rendered as an image, consistent with the original image? `state` is the OCR text, as a string, special tokens written in it are escaped. `files` (or `images`) has exactly 2 images: the original, then the rendered one, both are required. The request has one question and no `instructions`: the task is part of the prompt of the model, so a request that sends one is rejected. It is either a `choice` with the `criteria` `{"0": null, "1": null}`, where `1` means consistent, or a `noul` without `criteria`, which returns the probability of `1`. The model has no LM head, so text generation is not available.
 

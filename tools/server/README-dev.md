@@ -201,7 +201,7 @@ Invoke a tool call, request body is a JSON object with:
 
 Headers:
 - `x-tool-cwd`: optional; if set, use as the CWD for tool; this is not part of tool's params because it's meant to be set by the runtime, not the LLM itself
-- `x-tool-runtime`: optional; if set, run the tool inside this isolate instead of on the host. Either `docker-container:<id>` or `podman-container:<id>`, using an already-running container, or `ssh:<target>`, running the tool on a remote host
+- `x-tool-runtime`: optional; if set, run the tool inside this isolate instead of on the host. Either `docker-container:<id>` or `podman-container:<id>`, using an already-running container, or `ssh:<target>`, running the tool on a remote host. Refused with 403 when the server is started with `--tools-runtime`, so clients cannot move tools out of that sandbox
 
 Returns JSON object. There are two response formats (MCP tools use the same two formats: their result content is concatenated into `plain_text_response`, and RPC or tool errors are surfaced as the `error` string):
 
@@ -238,6 +238,8 @@ That requires `JSON.stringify` when formatted to message content:
     "content": "{\"error\":\"cannot open this file\"}"
 }
 ```
+
+When the client disconnects during an MCP tool call, or the call exceeds `timeout_ms`, `llama-server` sends `notifications/cancelled` with the request id to the MCP server and returns an error.
 
 Set `stream: true` in the request body to stream a tool's output as it runs, instead of waiting for it to finish. Only certain tools accept this (for ex. `exec_shell_command`);
 returns 404 if tool doesn't support it.
@@ -320,6 +322,8 @@ Call stack on waking up:
 - `sleeping = false` --> `notify_all` unblocks the HTTP thread, the request is handled as usual
 
 Endpoints created with `create_response(true)` (`/health`, `/props`, `/models`, `/metrics`) skip `wait_until_no_sleep`, so they answer from the cached responses instead of waking the server.
+
+IMPORTANT: any handler that touches the model or contexts (`ctx_server.mctx`, `ctx_server.vocab`, etc.) must call `create_response()` before that access, and keep the returned object alive until it is done with them. While sleeping, these pointers are freed, so using them before waking up leads to a crash. The returned object also holds an inflight count (released in its destructor) that prevents the server from going back to sleep. This applies to every route type, not only HTTP routes: for example, the `/v1/realtime` websocket handler calls `create_response()` first and holds it for the whole session.
 
 ### Notable Related PRs
 
