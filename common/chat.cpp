@@ -3,6 +3,7 @@
 #include "chat-auto-parser-helpers.h"
 #include "chat-auto-parser.h"
 #include "chat-peg-parser.h"
+#include "chat-tts-norm.h"
 #include "common.h"
 #include "ggml.h"
 #include "json-schema-to-grammar.h"
@@ -317,6 +318,7 @@ struct common_chat_templates {
     std::unique_ptr<common_chat_template> template_default;  // always set (defaults to chatml)
     std::unique_ptr<common_chat_template> template_tool_use;
     std::unique_ptr<common_chat_template> template_tts;  // the prompt of a text to speak
+    std::shared_ptr<common_tts_dicts> tts_dicts;         // dictionaries of the model for tts_dict(), by name
 };
 
 common_chat_tool_choice common_chat_tool_choice_parse_oaicompat(const std::string & tool_choice) {
@@ -805,8 +807,10 @@ bool common_chat_templates_was_explicit(const struct common_chat_templates * tmp
 }
 
 // renders a task template (e.g. "tts") with the given variables
-static std::string common_chat_template_render(const common_chat_template & tmpl, const json & vars) {
+static std::string common_chat_template_render(const common_chat_template & tmpl, const json & vars, const std::shared_ptr<common_tts_dicts> & tts_dicts) {
     jinja::context ctx(tmpl.source());
+    // text normalization helpers: tts_norm_scan(), tts_norm_sub() and tts_dict(), see docs/tts-norm-patterns.md
+    common_chat_tts_norm_add_builtins(ctx, tts_dicts);
     jinja::global_from_json(ctx, vars, false);
     ctx.set_val("bos_token", jinja::mk_val<jinja::value_string>(tmpl.bos_token()));
     ctx.set_val("eos_token", jinja::mk_val<jinja::value_string>(tmpl.eos_token()));
@@ -865,7 +869,7 @@ std::string common_chat_get_tts_prompt(const common_chat_templates * chat_templa
         {"messages", json::array({{{"role", "user"}, {"content", text}}})},
         {"language", language},
         {"voice",    voice},
-    });
+    }, chat_templates->tts_dicts);
 }
 
 std::string common_chat_templates_source(const struct common_chat_templates * tmpls, const std::string & variant) {
@@ -923,18 +927,6 @@ common_chat_templates_ptr common_chat_templates_init(const struct llama_model * 
                            "{%- if false %}");
     }
 
-    // TODO @aldehir : this is a temporary fix, pending Minja changes
-    // Ref: https://github.com/ggml-org/llama.cpp/pull/17713#issuecomment-3631342664
-    if (default_template_src.find("[TOOL_CALLS]") != std::string::npos
-        // search for the error message and patch it
-        && default_template_src.find("if (message['content'] is none or") != std::string::npos) {
-        string_replace_all(default_template_src,
-                           "{%- if (message['content'] is none or message['content'] == '' or "
-                           "message['content']|length == 0) and (message['tool_calls'] is not defined or "
-                           "message['tool_calls'] is none or message['tool_calls']|length == 0) %}",
-                           "{%- if false %}");
-    }
-
     std::string token_bos = bos_token_override;
     std::string token_eos = eos_token_override;
     bool        add_bos   = false;
@@ -985,6 +977,25 @@ common_chat_templates_ptr common_chat_templates_init(const struct llama_model * 
                 tmpls->template_tts = std::make_unique<common_chat_template>(src, token_bos, token_eos);
             } catch (const std::exception & e) {
                 LOG_ERR("%s: failed to parse the tts chat template (ignoring it): %s\n", __func__, e.what());
+            }
+        }
+        // dictionaries for tts_dict(), listed by name in tokenizer.tts_dicts
+        tmpls->tts_dicts = std::make_shared<common_tts_dicts>();
+        for (int32_t i = 0; i < llama_model_meta_arr_n(model, "tokenizer.tts_dicts"); i++) {
+            const std::string name    = llama_model_meta_arr_str(model, "tokenizer.tts_dicts", i);
+            const std::string key     = "tokenizer.tts_dict." + name + ".keys";
+            const std::string val_key = "tokenizer.tts_dict." + name + ".values";
+            const int32_t     n       = llama_model_meta_arr_n(model, key.c_str());
+            if (n < 0 || llama_model_meta_arr_n(model, val_key.c_str()) != n) {
+                LOG_ERR("%s: the tts dictionary '%s' has no value for each of its keys (ignoring it)\n", __func__, name.c_str());
+                continue;
+            }
+            auto & dict = (*tmpls->tts_dicts)[name];
+            dict.keys.reserve(n);
+            dict.values.reserve(n);
+            for (int32_t j = 0; j < n; j++) {
+                dict.keys.emplace_back(llama_model_meta_arr_str(model, key.c_str(), j));
+                dict.values.emplace_back(llama_model_meta_arr_str(model, val_key.c_str(), j));
             }
         }
     }
@@ -1245,13 +1256,6 @@ static common_chat_params common_chat_params_init_lfm2_5(const common_chat_templ
     return common_chat_params_init_lfm2(tmpl, inputs, /* tool_list_tokens = */ false);
 }
 
-// Older gemma4 templates need their tool responses rewritten before rendering
-static common_chat_params common_chat_params_init_gemma4_legacy(const common_chat_template & tmpl, const autoparser::generation_params & inputs) {
-    auto adjusted = inputs;
-    workaround::convert_tool_responses_gemma4(adjusted.messages);
-    return common_chat_params_init_gemma4(tmpl, adjusted);
-}
-
 // Pick the dedicated handler for a template from its source, or null for the autoparser.
 // Order matters: the first match wins, and later checks assume the earlier ones did not match.
 static common_chat_params_init_fn common_chat_template_detect_params_init(const std::string & src) {
@@ -1386,11 +1390,6 @@ static common_chat_params_init_fn common_chat_template_detect_params_init(const 
     // Gemma4 format detection
     if (src.find("'<|tool_call>call:'") != std::string::npos) {
         LOG_DBG("Using specialized template: Gemma4\n");
-        if (src.find("{#- OpenAI Chat Completions:") == std::string::npos) {
-            LOG_WRN("%s: detected an outdated gemma4 chat template, applying compatibility workarounds. "
-                    "Consider updating to the official template.\n", __func__);
-            return common_chat_params_init_gemma4_legacy;
-        }
         return common_chat_params_init_gemma4;
     }
 
@@ -1417,6 +1416,12 @@ static common_chat_params_init_fn common_chat_template_detect_params_init(const 
         src.find("'<tool_call><function=' ~ tool_call.name ~ '>'") == std::string::npos) {
         LOG_DBG("Using specialized template: Qwen3-Coder\n");
         return common_chat_params_init_qwen3_coder;
+    }
+
+    // Inkling 1 and 2
+    if (is_inkling_template(src)) {
+        LOG_DBG("Using specialized template: Inkling\n");
+        return common_chat_params_init_inkling;
     }
 
     return nullptr;
