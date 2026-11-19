@@ -441,8 +441,17 @@ static bool ggml_backend_cpu_device_supports_op(ggml_backend_dev_t dev, const st
 
     switch (op->op) {
         case GGML_OP_GET_ROWS:
-            return src0->type == GGML_TYPE_F32 || src0->type == GGML_TYPE_F16 ||
-                   src0->type == GGML_TYPE_BF16 || src0->type == GGML_TYPE_I32;
+            // Custom GPU-only ROCmFP4/FPX/Turbo/ROCmI4 types have no CPU GET_ROWS kernel;
+            // all standard GGML types (including quantized and F8_E4M3) are supported on CPU.
+            return src0->type != GGML_TYPE_Q4_0_ROCMFP4 &&
+                   src0->type != GGML_TYPE_Q4_0_ROCMFP4_FAST &&
+                   src0->type != GGML_TYPE_Q6_0_ROCMFPX &&
+                   src0->type != GGML_TYPE_Q8_0_ROCMFPX &&
+                   src0->type != GGML_TYPE_Q3_0_ROCMFPX &&
+                   src0->type != GGML_TYPE_TURBO3_0 &&
+                   src0->type != GGML_TYPE_TURBO4_0 &&
+                   src0->type != GGML_TYPE_Q2_0_ROCMFPX &&
+                   src0->type != GGML_TYPE_Q4_0_ROCMI4;
         case GGML_OP_CPY:
         case GGML_OP_SET_ROWS:
             return
