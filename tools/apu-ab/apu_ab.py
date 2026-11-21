@@ -30,7 +30,11 @@ import sys
 import time
 from pathlib import Path
 
-ROCM = "/opt/rocm/core-10.1"
+import os
+
+ROCM = os.environ.get("ROCM_PATH") or (
+    "/opt/rocm/core-10.2" if Path("/opt/rocm/core-10.2").exists() else "/opt/rocm/core-10.1"
+)
 TEMP = "/sys/class/drm/card1/device/hwmon/hwmon8/temp1_input"
 SCLK = "/sys/class/drm/card1/device/pp_dpm_sclk"
 
