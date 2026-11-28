@@ -1,5 +1,6 @@
 #include "gated_delta_net.cuh"
 #include "gated-delta-net-mma.cuh"
+#include "gated_delta_net_chunked.cuh"
 #include "ggml-cuda/common.cuh"
 
 #include <cstdint>
@@ -344,6 +345,55 @@ static void ggml_cuda_op_gated_delta_net_impl(
     // K (snapshot slot count) is an op param; state holds s0 only [S_v, S_v, H, n_seqs].
     const int K = ggml_get_op_params_i32(dst, 0);
     const bool keep_rs = K > 1;
+    const int64_t n_rs_batch = keep_rs ? std::max<int64_t>(1, ggml_get_op_params_i32(dst, 1)) : 0;
+
+    if (!kda && n_tokens > 1 &&
+        (S_v == 16 || S_v == 32 || S_v == 64 || S_v == 128)) {
+        const char * env = getenv("GGML_CUDA_GDN_CHUNKED");
+        if (env == nullptr || strcmp(env, "0") != 0) {
+            const int64_t GDN_CHUNKED_MIN_TOKENS = std::max<int64_t>(K > 16 ? (int64_t) K : 16, n_rs_batch);
+            auto launch_chunked = [&](float * state_d_ext, int64_t n_tokens_limit) -> bool {
+#if defined(GGML_USE_HIP) && defined(__HIP_PLATFORM_AMD__)
+                const int cc_c = ggml_cuda_info().devices[ggml_cuda_get_device()].cc;
+                const bool bf16_rdna_c = GGML_CUDA_CC_IS_RDNA4(cc_c) || GGML_CUDA_CC_IS_RDNA3(cc_c);
+                const char * envb_c = getenv("GGML_CUDA_GDN_CHUNKED_BF16");
+                const bool want_bf16_c = bf16_rdna_c && S_v == 128 &&
+                    (envb_c == nullptr || strcmp(envb_c, "0") != 0);
+                if (want_bf16_c) {
+                    if (GGML_CUDA_CC_IS_RDNA4(cc_c)) {
+                        return ggml_cuda_op_gated_delta_net_chunked_bf16(ctx, dst, state_d_ext, n_tokens_limit);
+                    }
+                    return ggml_cuda_op_gated_delta_net_chunked_bf16_gfx11(ctx, dst, state_d_ext, n_tokens_limit);
+                }
+#endif
+                return ggml_cuda_op_gated_delta_net_chunked(ctx, dst, state_d_ext, n_tokens_limit);
+            };
+
+            if (n_seqs == 1) {
+                if (n_tokens > GDN_CHUNKED_MIN_TOKENS) {
+                    if (launch_chunked(cache ? cache->data : nullptr, 0)) {
+                        static bool logged_free = false;
+                        if (!logged_free) {
+                            GGML_LOG_INFO("%s: whole-batch chunked GDN prefill n=%ld K=%d n_seqs=%ld "
+                                          "(> %ld: no snapshot tail needed)\n",
+                                          __func__, (long) n_tokens, K, (long) n_seqs,
+                                          (long) GDN_CHUNKED_MIN_TOKENS);
+                            logged_free = true;
+                        }
+                        return;
+                    }
+                    GGML_LOG_WARN("%s: chunked GDN launch rejected by the driver; falling back to the sequential kernel (GGML_CUDA_GDN_CHUNKED=0 equivalent)\n", __func__);
+                }
+            } else if (K == 1) {
+                if (n_tokens > GDN_CHUNKED_MIN_TOKENS) {
+                    if (launch_chunked(cache ? cache->data : nullptr, 0)) {
+                        return;
+                    }
+                    GGML_LOG_WARN("%s: chunked GDN launch rejected by the driver; falling back to the sequential kernel (GGML_CUDA_GDN_CHUNKED=0 equivalent)\n", __func__);
+                }
+            }
+        }
+    }
 
     // recurrent state -> gdn_out tail (after attention scores), or the cache when fusing
     float * state_d           = dst_d + S_v * H * n_tokens * n_seqs;
