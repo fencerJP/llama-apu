@@ -371,6 +371,14 @@ static bool bf16_mma_hardware_available(const int cc) {
         (GGML_CUDA_CC_IS_MTHREADS(cc) && cc >= GGML_CUDA_CC_PH1);
 }
 
+static inline bool ggml_cuda_bf16_src1_cache_on() {
+    static const bool on = [] {
+        const char * e = getenv("GGML_CUDA_BF16_SRC1_CACHE");
+        return e == nullptr || atoi(e) != 0;
+    }();
+    return on;
+}
+
 static bool fp32_mma_hardware_available(const int cc) {
     return GGML_CUDA_CC_IS_CDNA(cc);
 }
@@ -1581,6 +1589,33 @@ struct ggml_backend_cuda_context {
 
     // pool
     std::unique_ptr<ggml_cuda_pool> pools[GGML_CUDA_MAX_DEVICES][GGML_CUDA_MAX_STREAMS];
+
+    // Per-graph cache of the BF16 copy of an F32 src1 (multi-token graphs).
+    // Declared after `pools` so that its pool buffer is released before the pools are destroyed.
+    struct bf16_src1_cache_entry {
+        const ggml_tensor * src1 = nullptr;
+        const void * data = nullptr;
+        int stream_no = 0;
+        int64_t n = 0;
+        std::unique_ptr<ggml_cuda_pool_alloc<nv_bfloat16>> buf;
+    } bf16_src1_cache;
+
+    void bf16_src1_cache_clear() {
+        bf16_src1_cache.buf.reset();
+        bf16_src1_cache.src1 = nullptr;
+        bf16_src1_cache.data = nullptr;
+    }
+
+    nv_bfloat16 * bf16_src1_cache_put(const ggml_tensor * root, int64_t n) {
+        auto & c = bf16_src1_cache;
+        c.buf.reset();
+        c.buf       = std::make_unique<ggml_cuda_pool_alloc<nv_bfloat16>>(pool(), n);
+        c.src1      = root;
+        c.data      = root->data;
+        c.stream_no = curr_stream_no;
+        c.n         = n;
+        return c.buf->get();
+    }
 
     static std::unique_ptr<ggml_cuda_pool> new_pool_for_device(ggml_backend_cuda_context & ctx, int device, int stream_no);
 
