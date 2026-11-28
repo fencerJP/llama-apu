@@ -37,6 +37,7 @@
 #include "ggml-cuda/mmq.cuh"
 #include "ggml-cuda/mmvf.cuh"
 #include "ggml-cuda/mmvq.cuh"
+#include "ggml-cuda/tq.cuh"
 #include "ggml-cuda/moe-weighted-reduction.cuh"
 #include "ggml-cuda/norm.cuh"
 #include "ggml-cuda/opt-step-adamw.cuh"
@@ -935,6 +936,14 @@ static std::atomic<int> ggml_cuda_lock_counter;
 
 ggml_backend_cuda_context::~ggml_backend_cuda_context() {
     ggml_cuda_mmb_release_all();
+    {
+        static const bool census = [] { const char * e = getenv("GGML_CUDA_TQ_CENSUS"); return e != nullptr && atoi(e) != 0; }();
+        if (census) {
+            GGML_LOG_WARN("TQ_CENSUS dev=%d mul_mat small=%llu mma=%llu get_rows=%llu vec=%llu vec_fused=%llu\n", device,
+                          (unsigned long long) tq_census[0], (unsigned long long) tq_census[1], (unsigned long long) tq_census[2],
+                          (unsigned long long) tq_census[3], (unsigned long long) tq_census[4]);
+        }
+    }
     std::unique_lock<std::mutex> lock(ggml_cuda_lock);
     ggml_cuda_lock_cv.wait(lock, []{ return ggml_cuda_lock_counter.load(std::memory_order_relaxed) == 0; });
 
@@ -2436,6 +2445,11 @@ static bool ggml_cuda_should_fuse_mul_mat_q(const ggml_tensor * up, const ggml_t
 
 static void ggml_cuda_mul_mat(ggml_backend_cuda_context & ctx, const ggml_tensor * src0, const ggml_tensor * src1, ggml_tensor * dst) {
     GGML_TENSOR_BINARY_OP_LOCALS
+
+    if (src0->type == GGML_TYPE_TQ1_0 || src0->type == GGML_TYPE_TQ2_0) {
+        ggml_cuda_mul_mat_tq(ctx, src0, src1, dst);   // supports_op admits only what it takes (tq.cuh)
+        return;
+    }
 
     if (ggml_cuda_op_mul_mat_use_fwht(dst) && ggml_cuda_op_fwht(ctx, src1, dst)) {
         return;
@@ -4374,6 +4388,84 @@ static bool ggml_cuda_can_fuse(const struct ggml_cgraph *                cgraph,
     return false;
 }
 
+// TQ1_0 / TQ2_0 weights, one src1 column (tq.cu's vec kernel): gate + up + SWIGLU as one launch that writes the GLU,
+// a matmul and the ADD of its result (the residual) as one launch that writes the ADD, or two or three matmuls over the
+// same src1 (e.g. the K and V projections) as one launch.  Every row keeps its own
+// unchanged dot product, and the GLU is computed as the GLU kernel does, so the results are those of the separate ops.
+// Returns the index offset of the last fused node.  GGML_CUDA_TQ_FUSE=0: off.
+static int ggml_cuda_tq_try_fuse(ggml_backend_cuda_context * ctx, const ggml_cgraph * cgraph, int i) {
+    static const bool on = [] { const char * e = getenv("GGML_CUDA_TQ_FUSE"); return e == nullptr || atoi(e) != 0; }();
+    const ggml_tensor * node = cgraph->nodes[i];
+    if (!on || node->op != GGML_OP_MUL_MAT || !ggml_cuda_mul_mat_tq_vec_ok(node)) {
+        return 0;
+    }
+    const auto same = [&](const ggml_tensor * t) {
+        return t->op == GGML_OP_MUL_MAT && (t->flags & GGML_TENSOR_FLAG_COMPUTE) && t->src[1] == node->src[1] &&
+               t->src[0]->type == node->src[0]->type && t->src[0]->ne[0] == node->src[0]->ne[0] &&
+               ggml_cuda_mul_mat_tq_vec_ok(t) && ggml_is_matrix(t->src[0]) && ggml_is_vector(t) && ggml_is_contiguous(t);
+    };
+    if (!same(node)) {
+        return 0;
+    }
+    if (i + 2 < cgraph->n_nodes) {
+        const ggml_tensor * mm1 = cgraph->nodes[i + 1];
+        ggml_tensor       * glu = cgraph->nodes[i + 2];
+        const ggml_op ops[3]    = { GGML_OP_MUL_MAT, GGML_OP_MUL_MAT, GGML_OP_GLU };
+        const int     out[1]    = { i + 2 };
+        if (glu->op == GGML_OP_GLU && ggml_get_glu_op(glu) == GGML_GLU_OP_SWIGLU && !ggml_get_op_params_i32(glu, 1) &&
+                glu->type == GGML_TYPE_F32 && ggml_is_contiguous(glu) && same(mm1) &&
+                ((glu->src[0] == node && glu->src[1] == mm1) || (glu->src[0] == mm1 && glu->src[1] == node)) &&
+                ggml_are_same_shape(node->src[0], mm1->src[0]) && ggml_are_same_shape(glu, node) &&
+                ggml_can_fuse_subgraph(cgraph, i, 3, ops, out, 1) && ggml_cuda_check_fusion_memory_ranges(cgraph, i, 3, out, 1)) {
+            const ggml_tensor * mm[2] = { glu->src[0], glu->src[1] }; // gate, up
+            ggml_cuda_mul_mat_tq_vec(*ctx, mm, 2, glu, nullptr);
+            return 2;
+        }
+    }
+
+    // matmul + ADD (the residual): the sum is written by the matmul's threads, element by element, so the ADD may write in
+    // place over its other operand, but not over the matmul's src1, which other thread blocks may still be reading
+    if (i + 1 < cgraph->n_nodes) {
+        ggml_tensor   * add    = cgraph->nodes[i + 1];
+        const ggml_op   ops[2] = { GGML_OP_MUL_MAT, GGML_OP_ADD };
+        const int       out[1] = { i + 1 };
+        const ggml_tensor * res = add->src[0] == node ? add->src[1] : add->src[0];
+        const auto overlap = [](const ggml_tensor * a, const ggml_tensor * b) {
+            const uintptr_t a0 = (uintptr_t) a->data, a1 = a0 + ggml_nbytes(a), b0 = (uintptr_t) b->data, b1 = b0 + ggml_nbytes(b);
+            return a0 < b1 && b0 < a1;
+        };
+        if (add->op == GGML_OP_ADD && (add->src[0] == node || add->src[1] == node) && res != node &&
+                add->type == GGML_TYPE_F32 && res->type == GGML_TYPE_F32 && ggml_are_same_shape(add, node) &&
+                ggml_are_same_shape(res, add) && ggml_is_contiguous(add) && ggml_is_contiguous(res) &&
+                ggml_can_fuse_subgraph(cgraph, i, 2, ops, out, 1) && !overlap(add, node->src[1]) && !overlap(res, node->src[1]) &&
+                (!overlap(add, res) || add->data == res->data)) {
+            const ggml_tensor * mm[1] = { node };
+            ggml_cuda_mul_mat_tq_vec(*ctx, mm, 1, nullptr, add);
+            return 1;
+        }
+    }
+
+    const ggml_tensor * mm[3] = { node, nullptr, nullptr };
+    int n    = 1;
+    int last = i;
+    for (int j = i + 1; j < std::min(cgraph->n_nodes, i + 8) && n < 3; ++j) {
+        const ggml_tensor * t = cgraph->nodes[j];
+        if (ggml_cuda_is_view_or_noop(t)) {
+            continue;
+        }
+        if (!same(t)) {
+            break;
+        }
+        mm[n++] = t;
+        last    = j;
+    }
+    if (n < 2) {
+        return 0;
+    }
+    ggml_cuda_mul_mat_tq_vec(*ctx, mm, n, nullptr, nullptr);
+    return last - i;
+}
+
 // try and fuse nodes and return the number of nodes to skip
 static int ggml_cuda_try_fuse(ggml_backend_cuda_context * cuda_ctx, ggml_cgraph * cgraph, int i) {
 
@@ -5158,6 +5250,11 @@ static int ggml_cuda_try_fuse(ggml_backend_cuda_context * cuda_ctx, ggml_cgraph 
         return fused_node_count - 1;
     }
 
+    // TQ1_0 / TQ2_0 decode (tq.cu): gate + up + SWIGLU, matmul + ADD, or two or three matmuls over the same src1 in one launch
+    if (const int n_tq = ggml_cuda_tq_try_fuse(cuda_ctx, cgraph, i)) {
+        return n_tq;
+    }
+
     if (ggml_cuda_can_fuse(cgraph, i, { GGML_OP_RMS_NORM, GGML_OP_MUL, GGML_OP_ROPE, GGML_OP_VIEW, GGML_OP_SET_ROWS }, {})) {
         ggml_cuda_op_rms_norm_mul_rope_fused(*cuda_ctx, node, cgraph->nodes[i + 1], cgraph->nodes[i + 2], cgraph->nodes[i + 4]);
         return 4;
@@ -5609,6 +5706,41 @@ static void ggml_backend_cuda_graph_optimize(ggml_backend_t backend, ggml_cgraph
                 params->add_alloc_dep(params->user_data, up->src[2], cgraph->nodes[i + 5]);
                 i += 5;
                 break;
+            }
+        }
+        // TQ1_0 / TQ2_0, 1-token graphs, attention without a Q norm (Llama, BitNet): the model graph runs the Q projection and
+        // its RESHAPE + ROPE before the V and K projections over the same input, so the decode fusion
+        // (ggml_cuda_tq_try_fuse) could take only V and K.  Move the V / K projections (MUL_MAT + the RESHAPE / VIEW of
+        // them, which read none of the Q nodes) directly behind the Q projection: the same nodes, one stream, so the
+        // results are bit-identical.  Structural only.  GGML_CUDA_TQ_FUSE=0: off.
+        static const bool tq_fuse = [] { const char * e = getenv("GGML_CUDA_TQ_FUSE"); return e == nullptr || atoi(e) != 0; }();
+        for (int i = 0; tq_fuse && i + 3 < cgraph->n_nodes; ++i) {
+            ggml_tensor ** n = cgraph->nodes;
+            const auto is_tq_mm = [&](const ggml_tensor * t) {
+                return t->op == GGML_OP_MUL_MAT && t->ne[1] == 1 && t->src[1] == n[i]->src[1] &&
+                       (t->src[0]->type == GGML_TYPE_TQ1_0 || t->src[0]->type == GGML_TYPE_TQ2_0);
+            };
+            if (!is_tq_mm(n[i]) || n[i + 1]->op != GGML_OP_RESHAPE || n[i + 1]->src[0] != n[i] ||
+                    n[i + 2]->op != GGML_OP_ROPE || n[i + 2]->src[0] != n[i + 1]) {
+                continue;
+            }
+            int j   = i + 3;
+            int nmm = 0;
+            for (; j < std::min(cgraph->n_nodes, i + 11); ++j) {
+                const ggml_tensor * t = n[j];
+                bool view_of_moved = false;
+                for (int k = i + 3; k < j && !view_of_moved; ++k) {
+                    view_of_moved = (t->op == GGML_OP_RESHAPE || t->op == GGML_OP_VIEW) && t->src[0] == n[k] && n[k]->op == GGML_OP_MUL_MAT;
+                }
+                if (is_tq_mm(t)) {
+                    ++nmm;
+                } else if (!view_of_moved) {
+                    break;
+                }
+            }
+            if (nmm > 0) {
+                std::rotate(n + i + 1, n + i + 3, n + j);
+                i = j - 1;
             }
         }
         for (int i = 0; i < cgraph->n_nodes; ++i) {
@@ -6256,6 +6388,13 @@ static ggml_backend_buffer_type_t ggml_backend_cuda_device_get_host_buffer_type(
 }
 
 // TODO: move these functions here
+// TQ1_0 / TQ2_0 (ternary) weights on the GPU: MUL_MAT (tq.cu, bit-identical to the CPU backend's x86 AVX2 path) and
+// GET_ROWS.  GGML_CUDA_TQ=0: not supported, so the weights stay in host memory and the CPU backend runs them, as before.
+static bool ggml_cuda_tq_on() {
+    static const bool on = [] { const char * e = getenv("GGML_CUDA_TQ"); return e == nullptr || atoi(e) != 0; }();
+    return on;
+}
+
 static bool ggml_backend_cuda_device_supports_op(ggml_backend_dev_t dev, const ggml_tensor * op) {
     ggml_backend_cuda_device_context * dev_ctx = (ggml_backend_cuda_device_context *) dev->context;
 
@@ -6328,6 +6467,10 @@ static bool ggml_backend_cuda_device_supports_op(ggml_backend_dev_t dev, const g
                 struct ggml_tensor * b = op->src[1];
                 if (a->nb[0] != ggml_element_size(a) || b->nb[0] != ggml_element_size(b)) {
                     return false; // TODO this could in principle be implemented though currently there is no use case.
+                }
+                if (a->type == GGML_TYPE_TQ1_0 || a->type == GGML_TYPE_TQ2_0) {
+                    // MUL_MAT only: MUL_MAT_ID has no TQ path, its experts stay with the CPU backend
+                    return ggml_cuda_tq_on() && op->op == GGML_OP_MUL_MAT && ggml_cuda_mul_mat_tq_supported(a, b, op);
                 }
                 if (b->type == GGML_TYPE_F16 && a->type != GGML_TYPE_F16 && !ggml_cuda_op_mul_mat_use_fwht(op)) {
                     return false;
@@ -6412,6 +6555,9 @@ static bool ggml_backend_cuda_device_supports_op(ggml_backend_dev_t dev, const g
             return op->type == GGML_TYPE_F32 && op->src[0]->type == GGML_TYPE_F32 && op->src[1]->type == GGML_TYPE_F32;
         case GGML_OP_GET_ROWS:
             {
+                if (op->src[0]->type == GGML_TYPE_TQ1_0 || op->src[0]->type == GGML_TYPE_TQ2_0) {
+                    return ggml_cuda_tq_on();
+                }
                 switch (op->src[0]->type) {
                     case GGML_TYPE_F16:
                     case GGML_TYPE_F32:
