@@ -3907,8 +3907,11 @@ bool llamafile_sgemm(const struct ggml_compute_params * params, int64_t m, int64
     assert(params->ith < params->nth);
 
     // only enable sgemm for prompt processing
+    // decode (n_q = 1) and speculative verify batches (n_q = n_draft+1) must run the
+    // same kernels: route decode-scale batches through vec_dot and use llamafile
+    // only for prefill (n_q > 8).
 #if !defined(__MMA__)
-    if (n < 2)
+    if (n <= 8)
         return false;
 #endif
 

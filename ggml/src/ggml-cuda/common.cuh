@@ -371,6 +371,14 @@ static bool bf16_mma_hardware_available(const int cc) {
         (GGML_CUDA_CC_IS_MTHREADS(cc) && cc >= GGML_CUDA_CC_PH1);
 }
 
+static inline bool ggml_cuda_bf16_src1_cache_on() {
+    static const bool on = [] {
+        const char * e = getenv("GGML_CUDA_BF16_SRC1_CACHE");
+        return e == nullptr || atoi(e) != 0;
+    }();
+    return on;
+}
+
 static bool fp32_mma_hardware_available(const int cc) {
     return GGML_CUDA_CC_IS_CDNA(cc);
 }
@@ -835,6 +843,58 @@ static __device__ __forceinline__ void ggml_cuda_mad(float & acc, const half2 v,
     acc += tmpv.y * tmpu.y;
 #endif // FAST_FP16_AVAILABLE
 #endif // V_DOT2_F32_F16_AVAILABLE
+}
+
+#if defined(GGML_USE_HIP) && (defined(__gfx1100__) || defined(__gfx1101__) || defined(__gfx1102__) || defined(__gfx1103__) || \
+    defined(__gfx1150__) || defined(__gfx1151__) || defined(__gfx1152__) || defined(__gfx1153__) || defined(__gfx1200__) || defined(__gfx1201__))
+#define V_DOT2_F32_BF16_AVAILABLE
+#endif // defined(GGML_USE_HIP) && RDNA3/RDNA3.5/RDNA4 targets
+
+// Two BF16 products plus an FP32 add per instruction on RDNA3+; scalar FP32 math otherwise
+// (compile-only fallback: the native-BF16 path is never instantiated without the instruction).
+static __device__ __forceinline__ void ggml_cuda_mad(float & acc, const nv_bfloat162 v, const nv_bfloat162 u) {
+#ifdef V_DOT2_F32_BF16_AVAILABLE
+    asm volatile("v_dot2_f32_bf16 %0, %1, %2, %0" : "+v"(acc) : "v"(v), "v"(u));
+#else
+    const float2 tmpv = make_float2(__bfloat162float(__low2bfloat16(v)), __bfloat162float(__high2bfloat16(v)));
+    const float2 tmpu = make_float2(__bfloat162float(__low2bfloat16(u)), __bfloat162float(__high2bfloat16(u)));
+    acc += tmpv.x * tmpu.x;
+    acc += tmpv.y * tmpu.y;
+#endif // V_DOT2_F32_BF16_AVAILABLE
+}
+
+// Pack the low (ll) or high (hh) 16 bits of two nv_bfloat162 into one nv_bfloat162.
+// Used to pair BF16 values from two consecutive KV rows for v_dot2_f32_bf16 in the PV phase.
+static __device__ __forceinline__ nv_bfloat162 ggml_cuda_bf16_perm_ll(const nv_bfloat162 v0, const nv_bfloat162 v1) {
+#ifdef V_DOT2_F32_BF16_AVAILABLE
+    nv_bfloat162 dst;
+    asm volatile("v_perm_b32 %0, %2, %1, 0x05040100" : "=v"(dst) : "v"(v0), "v"(v1));
+    return dst;
+#else
+    uint32_t a, b, r;
+    memcpy(&a, &v0, sizeof(a));
+    memcpy(&b, &v1, sizeof(b));
+    r = (a & 0xFFFF) | (b << 16);
+    nv_bfloat162 dst;
+    memcpy(&dst, &r, sizeof(r));
+    return dst;
+#endif // V_DOT2_F32_BF16_AVAILABLE
+}
+
+static __device__ __forceinline__ nv_bfloat162 ggml_cuda_bf16_perm_hh(const nv_bfloat162 v0, const nv_bfloat162 v1) {
+#ifdef V_DOT2_F32_BF16_AVAILABLE
+    nv_bfloat162 dst;
+    asm volatile("v_perm_b32 %0, %2, %1, 0x07060302" : "=v"(dst) : "v"(v0), "v"(v1));
+    return dst;
+#else
+    uint32_t a, b, r;
+    memcpy(&a, &v0, sizeof(a));
+    memcpy(&b, &v1, sizeof(b));
+    r = ((a >> 16) & 0xFFFF) | (b & 0xFFFF0000);
+    nv_bfloat162 dst;
+    memcpy(&dst, &r, sizeof(r));
+    return dst;
+#endif // V_DOT2_F32_BF16_AVAILABLE
 }
 
 static __device__ __forceinline__ void ggml_cuda_mad(half2 & acc, const half2 v, const half2 u) {
@@ -1325,6 +1385,28 @@ struct ggml_cuda_type_traits<GGML_TYPE_IQ4_NL> {
     static constexpr int bs = sizeof(block_iq4_nl);
 };
 
+// TQ1_0 (ggml-quants.c dequantize_row_tq1_0): the trit 0..2 of value e (0..255) of a block, the stored value being trit - 1.
+// qs[0..31] hold values 0..159 (digit e/32 of byte e%32), qs[32..47] values 160..239 (digit (e-160)/16 of byte
+// 32 + (e-160)%16), qh[0..3] values 240..255 (digit (e-240)/4 of byte (e-240)%4); digit n of byte b is
+// ((uint8_t) (b*3^n) * 3) >> 8.
+static __device__ __forceinline__ int ggml_cuda_tq1_0_trit(const block_tq1_0 * x, const int e) {
+    int b;
+    int n;
+    if (e < 160) {
+        b = x->qs[e % 32];
+        n = e / 32;
+    } else if (e < 240) {
+        b = x->qs[32 + (e - 160) % 16];
+        n = (e - 160) / 16;
+    } else {
+        b = x->qh[(e - 240) % 4];
+        n = (e - 240) / 4;
+    }
+    const int     p = n == 0 ? 1 : n == 1 ? 3 : n == 2 ? 9 : n == 3 ? 27 : 81;
+    const uint8_t q = (uint8_t) (b * p);
+    return ((uint16_t) q * 3) >> 8;
+}
+
 template<>
 struct ggml_cuda_type_traits<GGML_TYPE_IQ4_XS> {
     static constexpr int qk = QK_K;
@@ -1369,6 +1451,51 @@ struct ggml_cuda_device_info {
 };
 
 const ggml_cuda_device_info & ggml_cuda_info();
+
+// WORKAROUND for the gfx1201 grid-size dispatch stall (ROCm/legacy-rocm-build#6689, ROCm/TheRock#8634): a dispatch
+// whose block count is a multiple of 256, or whose work-item count is a multiple of 65536, waits ~6-10 us before it
+// runs.  GGML_CUDA_GRID_STALL_PAD=0 turns it off at run time.
+static inline bool ggml_cuda_grid_stall_pad(const dim3 & grid, const dim3 & block,
+                                            const char * site = nullptr, const int64_t pad_blocks = 1) {
+#if defined(GGML_USE_HIP)
+    static const bool on = [] {
+        const char * e = getenv("GGML_CUDA_GRID_STALL_PAD");
+        return e == nullptr || atoi(e) != 0;
+    }();
+    if (!on) {
+        return false;
+    }
+    const int64_t nblk = (int64_t) grid.x * grid.y * grid.z;
+    const int64_t nthr = (int64_t) block.x * block.y * block.z;
+    if (nblk <= 0 || (nblk % 256 != 0 && (nblk * nthr) % 65536 != 0)) {
+        return false;
+    }
+    static const bool debug = [] {
+        const char * e = getenv("GGML_CUDA_GRID_STALL_PAD_DEBUG");
+        return e != nullptr && atoi(e) != 0;
+    }();
+    const int64_t nblk_pad = nblk + pad_blocks;
+    if (nblk_pad % 256 == 0 || (nblk_pad * nthr) % 65536 == 0) {
+        if (debug) {
+            GGML_LOG_INFO("grid-stall-pad: %s grid=(%u,%u,%u) %lld blocks: NO pad possible (+%lld keeps the multiple)\n",
+                          site ? site : "?", grid.x, grid.y, grid.z, (long long) nblk, (long long) pad_blocks);
+        }
+        return false;
+    }
+    if (debug) {
+        GGML_LOG_INFO("grid-stall-pad: %s grid=(%u,%u,%u) block=(%u,%u,%u): %lld -> %lld blocks\n",
+                      site ? site : "?", grid.x, grid.y, grid.z,
+                      block.x, block.y, block.z, (long long) nblk, (long long) nblk_pad);
+    }
+    return true;
+#else
+    GGML_UNUSED(grid);
+    GGML_UNUSED(block);
+    GGML_UNUSED(site);
+    GGML_UNUSED(pad_blocks);
+    return false;
+#endif // defined(GGML_USE_HIP)
+}
 
 void ggml_cuda_set_device(int device);
 int ggml_cuda_get_device();
@@ -1529,6 +1656,39 @@ struct ggml_backend_cuda_context {
 
     // pool
     std::unique_ptr<ggml_cuda_pool> pools[GGML_CUDA_MAX_DEVICES][GGML_CUDA_MAX_STREAMS];
+
+    // census (GGML_CUDA_TQ_CENSUS=1, logged when the context is freed): TQ1_0 / TQ2_0 weights, [0] MUL_MAT through the
+    // small-batch kernel, [1] MUL_MAT through the MMA kernel, [2] GET_ROWS, [3] decode launches of the vec kernel, [4] the
+    // nodes they took on top of the first matmul (fused matmuls and ADDs; GGML_CUDA_TQ_FUSE=0: none).  Host-side calls: a replayed graph
+    // adds nothing.
+    uint64_t tq_census[5] = {};
+
+    // Per-graph cache of the BF16 copy of an F32 src1 (multi-token graphs).
+    // Declared after `pools` so that its pool buffer is released before the pools are destroyed.
+    struct bf16_src1_cache_entry {
+        const ggml_tensor * src1 = nullptr;
+        const void * data = nullptr;
+        int stream_no = 0;
+        int64_t n = 0;
+        std::unique_ptr<ggml_cuda_pool_alloc<nv_bfloat16>> buf;
+    } bf16_src1_cache;
+
+    void bf16_src1_cache_clear() {
+        bf16_src1_cache.buf.reset();
+        bf16_src1_cache.src1 = nullptr;
+        bf16_src1_cache.data = nullptr;
+    }
+
+    nv_bfloat16 * bf16_src1_cache_put(const ggml_tensor * root, int64_t n) {
+        auto & c = bf16_src1_cache;
+        c.buf.reset();
+        c.buf       = std::make_unique<ggml_cuda_pool_alloc<nv_bfloat16>>(pool(), n);
+        c.src1      = root;
+        c.data      = root->data;
+        c.stream_no = curr_stream_no;
+        c.n         = n;
+        return c.buf->get();
+    }
 
     static std::unique_ptr<ggml_cuda_pool> new_pool_for_device(ggml_backend_cuda_context & ctx, int device, int stream_no);
 
