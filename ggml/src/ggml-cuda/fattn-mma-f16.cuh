@@ -1052,6 +1052,35 @@ static __device__ __forceinline__ void flash_attn_ext_f16_iter(
                     cp_async_wait_all();
                 }
                 __syncthreads();
+
+                // gfx11 signed-zero leak: a KV row that is masked (P == +0.0) for every query
+                // column of this block still feeds its V to the WMMA, where the masked cell's
+                // x + (-0.0) products are accumulated inexactly on gfx11 and leak the cell's
+                // (possibly stale/freed) content into the output. Never let such a row's V
+                // reach the multiply: zero it after it is staged, using the mask tile that is
+                // already in shared memory.
+                if constexpr (!V_is_K_view && !swz) {
+                    if (ncols2 > 1 || mask_h) { // tile_mask is valid iff the mask-add ran
+                        const int tid = threadIdx.y * warp_size + threadIdx.x;
+#pragma unroll
+                        for (int i = tid; i < nbatch_fa; i += nwarps*warp_size) {
+                            bool dead = true;
+#pragma unroll
+                            for (int j = 0; j < ncols; ++j) {
+                                if (tile_mask[i*stride_tile_mask + j] > -1e30f) {
+                                    dead = false;
+                                }
+                            }
+                            if (dead) {
+#pragma unroll
+                                for (int k = 0; k < i0_diff/2; ++k) {
+                                    tile_V[i*stride_tile_V + k] = make_half2(0.0f, 0.0f);
+                                }
+                            }
+                        }
+                        __syncthreads();
+                    }
+                }
             }
         }
         const int tile_V_offset_i = !V_is_K_view || i0_stop > 2*nbatch_K2 ? 0 : i0_start/2;
