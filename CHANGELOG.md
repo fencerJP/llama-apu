@@ -7,16 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
-## [Unreleased] (`eval/rdna-boosts`)
+## [0.13.0] - 2026-11-28
 
-**Selective RDNA 3.5 (`gfx1150`) Kernel, BF16 KV Cache, and Ternary GPU Offload Port from `stew675/llama-cpp-rdna-boosts` (`v18-919794500-r374`).**
+**RDNA 3.5 (`gfx1150`) Kernel Boosts, Native BF16 KV Cache, Ternary (`TQ1_0`/`TQ2_0`) GPU Offload & ROCm 10.2 Support.**
 
 ### Added
 - **MMB BF16-WMMA Quantized Prefill GEMM & Skinny F32 GEMM (`06`)**: Added `mmb.{cu,cuh}`, `mmf32.{cu,cuh}`, and `bf16_src1_cache` (`common.cuh`) while preserving `ROCmFPX` and decode paths. Delivers +89% to +152% prefill speedup on 8B–27B Q6_K dense models (`Dolphin3-8B` `pp4096` `153.09 -> 385.41 t/s`, `Qwensploit-27B` `pp2048` `51.85 -> 100.91 t/s`) and +20% to +124% on 35B MoE (`RavenX-35B` `q8_0` KV `pp2048` `225.85 -> 505.45 t/s`).
 - **Chunked Gated Delta Net (GDN) Prefill & `gfx11` BF16 WMMA Kernel (`03`)**: Added `gated_delta_net_chunked*.cu` with `GGML_CUDA_GDN_CHUNKED` and `GGML_CUDA_GDN_CHUNKED_BF16` switches (+19%–20% long-prompt prefill on `NeoHorse-1-4B` `pp2048`/`pp4096`).
 - **Native BF16 KV Cache & Flash-Attention (`04`)**: Added `v_dot2_f32_bf16`, `gfx11` masked-V signed-zero sanitization in `fattn-mma-f16.cuh`, native BF16 FA tile dispatch, and BF16 `rope.cu` (`rms_norm_mul_rope_fused`). Verified on `Dolphin3-8B` `-ctk bf16 -ctv bf16` (`pp512` +100.8%, `pp2048` +102.2%).
 - **`TQ1_0` / `TQ2_0` Ternary GPU Offload (`17`)**: Added `tq.{cu,cuh}`, dequant/convert/`getrows` support, and decode operator fusion (`GGML_CUDA_TQ`, `GGML_CUDA_TQ_FUSE`, `GGML_CUDA_TQ_CENSUS`), delivering 13.0x decode (`3.10 -> 40.32 t/s`) and +102%–129% prefill on `Spark-X2.5-4B` `TQ2_0`.
-- **Evaluator Report**: Added complete 19+2 block assessment and before/after benchmark analysis in [`docs/rdna-boosts-evaluation.md`](docs/rdna-boosts-evaluation.md).
+- **ROCm 10.2 Discovery & Adaptive Loader**: Supported ROCm 10.2 CMake discovery without `core-10.1` `FORCE` override (`6d778ee0d`) and adaptive `--optimize-settings` / `--optimization-test` loader (`1f71de9b0`).
+- **Evaluation Report**: Added complete 19+2 block assessment and before/after benchmark analysis in [`docs/rdna-boosts-evaluation.md`](docs/rdna-boosts-evaluation.md).
 
 ### Changed
 - **Foundation & Graph Allocator Parity (`00`)**: Ported `GGML_GLU_INPLACE`, `ggml_gallocr_graph_fp`, unused-view release (`ggml-alloc.c`), and small-batch FA/CPU band parity.

@@ -68,7 +68,13 @@ flowchart TD
 
 ## 🚀 Key Features
 
-### 1. Dynamic Confidence-Gated Speculative Decoding & DRM Sync (`v0.12.0`)
+### 1. RDNA 3.5 Kernel Boosts, Native BF16 KV & Ternary GPU Offload (`v0.13.0`)
+- **MMB BF16-WMMA Prefill GEMM & HIP `MMQ` Tuning:** Accelerates quantized prompt ingestion on `gfx1150` by **+89% to +152%** on 8B–27B Q6_K dense models (`Dolphin3-8B` `pp4096`: `153.09 → 385.41 t/s`) and **+20% to +124%** on 35B MoE (`RavenX-35B` `q8_0` KV `pp2048`: `225.85 → 505.45 t/s`), alongside `ggml_cuda_grid_stall_pad`, HIP `mul24`/`v_perm_b32`, and sorted-key `topk-moe`.
+- **Chunked Gated Delta Net (GDN) Prefill:** Adds `gfx11` BF16 WMMA chunked GDN prefill (+19%–20% long-prompt prefill on `NeoHorse-1-4B` `pp2048`/`pp4096`) with `GGML_CUDA_GDN_CHUNKED` / `GGML_CUDA_GDN_CHUNKED_BF16` controls.
+- **Native BF16 KV Cache & Flash-Attention:** Full BF16 KV cache support (`-ctk bf16 -ctv bf16`) with native BF16 FA tile dispatch, BF16 fused RoPE, and `gfx11` masked-V signed-zero sanitization.
+- **`TQ1_0` / `TQ2_0` Ternary GPU Offload:** Runs ternary models directly on the RDNA 3.5 iGPU with bit-exact CPU AVX2 parity, delivering **13.0× decode speedup** (`3.10 → 40.32 t/s`) and **+102% to +129% prefill** on `Spark-X2.5-4B` `TQ2_0`. Full benchmarks in [`docs/rdna-boosts-evaluation.md`](docs/rdna-boosts-evaluation.md).
+
+### 2. Dynamic Confidence-Gated Speculative Decoding & DRM Sync (`v0.12.0`)
 - **Exponential Moving Average (EMA) Throttled Drafting:** Dynamically gates draft token depth based on recent verification acceptance rates, avoiding wasted decode compute on low-confidence branches (`--spec-draft-apu {auto,on,off}`).
 - **Sub-15µs DRM Timeline Sync:** Coordinates token candidate drafting and verification across execution engines via Linux DRM timeline synchronization (`/dev/dri/renderD128`) with zero host memory copies (`PASS (host memcpy: 0)`).
 - **MTP Decoupled Boundary Ring Rollback:** Introduces a 32-slot circular state ring (`ring_h`, `ring_pos`, `ring_len`, `ring_head`) decoupled from context sequences. Eliminates context-destroying rollbacks, enabling $O(1)$ state rollbacks on verification rejection and salvaging trailing prompt cache tokens. Achieves **up to 1.91× speedup (4.90 t/s vs 2.56 t/s)** and **85.7% to 97.3% candidate acceptance rates ($\alpha$)** on MTP models (e.g. `Qwopus3.6-27B`).
